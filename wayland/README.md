@@ -59,13 +59,23 @@ coordinates are those Tk believes the windows have, which keeps them
 consistent within the application. Logical pixels have 96 dpi, and higher
 resolutions are handled with the buffer scale.
 
+## Also implemented
+
+- The CLIPBOARD and PRIMARY selections with other clients
+  (`wl_data_device`, primary selection protocol).
+- HiDPI and fractional scaling (`wp_fractional_scale_v1`, `wp_viewporter`);
+  pixmaps have the scale of the window they are made for.
+  `TK_WAYLAND_SCALE=1.5` forces a scale, for testing.
+- Activation (`xdg-activation-v1`) for `focus -force`, `raise`,
+  deiconify, and the startup token of launchers.
+- Input methods (`text-input-v3`), shown with the IME marked text virtual
+  events used on Aqua.
+
 ## Not done yet
 
-- The clipboard and the selection with other applications
-  (`wl_data_device`, primary selection); drag and drop.
-- Input methods (`text-input-v3`).
-- Fractional scaling (`wp_fractional_scale_v1`, `wp_viewporter`).
+- Drag and drop between applications.
 - Cursors made of bitmaps; cursor-shape-v1.
-- The system tray (StatusNotifierItem), `xdg-activation`, window icons
-  (`xdg-toplevel-icon`).
-- `send` between processes.
+- The system tray (StatusNotifierItem), window icons
+  (`xdg-toplevel-icon`), `wm attributes -alpha`.
+- `send` and embedding between processes (they work within a process).
+- `tk inactive` (the idle time of the user).
