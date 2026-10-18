@@ -23,16 +23,33 @@
  *----------------------------------------------------------------------
  */
 
+/*
+ * The size in pixels of a pixmap: only whole pixels, which can be drawn
+ * entirely, so that copies never use pixels which nothing was drawn into.
+ */
+
+static int
+PixmapSize(
+    unsigned int length,
+    double scale)
+{
+    int size = (int)floor(length * scale + 1e-6);
+
+    return (size > 0) ? size : 1;
+}
+
 Pixmap
 XCreatePixmap(
     Display *display,
-    TCL_UNUSED(Drawable),
+    Drawable d,
     unsigned int width, unsigned int height,
     unsigned int depth)
 {
     TkWlPixmap *pixPtr = (TkWlPixmap *)Tcl_Alloc(sizeof(TkWlPixmap));
     cairo_format_t format = (depth == 1) ? CAIRO_FORMAT_A8
 	    : (depth == 32) ? CAIRO_FORMAT_ARGB32 : CAIRO_FORMAT_RGB24;
+    TkWlSurface *surfPtr = TkWlGetSurface(d);
+    double scale = 1.0;
 
     TkWlNextRequest(display);
     if (width == 0) {
@@ -45,8 +62,19 @@ XCreatePixmap(
     pixPtr->width = (int)width;
     pixPtr->height = (int)height;
     pixPtr->depth = (depth == 1 || depth == 32) ? (int)depth : 24;
-    pixPtr->surface = cairo_image_surface_create(format, (int)width,
-	    (int)height);
+
+    /*
+     * Pixmaps of color are mostly used for double buffering: they have the
+     * scale of the surface of the window they are made for, so that what is
+     * drawn in them has the resolution of the surface.
+     */
+
+    if (surfPtr && depth != 1) {
+	scale = surfPtr->scale;
+    }
+    pixPtr->surface = cairo_image_surface_create(format,
+	    PixmapSize(width, scale), PixmapSize(height, scale));
+    cairo_surface_set_device_scale(pixPtr->surface, scale, scale);
     pixPtr->id = TkWlNewId(pixPtr);
     return pixPtr->id;
 }
@@ -166,6 +194,13 @@ TkWlBeginDraw(
     }
 
     ctxPtr->cr = cairo_create(ctxPtr->target);
+
+    /*
+     * Clip without antialiasing: with a fractional scale, the edges of the
+     * clip fall between pixels, which must be drawn entirely or not.
+     */
+
+    cairo_set_antialias(ctxPtr->cr, CAIRO_ANTIALIAS_NONE);
     boxes = pixman_region32_rectangles(&ctxPtr->clip, &n);
     for (i = 0; i < n; i++) {
 	cairo_rectangle(ctxPtr->cr, boxes[i].x1, boxes[i].y1,
@@ -807,6 +842,7 @@ TkWlPaintBackground(
 	return;
     }
     cr = cairo_create(surfPtr->backing);
+    cairo_set_antialias(cr, CAIRO_ANTIALIAS_NONE);
     boxes = pixman_region32_rectangles(rgn, &n);
     for (i = 0; i < n; i++) {
 	cairo_rectangle(cr, boxes[i].x1, boxes[i].y1,
@@ -881,7 +917,8 @@ QueueGraphicsExposures(
     int srcX, int srcY,
     unsigned int width, unsigned int height,
     int dstX, int dstY,
-    int majorCode)
+    int majorCode,
+    bool allLost)		/* The whole area is exposed. */
 {
     XEvent event;
     pixman_region32_t lost;
@@ -890,7 +927,9 @@ QueueGraphicsExposures(
     memset(&event, 0, sizeof(XEvent));
     event.xany.display = display;
     pixman_region32_init(&lost);
-    if (srcWinPtr) {
+    if (allLost) {
+	pixman_region32_union_rect(&lost, &lost, dstX, dstY, width, height);
+    } else if (srcWinPtr) {
 	pixman_region32_t visible;
 	int x, y;
 
@@ -949,7 +988,21 @@ XCopyArea(
 
 	cairo_set_operator(ctx.cr, (gc->function == GXxor)
 		? CAIRO_OPERATOR_DIFFERENCE : CAIRO_OPERATOR_SOURCE);
-	if (srcSurface == ctx.target) {
+	if (srcSurface == ctx.target && gc->graphics_exposures
+		&& ctx.surfPtr && !TkWlIntegralScale(ctx.surfPtr)) {
+	    /*
+	     * Scrolling at a fractional scale would move the pixels by a
+	     * fraction of a pixel: report the destination as exposed
+	     * instead, so that it is redrawn.
+	     */
+
+	    cairo_destroy(ctx.cr);
+	    ctx.cr = NULL;
+	    pixman_region32_fini(&ctx.clip);
+	    QueueGraphicsExposures(display, dst, NULL, srcX, srcY, width,
+		    height, dstX, dstY, 62 /* X_CopyArea */, true);
+	    return Success;
+	} else if (srcSurface == ctx.target) {
 	    /*
 	     * Copy within the same image (scrolling): go through a copy of
 	     * the area, since the areas may overlap.
@@ -971,8 +1024,23 @@ XCopyArea(
 	    cairo_destroy(cr);
 	    cairo_set_source_surface(ctx.cr, copy, dstX, dstY);
 	} else {
+	    double srcScale, dstScale, dummy;
+
 	    cairo_set_source_surface(ctx.cr, srcSurface, dstX - srcX - sx,
 		    dstY - srcY - sy);
+	    cairo_surface_get_device_scale(srcSurface, &srcScale, &dummy);
+	    cairo_surface_get_device_scale(ctx.target, &dstScale, &dummy);
+	    if (srcScale == dstScale) {
+		/*
+		 * A copy of pixels: with a fractional scale the position may
+		 * fall between pixels, which must not blur them.
+		 */
+
+		cairo_pattern_set_filter(cairo_get_source(ctx.cr),
+			CAIRO_FILTER_NEAREST);
+	    }
+	    cairo_pattern_set_extend(cairo_get_source(ctx.cr),
+		    CAIRO_EXTEND_PAD);
 	}
 	cairo_rectangle(ctx.cr, dstX, dstY, width, height);
 	cairo_fill(ctx.cr);
@@ -983,7 +1051,7 @@ XCopyArea(
     }
     if (gc->graphics_exposures) {
 	QueueGraphicsExposures(display, dst, srcWinPtr, srcX, srcY, width,
-		height, dstX, dstY, 62 /* X_CopyArea */);
+		height, dstX, dstY, 62 /* X_CopyArea */, false);
     }
     return Success;
 }
@@ -1077,7 +1145,7 @@ XCopyPlane(
     }
     if (gc->graphics_exposures) {
 	QueueGraphicsExposures(display, dst, srcWinPtr, srcX, srcY, width,
-		height, dstX, dstY, 63 /* X_CopyPlane */);
+		height, dstX, dstY, 63 /* X_CopyPlane */, false);
     }
     return Success;
 }

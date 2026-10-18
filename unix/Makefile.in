@@ -466,7 +466,8 @@ WAYLAND_OBJS = tkUnix.o tkUnix3d.o tkUnixAccessibility.o tkUnixButton.o \
 	tkWaylandXlib.o \
 	$(WAYLAND_PROTOCOL_OBJS)
 
-WAYLAND_PROTOCOLS = xdg-shell primary-selection-unstable-v1
+WAYLAND_PROTOCOLS = xdg-shell primary-selection-unstable-v1 viewporter \
+	fractional-scale-v1 xdg-activation-v1 text-input-unstable-v3
 
 WAYLAND_PROTOCOL_OBJS = $(WAYLAND_PROTOCOLS:%=%-protocol.o)
 
@@ -1438,17 +1439,25 @@ tkUnixWm.o: $(UNIX_DIR)/tkUnixWm.c
 tkUnixXId.o: $(UNIX_DIR)/tkUnixXId.c
 	$(CC) -c $(CC_SWITCHES) $(UNIX_DIR)/tkUnixXId.c
 
-xdg-shell-client-protocol.h: $(WAYLAND_PROTOCOLS_DIR)/stable/xdg-shell/xdg-shell.xml
-	$(WAYLAND_SCANNER) client-header $(WAYLAND_PROTOCOLS_DIR)/stable/xdg-shell/xdg-shell.xml $@
+# Where the XML files of the protocols are.
+WAYLAND_PROTOCOL_xdg-shell = stable/xdg-shell/xdg-shell.xml
+WAYLAND_PROTOCOL_viewporter = stable/viewporter/viewporter.xml
+WAYLAND_PROTOCOL_primary-selection-unstable-v1 = \
+	unstable/primary-selection/primary-selection-unstable-v1.xml
+WAYLAND_PROTOCOL_text-input-unstable-v3 = \
+	unstable/text-input/text-input-unstable-v3.xml
+WAYLAND_PROTOCOL_fractional-scale-v1 = \
+	staging/fractional-scale/fractional-scale-v1.xml
+WAYLAND_PROTOCOL_xdg-activation-v1 = \
+	staging/xdg-activation/xdg-activation-v1.xml
 
-xdg-shell-protocol.c: $(WAYLAND_PROTOCOLS_DIR)/stable/xdg-shell/xdg-shell.xml
-	$(WAYLAND_SCANNER) private-code $(WAYLAND_PROTOCOLS_DIR)/stable/xdg-shell/xdg-shell.xml $@
+%-client-protocol.h:
+	$(WAYLAND_SCANNER) client-header \
+		$(WAYLAND_PROTOCOLS_DIR)/$(WAYLAND_PROTOCOL_$*) $@
 
-primary-selection-unstable-v1-client-protocol.h: $(WAYLAND_PROTOCOLS_DIR)/unstable/primary-selection/primary-selection-unstable-v1.xml
-	$(WAYLAND_SCANNER) client-header $(WAYLAND_PROTOCOLS_DIR)/unstable/primary-selection/primary-selection-unstable-v1.xml $@
-
-primary-selection-unstable-v1-protocol.c: $(WAYLAND_PROTOCOLS_DIR)/unstable/primary-selection/primary-selection-unstable-v1.xml
-	$(WAYLAND_SCANNER) private-code $(WAYLAND_PROTOCOLS_DIR)/unstable/primary-selection/primary-selection-unstable-v1.xml $@
+%-protocol.c:
+	$(WAYLAND_SCANNER) private-code \
+		$(WAYLAND_PROTOCOLS_DIR)/$(WAYLAND_PROTOCOL_$*) $@
 
 %-protocol.o: %-protocol.c
 	$(CC) -c $(CC_SWITCHES) $<

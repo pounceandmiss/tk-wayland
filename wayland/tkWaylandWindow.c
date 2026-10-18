@@ -618,22 +618,49 @@ QueueConfigureNotify(
  *----------------------------------------------------------------------
  */
 
+/*
+ * The scale of a surface is the preferred fractional scale the compositor
+ * gives, or its preferred integer scale, or the largest scale of the
+ * outputs the surface is on, in this order. Fractional scales need the
+ * viewporter.
+ */
+
 static void
 SurfaceEnter(
     void *data,
     TCL_UNUSED(struct wl_surface *),
-    TCL_UNUSED(struct wl_output *))
+    struct wl_output *output)
 {
-    (void)data;
+    TkWlSurface *surfPtr = (TkWlSurface *)data;
+    TkWlOutput *outPtr;
+
+    for (outPtr = tkWlDisplay->outputs; outPtr; outPtr = outPtr->nextPtr) {
+	if (outPtr->output == output) {
+	    break;
+	}
+    }
+    if (outPtr && surfPtr->numOutputs < 8) {
+	surfPtr->outputs[surfPtr->numOutputs++] = outPtr;
+	TkWlUpdateScale(surfPtr);
+    }
 }
 
 static void
 SurfaceLeave(
     void *data,
     TCL_UNUSED(struct wl_surface *),
-    TCL_UNUSED(struct wl_output *))
+    struct wl_output *output)
 {
-    (void)data;
+    TkWlSurface *surfPtr = (TkWlSurface *)data;
+    int i;
+
+    for (i = 0; i < surfPtr->numOutputs; i++) {
+	if (surfPtr->outputs[i]->output == output) {
+	    surfPtr->outputs[i] = surfPtr->outputs[--surfPtr->numOutputs];
+	    TkWlUpdateScale(surfPtr);
+	    break;
+	}
+    }
 }
 
 static void
@@ -642,8 +669,27 @@ SurfacePreferredScale(
     TCL_UNUSED(struct wl_surface *),
     int32_t factor)
 {
-    TkWlSurfaceSetScale((TkWlSurface *)data, factor);
+    TkWlSurface *surfPtr = (TkWlSurface *)data;
+
+    surfPtr->preferredScale = factor;
+    TkWlUpdateScale(surfPtr);
 }
+
+static void
+FractionalPreferredScale(
+    void *data,
+    TCL_UNUSED(struct wp_fractional_scale_v1 *),
+    uint32_t scale)
+{
+    TkWlSurface *surfPtr = (TkWlSurface *)data;
+
+    surfPtr->fractionalScale = scale / 120.0;
+    TkWlUpdateScale(surfPtr);
+}
+
+static const struct wp_fractional_scale_v1_listener fractionalListener = {
+    FractionalPreferredScale
+};
 
 static void
 SurfacePreferredTransform(
@@ -670,7 +716,7 @@ NewSurface(
 
     memset(surfPtr, 0, sizeof(TkWlSurface));
     surfPtr->winPtr = winPtr;
-    surfPtr->scale = 1;
+    surfPtr->scale = 1.0;
     pixman_region32_init(&surfPtr->damage);
     for (i = 0; i < TKWL_NUM_BUFFERS; i++) {
 	pixman_region32_init(&surfPtr->buffers[i].damage);
@@ -678,6 +724,18 @@ NewSurface(
     surfPtr->surface = wl_compositor_create_surface(tkWlDisplay->compositor);
     wl_surface_set_user_data(surfPtr->surface, surfPtr);
     wl_surface_add_listener(surfPtr->surface, &surfaceListener, surfPtr);
+    if (tkWlDisplay->viewporter) {
+	surfPtr->viewport = wp_viewporter_get_viewport(
+		tkWlDisplay->viewporter, surfPtr->surface);
+	if (tkWlDisplay->fractionalScaleManager) {
+	    surfPtr->fractional =
+		    wp_fractional_scale_manager_v1_get_fractional_scale(
+		    tkWlDisplay->fractionalScaleManager, surfPtr->surface);
+	    wp_fractional_scale_v1_add_listener(surfPtr->fractional,
+		    &fractionalListener, surfPtr);
+	}
+    }
+    TkWlUpdateScale(surfPtr);
     surfPtr->nextPtr = tkWlDisplay->surfaces;
     tkWlDisplay->surfaces = surfPtr;
     winPtr->surface = surfPtr;
@@ -742,6 +800,12 @@ DestroySurface(
 	FreeBuffer(&surfPtr->buffers[i]);
 	pixman_region32_fini(&surfPtr->buffers[i].damage);
     }
+    if (surfPtr->fractional) {
+	wp_fractional_scale_v1_destroy(surfPtr->fractional);
+    }
+    if (surfPtr->viewport) {
+	wp_viewport_destroy(surfPtr->viewport);
+    }
     wl_surface_destroy(surfPtr->surface);
     if (surfPtr->backing) {
 	cairo_surface_destroy(surfPtr->backing);
@@ -762,6 +826,53 @@ DestroySurface(
  *----------------------------------------------------------------------
  */
 
+/*
+ * The size in pixels of a length in logical pixels, as in the fractional
+ * scale protocol.
+ */
+
+static int
+BufferSize(
+    int length,
+    double scale)
+{
+    int size = (int)lround(length * scale);
+
+    return (size > 0) ? size : 1;
+}
+
+/*
+ * Convert a box in surface coordinates to the pixels of the buffer which it
+ * touches.
+ */
+
+static void
+BufferBox(
+    TkWlSurface *surfPtr,
+    pixman_box32_t *boxPtr,
+    int *xPtr, int *yPtr, int *widthPtr, int *heightPtr)
+{
+    double s = surfPtr->scale;
+    int x1 = (int)floor(boxPtr->x1 * s), y1 = (int)floor(boxPtr->y1 * s);
+    int x2 = (int)ceil(boxPtr->x2 * s), y2 = (int)ceil(boxPtr->y2 * s);
+
+    if (x1 < 0) x1 = 0;
+    if (y1 < 0) y1 = 0;
+    if (x2 > surfPtr->bufferWidth) x2 = surfPtr->bufferWidth;
+    if (y2 > surfPtr->bufferHeight) y2 = surfPtr->bufferHeight;
+    *xPtr = x1;
+    *yPtr = y1;
+    *widthPtr = (x2 > x1) ? x2 - x1 : 0;
+    *heightPtr = (y2 > y1) ? y2 - y1 : 0;
+}
+
+bool
+TkWlIntegralScale(
+    TkWlSurface *surfPtr)
+{
+    return surfPtr->scale == floor(surfPtr->scale);
+}
+
 static void
 ResizeBacking(
     TkWlSurface *surfPtr)
@@ -781,8 +892,10 @@ ResizeBacking(
 	    && height == surfPtr->height) {
 	return;
     }
+    surfPtr->bufferWidth = BufferSize(width, surfPtr->scale);
+    surfPtr->bufferHeight = BufferSize(height, surfPtr->scale);
     backing = cairo_image_surface_create(CAIRO_FORMAT_RGB24,
-	    width * surfPtr->scale, height * surfPtr->scale);
+	    surfPtr->bufferWidth, surfPtr->bufferHeight);
     cairo_surface_set_device_scale(backing, surfPtr->scale, surfPtr->scale);
     if (surfPtr->backing) {
 	cairo_t *cr = cairo_create(backing);
@@ -800,14 +913,49 @@ ResizeBacking(
 	    (unsigned)width, (unsigned)height);
 }
 
+/*
+ * Forget what was drawn in a window and its descendants, so that they get
+ * Expose events for all of their visible parts.
+ */
+
+static void
+ForgetExposed(
+    TkWlWindow *winPtr)
+{
+    TkWlWindow *childPtr;
+
+    pixman_region32_clear(&winPtr->exposed);
+    winPtr->exposedWidth = -1;
+    for (childPtr = winPtr->firstChild; childPtr; childPtr = childPtr->above) {
+	ForgetExposed(childPtr);
+    }
+}
+
 void
-TkWlSurfaceSetScale(
-    TkWlSurface *surfPtr,
-    int scale)
+TkWlUpdateScale(
+    TkWlSurface *surfPtr)
 {
     TkWlWindow *winPtr = surfPtr->winPtr;
+    double scale = 1.0;
+    int i;
 
-    if (scale < 1 || scale == surfPtr->scale) {
+    if (tkWlDisplay->forcedScale > 0.0) {
+	scale = tkWlDisplay->forcedScale;
+    } else if (surfPtr->fractionalScale > 0.0) {
+	scale = surfPtr->fractionalScale;
+    } else if (surfPtr->preferredScale > 0) {
+	scale = surfPtr->preferredScale;
+    } else {
+	for (i = 0; i < surfPtr->numOutputs; i++) {
+	    if (surfPtr->outputs[i]->scale > scale) {
+		scale = surfPtr->outputs[i]->scale;
+	    }
+	}
+    }
+    if (surfPtr->viewport == NULL) {
+	scale = ceil(scale);
+    }
+    if (scale == surfPtr->scale) {
 	return;
     }
 
@@ -820,10 +968,12 @@ TkWlSurfaceSetScale(
 	cairo_surface_destroy(surfPtr->backing);
 	surfPtr->backing = NULL;
 	ResizeBacking(surfPtr);
-	pixman_region32_clear(&winPtr->exposed);
-	winPtr->exposedWidth = -1;
+	ForgetExposed(winPtr);
 	TkWlTreeChanged(winPtr);
-	ExposeWindow(winPtr);
+	TkWlProcessExposures(surfPtr);
+    }
+    if (tkWlDisplay->pointerSurface == surfPtr) {
+	TkWlUpdateCursor();
     }
 }
 
@@ -963,7 +1113,7 @@ Present(
     TkWlSurface *surfPtr)
 {
     TkWlBuffer *bufPtr = NULL;
-    int i, n, width, height, scale = surfPtr->scale;
+    int i, n, width, height;
     pixman_box32_t *boxes;
     pixman_image_t *src, *dst;
 
@@ -983,8 +1133,8 @@ Present(
 	return;
     }
 
-    width = surfPtr->width * scale;
-    height = surfPtr->height * scale;
+    width = surfPtr->bufferWidth;
+    height = surfPtr->bufferHeight;
     for (i = 0; i < TKWL_NUM_BUFFERS; i++) {
 	if (!surfPtr->buffers[i].busy) {
 	    bufPtr = &surfPtr->buffers[i];
@@ -1022,27 +1172,37 @@ Present(
 	    (uint32_t *)bufPtr->data, bufPtr->stride);
     boxes = pixman_region32_rectangles(&bufPtr->damage, &n);
     for (i = 0; i < n; i++) {
-	pixman_image_composite32(PIXMAN_OP_SRC, src, NULL, dst,
-		boxes[i].x1 * scale, boxes[i].y1 * scale, 0, 0,
-		boxes[i].x1 * scale, boxes[i].y1 * scale,
-		(boxes[i].x2 - boxes[i].x1) * scale,
-		(boxes[i].y2 - boxes[i].y1) * scale);
+	int x, y, w, h;
+
+	BufferBox(surfPtr, &boxes[i], &x, &y, &w, &h);
+	pixman_image_composite32(PIXMAN_OP_SRC, src, NULL, dst, x, y, 0, 0,
+		x, y, w, h);
     }
     pixman_image_unref(src);
     pixman_image_unref(dst);
     pixman_region32_clear(&bufPtr->damage);
 
     wl_surface_attach(surfPtr->surface, bufPtr->buffer, 0, 0);
-    wl_surface_set_buffer_scale(surfPtr->surface, scale);
+    if (surfPtr->viewport) {
+	/*
+	 * The viewport scales the buffer to the size of the surface.
+	 */
+
+	wl_surface_set_buffer_scale(surfPtr->surface, 1);
+	wp_viewport_set_destination(surfPtr->viewport, surfPtr->width,
+		surfPtr->height);
+    } else {
+	wl_surface_set_buffer_scale(surfPtr->surface, (int)surfPtr->scale);
+    }
     if (!surfPtr->committed) {
 	wl_surface_damage_buffer(surfPtr->surface, 0, 0, width, height);
     } else {
 	boxes = pixman_region32_rectangles(&surfPtr->damage, &n);
 	for (i = 0; i < n; i++) {
-	    wl_surface_damage_buffer(surfPtr->surface,
-		    boxes[i].x1 * scale, boxes[i].y1 * scale,
-		    (boxes[i].x2 - boxes[i].x1) * scale,
-		    (boxes[i].y2 - boxes[i].y1) * scale);
+	    int x, y, w, h;
+
+	    BufferBox(surfPtr, &boxes[i], &x, &y, &w, &h);
+	    wl_surface_damage_buffer(surfPtr->surface, x, y, w, h);
 	}
     }
     pixman_region32_clear(&surfPtr->damage);

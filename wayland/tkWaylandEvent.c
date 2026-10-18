@@ -107,7 +107,12 @@ OutputDone(
     TCL_UNUSED(void *),
     TCL_UNUSED(struct wl_output *))
 {
+    TkWlSurface *surfPtr;
+
     UpdateScreenSize();
+    for (surfPtr = tkWlDisplay->surfaces; surfPtr; surfPtr = surfPtr->nextPtr) {
+	TkWlUpdateScale(surfPtr);
+    }
 }
 
 static void
@@ -906,6 +911,18 @@ RegistryGlobal(
 	tkWlDisplay->seat = (struct wl_seat *)wl_registry_bind(registry, name,
 		&wl_seat_interface, MIN(version, 9));
 	wl_seat_add_listener(tkWlDisplay->seat, &seatListener, NULL);
+    } else if (!strcmp(interface, wp_viewporter_interface.name)) {
+	tkWlDisplay->viewporter = (struct wp_viewporter *)wl_registry_bind(
+		registry, name, &wp_viewporter_interface, 1);
+    } else if (!strcmp(interface,
+	    wp_fractional_scale_manager_v1_interface.name)) {
+	tkWlDisplay->fractionalScaleManager =
+		(struct wp_fractional_scale_manager_v1 *)wl_registry_bind(
+		registry, name, &wp_fractional_scale_manager_v1_interface, 1);
+    } else if (!strcmp(interface, xdg_activation_v1_interface.name)) {
+	tkWlDisplay->activation = (struct xdg_activation_v1 *)
+		wl_registry_bind(registry, name, &xdg_activation_v1_interface,
+		1);
     } else if (!strcmp(interface, xdg_wm_base_interface.name)) {
 	tkWlDisplay->wmBase = (struct xdg_wm_base *)wl_registry_bind(
 		registry, name, &xdg_wm_base_interface, 1);
@@ -1015,6 +1032,14 @@ TkpOpenDisplay(
     tkWlDisplay->wlDisplay = wlDisplay;
     tkWlDisplay->repeatRate = 25;
     tkWlDisplay->repeatDelay = 600;
+
+    /*
+     * TK_WAYLAND_SCALE forces the scale of the surfaces, for testing.
+     */
+
+    if (getenv("TK_WAYLAND_SCALE")) {
+	tkWlDisplay->forcedScale = atof(getenv("TK_WAYLAND_SCALE"));
+    }
     tkWlDisplay->xkbContext = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
     locale = setlocale(LC_CTYPE, NULL);
     if (!locale || !strcmp(locale, "C")) {

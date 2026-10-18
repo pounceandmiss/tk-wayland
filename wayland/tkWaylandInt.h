@@ -44,6 +44,9 @@
 #include <cairo.h>
 #include <pixman.h>
 #include "xdg-shell-client-protocol.h"
+#include "viewporter-client-protocol.h"
+#include "fractional-scale-v1-client-protocol.h"
+#include "xdg-activation-v1-client-protocol.h"
 
 /*
  * Kinds of drawables. Both structures start with the type.
@@ -177,11 +180,22 @@ typedef struct TkWlSurface {
     bool inConfigure;		/* The window is being resized by the
 				 * compositor. */
     bool committed;		/* A buffer was attached. */
-    int scale;			/* Buffer scale. */
+    double scale;		/* Pixels of the buffer per logical pixel,
+				 * which may be fractional when the viewport
+				 * scales the buffer. */
+    double fractionalScale;	/* Preferred fractional scale, or 0. */
+    int preferredScale;		/* Preferred integer scale, or 0. */
+    struct wp_viewport *viewport;
+    struct wp_fractional_scale_v1 *fractional;
+    struct TkWlOutput *outputs[8];
+				/* The outputs the surface is on. */
+    int numOutputs;
     int width, height;		/* Size of the backing image, in surface
 				 * coordinates. */
-    cairo_surface_t *backing;	/* The image Tk draws into, with the buffer
-				 * scale as device scale. */
+    int bufferWidth, bufferHeight;
+				/* Size of the backing image, in pixels. */
+    cairo_surface_t *backing;	/* The image Tk draws into, with the scale as
+				 * device scale. */
     pixman_region32_t damage;	/* Damage not yet committed, in surface
 				 * coordinates. */
     TkWlBuffer buffers[TKWL_NUM_BUFFERS];
@@ -217,6 +231,11 @@ typedef struct TkWlDisplay {
     struct wl_compositor *compositor;
     struct wl_shm *shm;
     struct xdg_wm_base *wmBase;
+    struct wp_viewporter *viewporter;
+    struct wp_fractional_scale_manager_v1 *fractionalScaleManager;
+    struct xdg_activation_v1 *activation;
+    double forcedScale;		/* Scale set with TK_WAYLAND_SCALE, for
+				 * testing, or 0. */
     struct wl_seat *seat;
     struct wl_pointer *pointer;
     struct wl_keyboard *keyboard;
@@ -311,7 +330,8 @@ MODULE_SCOPE void	TkWlSurfaceConfigured(TkWlSurface *surfPtr);
 MODULE_SCOPE TkWlProperty *TkWlGetProperty(TkWlWindow *winPtr, Atom name);
 MODULE_SCOPE void	TkWlFreeProperties(TkWlWindow *winPtr);
 MODULE_SCOPE TkWlSurface *TkWlGetSurface(Window w);
-MODULE_SCOPE void	TkWlSurfaceSetScale(TkWlSurface *surfPtr, int scale);
+MODULE_SCOPE void	TkWlUpdateScale(TkWlSurface *surfPtr);
+MODULE_SCOPE bool	TkWlIntegralScale(TkWlSurface *surfPtr);
 
 /* tkWaylandDraw.c */
 MODULE_SCOPE cairo_surface_t *TkWlPixmapSurface(Pixmap pixmap);

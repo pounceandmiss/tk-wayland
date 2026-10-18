@@ -308,7 +308,7 @@ TkWlUpdateCursor(void)
 		tkWlDisplay->pointerSerial, NULL, 0, 0);
 	return;
     }
-    scale = tkWlDisplay->pointerSurface->scale;
+    scale = (int)ceil(tkWlDisplay->pointerSurface->scale);
     cursor = LoadCursor(cursorPtr ? cursorPtr->name : "left_ptr", scale);
     if (cursor == NULL || cursor->image_count < 1) {
 	return;
