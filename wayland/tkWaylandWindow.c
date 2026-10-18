@@ -1053,6 +1053,7 @@ FrameDone(
 
     wl_callback_destroy(callback);
     surfPtr->frameCallback = NULL;
+    surfPtr->presented = surfPtr->committed;
     if (pixman_region32_not_empty(&surfPtr->damage)) {
 	SchedulePresent(surfPtr);
     }
@@ -1212,6 +1213,7 @@ Present(
     bufPtr->busy = true;
     wl_surface_commit(surfPtr->surface);
     surfPtr->committed = true;
+    TkWlWmSurfaceCommitted(surfPtr);
     wl_display_flush(tkWlDisplay->wlDisplay);
 }
 
@@ -1525,6 +1527,7 @@ XUnmapWindow(
 	}
 	surfPtr->committed = false;
 	surfPtr->configured = false;
+	surfPtr->presented = false;
     }
 
     memset(&event, 0, sizeof(XEvent));
@@ -1689,7 +1692,17 @@ XRaiseWindow(
     Window w)
 {
     XWindowChanges values;
+    TkWlWindow *winPtr = TkWlGetWindow(w);
 
+    /*
+     * A Wayland client cannot raise its toplevels; it can ask the compositor
+     * to activate them.
+     */
+
+    if (winPtr && winPtr->surface && winPtr->mapped
+	    && !winPtr->overrideRedirect) {
+	TkWlWmActivate(winPtr->surface);
+    }
     values.stack_mode = Above;
     return XConfigureWindow(display, w, CWStackMode, &values);
 }

@@ -177,9 +177,13 @@ typedef struct TkWlSurface {
     bool iconic;		/* The window was iconified: the X window is
 				 * unmapped, but the surface keeps its role,
 				 * since Wayland has no iconic state. */
+    bool rolePending;		/* The role is created at idle time. */
+    bool minimizePending;	/* Minimize after the first commit. */
     bool inConfigure;		/* The window is being resized by the
 				 * compositor. */
     bool committed;		/* A buffer was attached. */
+    bool presented;		/* A frame was shown since the role was
+				 * given. */
     double scale;		/* Pixels of the buffer per logical pixel,
 				 * which may be fractional when the viewport
 				 * scales the buffer. */
@@ -365,5 +369,7 @@ MODULE_SCOPE void	TkWlWmSurfaceResized(TkWlSurface *surfPtr);
 MODULE_SCOPE void	TkWlWmPropertyChanged(TkWlSurface *surfPtr,
 			    Atom property);
 MODULE_SCOPE bool	TkWlWmClientMessage(XEvent *eventPtr);
+MODULE_SCOPE void	TkWlWmActivate(TkWlSurface *surfPtr);
+MODULE_SCOPE void	TkWlWmSurfaceCommitted(TkWlSurface *surfPtr);
 
 #endif /* _TKWAYLANDINT */

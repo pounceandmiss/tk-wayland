@@ -28,6 +28,7 @@ static void		FrameDismissPopup(struct libdecor_frame *frame,
 			    const char *seatName, void *data);
 
 static void		DestroyRole(TkWlSurface *surfPtr);
+static void		MapToplevel(void *clientData);
 static void		MapPopup(TkWlSurface *surfPtr);
 
 static struct libdecor_frame_interface frameInterface = {
@@ -222,6 +223,18 @@ XReconfigureWMWindow(
     unsigned int mask,
     XWindowChanges *changes)
 {
+    TkWlWindow *winPtr = TkWlGetWindow(w);
+
+    /*
+     * Raising a toplevel above the others ("raise") asks the compositor to
+     * activate it.
+     */
+
+    if (winPtr && winPtr->surface && winPtr->mapped
+	    && (mask & CWStackMode) && !(mask & CWSibling)
+	    && changes->stack_mode == Above) {
+	TkWlWmActivate(winPtr->surface);
+    }
     return XConfigureWindow(display, w, mask, changes) == Success;
 }
 
@@ -408,6 +421,32 @@ SetNetWmState(
 }
 
 /*
+ * Minimize a toplevel. Compositors (Weston) do not expect toplevels to be
+ * minimized before they are shown, so this waits for the first buffer.
+ */
+
+static void
+Minimize(
+    TkWlSurface *surfPtr)
+{
+    if (surfPtr->committed) {
+	libdecor_frame_set_minimized(surfPtr->frame);
+    } else {
+	surfPtr->minimizePending = true;
+    }
+}
+
+void
+TkWlWmSurfaceCommitted(
+    TkWlSurface *surfPtr)
+{
+    if (surfPtr->minimizePending && surfPtr->frame) {
+	surfPtr->minimizePending = false;
+	libdecor_frame_set_minimized(surfPtr->frame);
+    }
+}
+
+/*
  *----------------------------------------------------------------------
  *
  * TkWlWmMapSurface --
@@ -423,7 +462,6 @@ TkWlWmMapSurface(
     TkWlSurface *surfPtr)
 {
     TkWlWindow *winPtr = surfPtr->winPtr;
-    long *hints;
 
     InitAtoms(winPtr->display);
     if (surfPtr->iconic) {
@@ -432,6 +470,7 @@ TkWlWmMapSurface(
 	 */
 
 	surfPtr->iconic = false;
+	TkWlWmActivate(surfPtr);
 	return;
     }
     if (surfPtr->frame || surfPtr->xdgSurface) {
@@ -439,6 +478,31 @@ TkWlWmMapSurface(
     }
     if (winPtr->overrideRedirect || tkWlDisplay->decor == NULL) {
 	MapPopup(surfPtr);
+	return;
+    }
+
+    /*
+     * The toplevel is created at idle time, so that windows which are
+     * mapped and unmapped or destroyed at once never get one. (Weston 15
+     * crashes when a toplevel is destroyed before it is configured.)
+     */
+
+    if (!surfPtr->rolePending) {
+	surfPtr->rolePending = true;
+	Tcl_DoWhenIdle(MapToplevel, surfPtr);
+    }
+}
+
+static void
+MapToplevel(
+    void *clientData)
+{
+    TkWlSurface *surfPtr = (TkWlSurface *)clientData;
+    TkWlWindow *winPtr = surfPtr->winPtr;
+    long *hints;
+
+    surfPtr->rolePending = false;
+    if (!winPtr->mapped || surfPtr->frame) {
 	return;
     }
     surfPtr->configured = false;
@@ -451,9 +515,20 @@ TkWlWmMapSurface(
     ApplyTransient(surfPtr);
     ApplyNetWmState(surfPtr);
     libdecor_frame_map(surfPtr->frame);
+
+    /*
+     * The first window of an application started by a launcher which gave
+     * it an activation token is activated with it.
+     */
+
+    if (tkWlDisplay->activation && getenv("XDG_ACTIVATION_TOKEN")) {
+	xdg_activation_v1_activate(tkWlDisplay->activation,
+		getenv("XDG_ACTIVATION_TOKEN"), surfPtr->surface);
+	unsetenv("XDG_ACTIVATION_TOKEN");
+    }
     hints = GetLongs(winPtr, XA_WM_HINTS, 9);
     if (hints && (hints[0] & StateHint) && hints[2] == IconicState) {
-	libdecor_frame_set_minimized(surfPtr->frame);
+	Minimize(surfPtr);
     }
     wl_display_flush(tkWlDisplay->wlDisplay);
 }
@@ -475,6 +550,7 @@ TkWlSurfaceSetFrame(
     }
     surfPtr->frame = frame;
     surfPtr->iconic = false;
+    surfPtr->minimizePending = false;
 }
 
 /*
@@ -615,10 +691,12 @@ TkWlWmClientMessage(
 	 */
 
 	if (surfPtr->frame && winPtr->mapped) {
-	    libdecor_frame_set_minimized(surfPtr->frame);
+	    Minimize(surfPtr);
 	    surfPtr->iconic = true;
 	    XUnmapWindow(winPtr->display, winPtr->id);
 	}
+    } else if (eventPtr->xclient.message_type == atoms._NET_ACTIVE_WINDOW) {
+	TkWlWmActivate(surfPtr);
     } else if (eventPtr->xclient.message_type == atoms._NET_WM_STATE) {
 	long action = eventPtr->xclient.data.l[0];
 	int i;
@@ -659,6 +737,64 @@ TkWlWmClientMessage(
 	}
     }
     return true;
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWlWmActivate --
+ *
+ *	Ask the compositor to activate (raise and focus) a toplevel, with an
+ *	activation token for the input the application last received. The
+ *	compositor decides whether it does.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static void
+TokenDone(
+    void *data,
+    struct xdg_activation_token_v1 *token,
+    const char *tokenString)
+{
+    TkWlSurface *surfPtr = TkWlGetSurface((Window)(uintptr_t)data);
+
+    if (surfPtr && surfPtr->winPtr->mapped
+	    && (surfPtr->frame || surfPtr->xdgToplevel)) {
+	xdg_activation_v1_activate(tkWlDisplay->activation, tokenString,
+		surfPtr->surface);
+	wl_display_flush(tkWlDisplay->wlDisplay);
+    }
+    xdg_activation_token_v1_destroy(token);
+}
+
+static const struct xdg_activation_token_v1_listener tokenListener = {
+    TokenDone
+};
+
+void
+TkWlWmActivate(
+    TkWlSurface *surfPtr)
+{
+    struct xdg_activation_token_v1 *token;
+
+    if (tkWlDisplay->activation == NULL || surfPtr == NULL
+	    || surfPtr == tkWlDisplay->keyboardSurface) {
+	return;
+    }
+    token = xdg_activation_v1_get_activation_token(tkWlDisplay->activation);
+    xdg_activation_token_v1_add_listener(token, &tokenListener,
+	    (void *)(uintptr_t)surfPtr->winPtr->id);
+    if (tkWlDisplay->seat && tkWlDisplay->lastSerial) {
+	xdg_activation_token_v1_set_serial(token, tkWlDisplay->lastSerial,
+		tkWlDisplay->seat);
+    }
+    if (tkWlDisplay->keyboardSurface) {
+	xdg_activation_token_v1_set_surface(token,
+		tkWlDisplay->keyboardSurface->surface);
+    }
+    xdg_activation_token_v1_commit(token);
+    wl_display_flush(tkWlDisplay->wlDisplay);
 }
 
 /*
@@ -795,8 +931,9 @@ RoleXdgSurface(
 }
 
 /*
- * Whether a surface can be the parent of a popup: it must have a role, and
- * not be the popup or one of its descendants.
+ * Whether a surface can be the parent of a popup: it must have a role, have
+ * been shown (Weston 15 crashes positioning popups of surfaces it has not
+ * shown yet), and not be the popup or one of its descendants.
  */
 
 static bool
@@ -807,7 +944,7 @@ CanBeParent(
     TkWlSurface *p;
 
     if (parentPtr == NULL || !parentPtr->winPtr->mapped
-	    || !parentPtr->configured || RoleXdgSurface(parentPtr) == NULL) {
+	    || !parentPtr->presented || RoleXdgSurface(parentPtr) == NULL) {
 	return false;
     }
     for (p = parentPtr; p; p = p->popupParent) {
@@ -943,6 +1080,10 @@ DestroyRole(
 {
     TkWlSurface *p;
 
+    if (surfPtr->rolePending) {
+	Tcl_CancelIdleCall(MapToplevel, surfPtr);
+	surfPtr->rolePending = false;
+    }
     for (p = tkWlDisplay->surfaces; p; p = p->nextPtr) {
 	if (p->popupParent == surfPtr) {
 	    DestroyRole(p);
@@ -952,6 +1093,7 @@ DestroyRole(
 		p->committed = false;
 	    }
 	    p->configured = false;
+	    p->presented = false;
 	}
     }
     if (surfPtr->xdgPopup) {

@@ -1473,6 +1473,12 @@ XSetInputFocus(
     if (winPtr && tkWlDisplay->keyboardSurface
 	    && TkWlTopWindow(winPtr) == tkWlDisplay->keyboardSurface->winPtr) {
 	focusWindow = focus;
+    } else if (winPtr && TkWlTopWindow(winPtr)) {
+	/*
+	 * Moving the focus to another toplevel needs the compositor.
+	 */
+
+	TkWlWmActivate(TkWlTopWindow(winPtr)->surface);
     }
     return Success;
 }
