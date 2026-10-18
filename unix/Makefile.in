@@ -471,6 +471,10 @@ WAYLAND_PROTOCOL_OBJS = $(WAYLAND_PROTOCOLS:%=%-protocol.o)
 
 WAYLAND_PROTOCOL_HDRS = $(WAYLAND_PROTOCOLS:%=%-client-protocol.h)
 
+# Shared files which include tkWaylandInt.h on Wayland need the protocol
+# headers (the variable is empty for the other windowing systems).
+tkPointer.o: $(@TK_WINDOWINGSYSTEM@_PROTOCOL_HDRS)
+
 OBJS =  $(GENERIC_OBJS) $(WIDG_OBJS) $(CANV_OBJS) $(IMAGE_OBJS) $(TEXT_OBJS) \
 	$(STUB_OBJS) $(TTK_OBJS) \
 	$(@TK_WINDOWINGSYSTEM@_OBJS) @PLAT_OBJS@

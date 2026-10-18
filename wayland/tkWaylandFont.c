@@ -96,11 +96,35 @@ GetFace(
 	cairo_font_face_t *fontFace;
 	cairo_matrix_t fontMatrix, ctm;
 	cairo_font_options_t *options;
-	double pixelSize = 12.0;
+	double pixelSize = 12.0, fixup;
 
-	if (FcPatternGetDouble(pat, FC_PIXEL_SIZE, 0, &pixelSize)
+	/*
+	 * Use the size requested for the font: the pattern of a bitmap face
+	 * (such as color emoji) has the size of its bitmaps, with a matrix
+	 * which fontconfig computes to scale them; the font matrix below
+	 * does the scaling, so that factor is removed from the matrix.
+	 */
+
+	if (FcPatternGetDouble(fontPtr->pattern, FC_PIXEL_SIZE, 0, &pixelSize)
+		!= FcResultMatch
+		&& FcPatternGetDouble(pat, FC_PIXEL_SIZE, 0, &pixelSize)
 		!= FcResultMatch) {
 	    pixelSize = 12.0;
+	}
+	if (FcPatternGetDouble(pat, "pixelsizefixupfactor", 0, &fixup)
+		== FcResultMatch && fixup > 0.0) {
+	    FcMatrix *matPtr, mat;
+
+	    if (FcPatternGetMatrix(pat, FC_MATRIX, 0, &matPtr)
+		    == FcResultMatch) {
+		mat = *matPtr;
+		mat.xx /= fixup;
+		mat.xy /= fixup;
+		mat.yx /= fixup;
+		mat.yy /= fixup;
+		FcPatternDel(pat, FC_MATRIX);
+		FcPatternAddMatrix(pat, FC_MATRIX, &mat);
+	    }
 	}
 	fontFace = cairo_ft_font_face_create_for_pattern(pat);
 	cairo_matrix_init_scale(&fontMatrix, pixelSize, pixelSize);

@@ -508,6 +508,32 @@ static const char *const modNames[8] = {
 static xkb_mod_index_t modIndices[8];
 
 static void
+InitModIndices(
+    struct xkb_keymap *keymap)
+{
+    int i;
+
+    for (i = 0; i < 8; i++) {
+	modIndices[i] = xkb_keymap_mod_get_index(keymap, modNames[i]);
+    }
+
+    /*
+     * The modifiers in Mod1-Mod5 depend on the keymap; use the usual
+     * assignment of XKB when the keymap has virtual modifiers only.
+     */
+
+    if (modIndices[3] == XKB_MOD_INVALID) {
+	modIndices[3] = xkb_keymap_mod_get_index(keymap, XKB_MOD_NAME_ALT);
+    }
+    if (modIndices[4] == XKB_MOD_INVALID) {
+	modIndices[4] = xkb_keymap_mod_get_index(keymap, XKB_MOD_NAME_NUM);
+    }
+    if (modIndices[6] == XKB_MOD_INVALID) {
+	modIndices[6] = xkb_keymap_mod_get_index(keymap, XKB_MOD_NAME_LOGO);
+    }
+}
+
+static void
 KeyboardKeymap(
     TCL_UNUSED(void *),
     TCL_UNUSED(struct wl_keyboard *),
@@ -517,7 +543,6 @@ KeyboardKeymap(
 {
     struct xkb_keymap *keymap;
     char *map;
-    int i;
 
     if (format != WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1) {
 	close(fd);
@@ -543,24 +568,7 @@ KeyboardKeymap(
     }
     tkWlDisplay->keymap = keymap;
     tkWlDisplay->xkbState = xkb_state_new(keymap);
-    for (i = 0; i < 8; i++) {
-	modIndices[i] = xkb_keymap_mod_get_index(keymap, modNames[i]);
-    }
-
-    /*
-     * The modifiers in Mod1-Mod5 depend on the keymap; use the usual
-     * assignment of XKB when the keymap has virtual modifiers only.
-     */
-
-    if (modIndices[3] == XKB_MOD_INVALID) {
-	modIndices[3] = xkb_keymap_mod_get_index(keymap, XKB_MOD_NAME_ALT);
-    }
-    if (modIndices[4] == XKB_MOD_INVALID) {
-	modIndices[4] = xkb_keymap_mod_get_index(keymap, XKB_MOD_NAME_NUM);
-    }
-    if (modIndices[6] == XKB_MOD_INVALID) {
-	modIndices[6] = xkb_keymap_mod_get_index(keymap, XKB_MOD_NAME_LOGO);
-    }
+    InitModIndices(keymap);
     if (tkWlDisplay->display) {
 	TkDisplay *dispPtr = TkGetDisplayList();
 
@@ -1043,6 +1051,21 @@ TkpOpenDisplay(
     wl_display_roundtrip(wlDisplay);
 
     tkWlDisplay->decor = libdecor_new(wlDisplay, &decorInterface);
+
+    /*
+     * Without a keyboard (as on a headless compositor), use the default
+     * keymap, so that keysyms can still be mapped to keycodes, for [event
+     * generate].
+     */
+
+    if (tkWlDisplay->keymap == NULL) {
+	tkWlDisplay->keymap = xkb_keymap_new_from_names(
+		tkWlDisplay->xkbContext, NULL, XKB_KEYMAP_COMPILE_NO_FLAGS);
+	if (tkWlDisplay->keymap) {
+	    tkWlDisplay->xkbState = xkb_state_new(tkWlDisplay->keymap);
+	    InitModIndices(tkWlDisplay->keymap);
+	}
+    }
 
     outPtr = tkWlDisplay->outputs;
     tkWlDisplay->display = TkWlOpenXDisplay(

@@ -120,6 +120,7 @@ NewWindow(
     winPtr->display = display;
     winPtr->bitGravity = ForgetGravity;
     winPtr->backgroundType = BG_NONE;
+    winPtr->visibility = -1;
     pixman_region32_init(&winPtr->exposed);
     pixman_region32_init(&winPtr->clip);
     return winPtr;
@@ -478,6 +479,41 @@ ExposeWindow(
 	    }
 	}
     }
+    /*
+     * Send VisibilityNotify when the visibility of a viewable window
+     * changes.
+     */
+
+    if (TkWlIsViewable(winPtr) && !winPtr->inputOnly) {
+	int state;
+
+	if (!pixman_region32_not_empty(&visible)) {
+	    state = VisibilityFullyObscured;
+	} else if (pixman_region32_n_rects(&visible) == 1
+		&& pixman_region32_extents(&visible)->x2
+		    - pixman_region32_extents(&visible)->x1 == winPtr->width
+		&& pixman_region32_extents(&visible)->y2
+		    - pixman_region32_extents(&visible)->y1 == winPtr->height) {
+	    state = VisibilityUnobscured;
+	} else {
+	    state = VisibilityPartiallyObscured;
+	}
+	if (state != winPtr->visibility
+		&& (winPtr->eventMask & VisibilityChangeMask)) {
+	    XEvent event;
+
+	    memset(&event, 0, sizeof(XEvent));
+	    event.xvisibility.type = VisibilityNotify;
+	    event.xvisibility.display = winPtr->display;
+	    event.xvisibility.window = winPtr->id;
+	    event.xvisibility.state = state;
+	    TkWlQueueEvent(&event);
+	}
+	winPtr->visibility = state;
+    } else {
+	winPtr->visibility = -1;
+    }
+
     pixman_region32_copy(&winPtr->exposed, &visible);
     winPtr->exposedX = x;
     winPtr->exposedY = y;
@@ -1339,13 +1375,13 @@ XUnmapWindow(
     return Success;
 }
 
-int
+Status
 XWithdrawWindow(
     Display *display,
     Window w,
     TCL_UNUSED(int))
 {
-    return XUnmapWindow(display, w);
+    return XUnmapWindow(display, w) == Success;
 }
 
 /*

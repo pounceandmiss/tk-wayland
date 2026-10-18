@@ -119,6 +119,8 @@ typedef struct TkWlWindow {
     int exposedX, exposedY;	/* Position of the inside of the window in
 				 * its surface at that time. */
     int exposedWidth, exposedHeight;
+    int visibility;		/* VisibilityUnobscured etc., or -1 when the
+				 * window is not viewable. */
 
     /*
      * The visible region is cached until the window tree changes.
