@@ -604,6 +604,22 @@ ModState(void)
 }
 
 static void
+QueueFocusEvent(
+    int type,
+    Window w)
+{
+    XEvent event;
+
+    memset(&event, 0, sizeof(XEvent));
+    event.xfocus.type = type;
+    event.xfocus.display = tkWlDisplay->display;
+    event.xfocus.window = w;
+    event.xfocus.mode = NotifyNormal;
+    event.xfocus.detail = NotifyNonlinear;
+    TkWlQueueEvent(&event);
+}
+
+static void
 KeyboardEnter(
     TCL_UNUSED(void *),
     TCL_UNUSED(struct wl_keyboard *),
@@ -612,7 +628,6 @@ KeyboardEnter(
     TCL_UNUSED(struct wl_array *))
 {
     TkWlSurface *surfPtr = surface ? TkWlSurfaceFromWl(surface) : NULL;
-    XEvent event;
 
     tkWlDisplay->lastSerial = serial;
     tkWlDisplay->keyboardSurface = surfPtr;
@@ -626,14 +641,11 @@ KeyboardEnter(
 
 	XMapWindow(surfPtr->winPtr->display, surfPtr->winPtr->id);
     }
+    if (TkWlGetWindow(focusWindow) && focusWindow != surfPtr->winPtr->id) {
+	QueueFocusEvent(FocusOut, focusWindow);
+    }
     focusWindow = surfPtr->winPtr->id;
-    memset(&event, 0, sizeof(XEvent));
-    event.xfocus.type = FocusIn;
-    event.xfocus.display = surfPtr->winPtr->display;
-    event.xfocus.window = surfPtr->winPtr->id;
-    event.xfocus.mode = NotifyNormal;
-    event.xfocus.detail = NotifyNonlinear;
-    TkWlQueueEvent(&event);
+    QueueFocusEvent(FocusIn, focusWindow);
 }
 
 static void
@@ -643,26 +655,22 @@ KeyboardLeave(
     uint32_t serial,
     TCL_UNUSED(struct wl_surface *))
 {
-    TkWlSurface *surfPtr = tkWlDisplay->keyboardSurface;
-    XEvent event;
-
     tkWlDisplay->lastSerial = serial;
     tkWlDisplay->keyboardSurface = NULL;
     if (tkWlDisplay->repeatTimer) {
 	Tcl_DeleteTimerHandler(tkWlDisplay->repeatTimer);
 	tkWlDisplay->repeatTimer = NULL;
     }
-    focusWindow = None;
-    if (surfPtr == NULL) {
-	return;
+
+    /*
+     * The focus may be in another toplevel than the one the compositor gave
+     * the keyboard to (see XSetInputFocus).
+     */
+
+    if (TkWlGetWindow(focusWindow)) {
+	QueueFocusEvent(FocusOut, focusWindow);
     }
-    memset(&event, 0, sizeof(XEvent));
-    event.xfocus.type = FocusOut;
-    event.xfocus.display = surfPtr->winPtr->display;
-    event.xfocus.window = surfPtr->winPtr->id;
-    event.xfocus.mode = NotifyNormal;
-    event.xfocus.detail = NotifyNonlinear;
-    TkWlQueueEvent(&event);
+    focusWindow = None;
 }
 
 /*
@@ -729,8 +737,7 @@ QueueKeyEvent(
     memset(&event, 0, sizeof(event));
     event.x.xkey.type = type;
     event.x.xkey.display = surfPtr->winPtr->display;
-    event.x.xkey.window = (focusWindow != None && TkWlGetWindow(focusWindow)
-	    && TkWlTopWindow(TkWlGetWindow(focusWindow)) == surfPtr->winPtr)
+    event.x.xkey.window = TkWlGetWindow(focusWindow)
 	    ? focusWindow : surfPtr->winPtr->id;
     event.x.xkey.root = RootWindow(event.x.xkey.display, 0);
     event.x.xkey.time = tkWlDisplay->lastTime;
@@ -1503,17 +1510,35 @@ XSetInputFocus(
     TCL_UNUSED(Time))
 {
     TkWlWindow *winPtr = TkWlGetWindow(focus);
+    TkWlWindow *topPtr = winPtr ? TkWlTopWindow(winPtr) : NULL;
 
     TkWlNextRequest(display);
-    if (winPtr && tkWlDisplay->keyboardSurface
-	    && TkWlTopWindow(winPtr) == tkWlDisplay->keyboardSurface->winPtr) {
-	focusWindow = focus;
-    } else if (winPtr && TkWlTopWindow(winPtr)) {
+    if (topPtr == NULL || tkWlDisplay->keyboardSurface == NULL) {
 	/*
-	 * Moving the focus to another toplevel needs the compositor.
+	 * Only the compositor can give the keyboard to the application.
 	 */
 
-	TkWlWmActivate(TkWlTopWindow(winPtr)->surface);
+	if (topPtr) {
+	    TkWlWmActivate(topPtr->surface);
+	}
+	return Success;
+    }
+
+    /*
+     * The application has the keyboard: like an X server, move the focus
+     * between its windows, which the keys go to. The compositor is asked to
+     * activate the toplevel, so that it is shown in front.
+     */
+
+    if (topPtr != tkWlDisplay->keyboardSurface->winPtr) {
+	TkWlWmActivate(topPtr->surface);
+    }
+    if (focus != focusWindow) {
+	if (TkWlGetWindow(focusWindow)) {
+	    QueueFocusEvent(FocusOut, focusWindow);
+	}
+	focusWindow = focus;
+	QueueFocusEvent(FocusIn, focusWindow);
     }
     return Success;
 }

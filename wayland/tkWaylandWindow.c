@@ -713,6 +713,89 @@ static const struct wl_surface_listener surfaceListener = {
 #endif
 };
 
+/*
+ * Create and destroy the wl_surface of a surface, with its viewport.
+ */
+
+static void
+CreateWlSurface(
+    TkWlSurface *surfPtr)
+{
+    surfPtr->surface = wl_compositor_create_surface(tkWlDisplay->compositor);
+    wl_surface_set_user_data(surfPtr->surface, surfPtr);
+    wl_surface_add_listener(surfPtr->surface, &surfaceListener, surfPtr);
+    if (tkWlDisplay->viewporter) {
+	surfPtr->viewport = wp_viewporter_get_viewport(
+		tkWlDisplay->viewporter, surfPtr->surface);
+	if (tkWlDisplay->fractionalScaleManager) {
+	    surfPtr->fractional =
+		    wp_fractional_scale_manager_v1_get_fractional_scale(
+		    tkWlDisplay->fractionalScaleManager, surfPtr->surface);
+	    wp_fractional_scale_v1_add_listener(surfPtr->fractional,
+		    &fractionalListener, surfPtr);
+	}
+    }
+    surfPtr->numOutputs = 0;
+    surfPtr->roleType = TKWL_ROLE_NONE;
+}
+
+static void
+DestroyWlSurface(
+    TkWlSurface *surfPtr)
+{
+    if (surfPtr->frameCallback) {
+	wl_callback_destroy(surfPtr->frameCallback);
+	surfPtr->frameCallback = NULL;
+    }
+    if (surfPtr->fractional) {
+	wp_fractional_scale_v1_destroy(surfPtr->fractional);
+	surfPtr->fractional = NULL;
+    }
+    if (surfPtr->viewport) {
+	wp_viewport_destroy(surfPtr->viewport);
+	surfPtr->viewport = NULL;
+    }
+    wl_surface_destroy(surfPtr->surface);
+    surfPtr->surface = NULL;
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWlSurfaceSetRole --
+ *
+ *	Called before a surface is given a role. The role of a wl_surface
+ *	cannot change (a toplevel cannot become a popup, even after its
+ *	xdg_toplevel was destroyed), so the wl_surface is replaced when the
+ *	surface gets a role of another type.
+ *
+ *----------------------------------------------------------------------
+ */
+
+void
+TkWlSurfaceSetRole(
+    TkWlSurface *surfPtr,
+    int roleType)
+{
+    int i;
+
+    if (surfPtr->roleType != TKWL_ROLE_NONE
+	    && surfPtr->roleType != roleType) {
+	DestroyWlSurface(surfPtr);
+	CreateWlSurface(surfPtr);
+	surfPtr->committed = false;
+	surfPtr->configured = false;
+	surfPtr->presented = false;
+	for (i = 0; i < TKWL_NUM_BUFFERS; i++) {
+	    surfPtr->buffers[i].busy = false;
+	    pixman_region32_union_rect(&surfPtr->buffers[i].damage,
+		    &surfPtr->buffers[i].damage, 0, 0,
+		    (unsigned)surfPtr->width, (unsigned)surfPtr->height);
+	}
+    }
+    surfPtr->roleType = roleType;
+}
+
 static TkWlSurface *
 NewSurface(
     TkWlWindow *winPtr)
@@ -728,20 +811,7 @@ NewSurface(
     for (i = 0; i < TKWL_NUM_BUFFERS; i++) {
 	pixman_region32_init(&surfPtr->buffers[i].damage);
     }
-    surfPtr->surface = wl_compositor_create_surface(tkWlDisplay->compositor);
-    wl_surface_set_user_data(surfPtr->surface, surfPtr);
-    wl_surface_add_listener(surfPtr->surface, &surfaceListener, surfPtr);
-    if (tkWlDisplay->viewporter) {
-	surfPtr->viewport = wp_viewporter_get_viewport(
-		tkWlDisplay->viewporter, surfPtr->surface);
-	if (tkWlDisplay->fractionalScaleManager) {
-	    surfPtr->fractional =
-		    wp_fractional_scale_manager_v1_get_fractional_scale(
-		    tkWlDisplay->fractionalScaleManager, surfPtr->surface);
-	    wp_fractional_scale_v1_add_listener(surfPtr->fractional,
-		    &fractionalListener, surfPtr);
-	}
-    }
+    CreateWlSurface(surfPtr);
     TkWlUpdateScale(surfPtr);
     surfPtr->nextPtr = tkWlDisplay->surfaces;
     tkWlDisplay->surfaces = surfPtr;
@@ -799,21 +869,12 @@ DestroySurface(
     if (surfPtr->presentPending) {
 	Tcl_CancelIdleCall(PresentIdle, surfPtr);
     }
-    if (surfPtr->frameCallback) {
-	wl_callback_destroy(surfPtr->frameCallback);
-    }
     TkWlWmUnmapSurface(surfPtr);
     for (i = 0; i < TKWL_NUM_BUFFERS; i++) {
 	FreeBuffer(&surfPtr->buffers[i]);
 	pixman_region32_fini(&surfPtr->buffers[i].damage);
     }
-    if (surfPtr->fractional) {
-	wp_fractional_scale_v1_destroy(surfPtr->fractional);
-    }
-    if (surfPtr->viewport) {
-	wp_viewport_destroy(surfPtr->viewport);
-    }
-    wl_surface_destroy(surfPtr->surface);
+    DestroyWlSurface(surfPtr);
     if (surfPtr->backing) {
 	cairo_surface_destroy(surfPtr->backing);
     }

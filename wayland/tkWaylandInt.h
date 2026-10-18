@@ -181,6 +181,8 @@ typedef struct TkWlSurface {
 				 * unmapped, but the surface keeps its role,
 				 * since Wayland has no iconic state. */
     double opacity;		/* From _NET_WM_WINDOW_OPACITY. */
+    int roleType;		/* TKWL_ROLE_*: the type of the role the
+				 * wl_surface had, which cannot change. */
     bool rolePending;		/* The role is created at idle time. */
     bool minimizePending;	/* Minimize after the first commit. */
     bool inConfigure;		/* The window is being resized by the
@@ -339,6 +341,12 @@ MODULE_SCOPE TkWlWindow *TkWlWindowAtPoint(TkWlWindow *winPtr, int x, int y);
 MODULE_SCOPE TkWlSurface *TkWlSurfaceFromWl(struct wl_surface *surface);
 MODULE_SCOPE void	TkWlQueueEvent(XEvent *eventPtr);
 MODULE_SCOPE void	TkWlSurfaceConfigured(TkWlSurface *surfPtr);
+MODULE_SCOPE void	TkWlSurfaceSetRole(TkWlSurface *surfPtr,
+			    int roleType);
+
+#define TKWL_ROLE_NONE		0
+#define TKWL_ROLE_TOPLEVEL	1
+#define TKWL_ROLE_POPUP		2
 MODULE_SCOPE TkWlProperty *TkWlGetProperty(TkWlWindow *winPtr, Atom name);
 MODULE_SCOPE void	TkWlFreeProperties(TkWlWindow *winPtr);
 MODULE_SCOPE TkWlSurface *TkWlGetSurface(Window w);

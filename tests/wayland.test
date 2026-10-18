@@ -1,0 +1,950 @@
+# This file is a Tcl script to test the Wayland port of Tk: the life cycle of
+# windows and popups (including the unusual sequences which compositors are
+# sensitive to), drawing, window attributes, cursors, icons, bidirectional
+# text and selections.
+#
+# Some tests drive the compositor from outside, and need additional tools:
+# - waylandInput: wtype (virtual keyboard), wl-copy and wl-paste
+#   (wl-clipboard), on a compositor which supports the protocols they use
+#   (such as sway). Enabled by setting the environment variable
+#   TK_WAYLAND_TEST_INPUT. The seat must have a keyboard, which headless
+#   compositors do not have: run "wtype -s 86400000" in the background.
+# - swayPointer: swaymsg, to find windows on sway, and a virtual pointer
+#   (a program reading the commands "move X Y", "press N" and "release N",
+#   such as tools/vpointer.c of the wayland-cairo branch), whose command is
+#   given in the environment variable TK_WAYLAND_VPOINTER, followed by the
+#   size of the layout.
+#
+# Copyright © 2026 The Tk developers.
+
+#
+# TESTFILE INITIALIZATION
+#
+
+package require tcltest 2.2; # needed in mode -singleproc 0
+
+# Load the main script main.tcl, which takes care of:
+# - setup for the application and the root window
+# - importing commands from the tcltest namespace
+# - loading of the testutils mechanism along with its utility procs
+# - loading of Tk specific test constraints (additionally to constraints
+#   provided by the package tcltest)
+source [file join [tcltest::configure -testdir] main.tcl]
+
+testConstraint wayland [expr {[tk windowingsystem] eq "wayland"}]
+testConstraint bidi [expr {![tk::build-info no-bidi]}]
+testConstraint waylandInput [expr {[testConstraint wayland]
+	&& [info exists env(TK_WAYLAND_TEST_INPUT)]
+	&& [llength [auto_execok wtype]] && [llength [auto_execok wl-paste]]}]
+testConstraint swayPointer [expr {[testConstraint waylandInput]
+	&& [info exists env(SWAYSOCK)] && [llength [auto_execok swaymsg]]
+	&& [info exists env(TK_WAYLAND_VPOINTER)]}]
+
+# Ensure a pristine initial window state
+resetWindows
+
+namespace eval ::tk::test::wayland {
+    namespace import -force ::tcltest::*
+
+    # Wait until a condition is true, processing events, for at most
+    # timeout milliseconds. Returns the value of the condition.
+    proc waitFor {condition {timeout 3000}} {
+	set end [expr {[clock milliseconds] + $timeout}]
+	while {![uplevel 1 [list expr $condition]]} {
+	    if {[clock milliseconds] > $end} {
+		return 0
+	    }
+	    after 20
+	    update
+	}
+	return 1
+    }
+
+    # Wait for a window to be shown and drawn.
+    proc waitShown {w} {
+	waitFor {[winfo ismapped $w]}
+	update
+	after 100
+	update
+    }
+
+    # The application is still connected to the compositor: Tk exits when
+    # the compositor closes the connection (for instance after a protocol
+    # error), so being able to make and show a window is enough.
+    proc stillConnected {} {
+	destroy .alive
+	toplevel .alive
+	waitShown .alive
+	set result [winfo ismapped .alive]
+	destroy .alive
+	return $result
+    }
+
+    # Write an X bitmap file, a cross of 8x8.
+    proc writeBitmap {name {size 8}} {
+	set f [open $name w]
+	puts $f "#define c_width $size\n#define c_height $size"
+	puts $f "#define c_x_hot 4\n#define c_y_hot 4"
+	set bytes {}
+	for {set i 0} {$i < $size * (($size + 7) / 8)} {incr i} {
+	    lappend bytes 0x18
+	}
+	puts $f "static unsigned char c_bits\[\] = {\n   [join $bytes {, }]};"
+	close $f
+	return $name
+    }
+
+    # The position of the content of a toplevel on the screen of sway, from
+    # its title: the "rect" of its node, plus the offset of the content in
+    # it ("window_rect"), which come before its "name" in the tree.
+    proc swayRect {title} {
+	set tree [exec swaymsg -t get_tree -r]
+	set num {\s*(-?\d+)}
+	set pattern "\"rect\": \\{\\s*\"x\":$num,\\s*\"y\":$num,\[^\}\]*\\}"
+	append pattern "\[^\\\[\\\]\]*?\"window_rect\": \\{\\s*\"x\":$num,"
+	append pattern "\\s*\"y\":$num,\[^\}\]*\\}\[^\\\[\\\]\]*?"
+	append pattern "\"name\": \"[string map {\\ \\\\ . \\.} $title]\""
+	if {![regexp $pattern $tree -> x y wx wy]} {
+	    return {}
+	}
+	return [list [expr {$x + $wx}] [expr {$y + $wy}]]
+    }
+
+    # Send a command to the virtual pointer, which is started the first
+    # time, and kept, so that the seat keeps its pointer.
+    variable pointer {}
+    proc pointer {command} {
+	variable pointer
+	if {$pointer eq ""} {
+	    set pointer [open |$::env(TK_WAYLAND_VPOINTER) r+]
+	    fconfigure $pointer -buffering line
+	    gets $pointer
+
+	    # Let the application see the new pointer of the seat.
+	    waitFor 0 500
+	}
+	puts $pointer $command
+	gets $pointer
+	update
+    }
+
+    # Click in a window, at a position relative to it, with sway.
+    proc swayClick {w x y {button 1}} {
+	set top [winfo toplevel $w]
+	lassign [swayRect [wm title $top]] tx ty
+	set x [expr {$tx + [winfo rootx $w] - [winfo rootx $top] + $x}]
+	set y [expr {$ty + [winfo rooty $w] - [winfo rooty $top] + $y}]
+	pointer "move $x $y"
+	after 50
+	update
+	pointer "press $button"
+	after 50
+	update
+	pointer "release $button"
+	after 50
+	update
+    }
+
+    # Wait for the application to have the keyboard, then give the focus to
+    # a window. On startup, the compositor may give the keyboard to another
+    # toplevel after the focus was set, which moves it there.
+    proc focusOn {w} {
+	waitFor {[focus] ne ""}
+	focus -force $w
+	waitFor {[focus] eq $w}
+    }
+
+    # A key typed with wtype first, since the first key of a new virtual
+    # keyboard reaches the client as already pressed.
+    proc type {args} {
+	exec wtype -k Shift_L {*}$args
+    }
+
+#
+# TESTS
+#
+
+# Life cycle of toplevels
+
+test wayland-1.1 {create and destroy toplevels, showing them} -constraints {
+    wayland
+} -body {
+    for {set i 0} {$i < 30} {incr i} {
+	toplevel .t$i
+	update
+	destroy .t$i
+    }
+    stillConnected
+} -result 1
+test wayland-1.2 {create and destroy toplevels before they are shown} -constraints {
+    wayland
+} -body {
+    for {set i 0} {$i < 30} {incr i} {
+	toplevel .t$i
+	update idletasks
+	destroy .t$i
+    }
+    for {set i 0} {$i < 30} {incr i} {
+	toplevel .t$i
+	wm withdraw .t$i
+	update idletasks
+	wm deiconify .t$i
+	destroy .t$i
+    }
+    stillConnected
+} -result 1
+test wayland-1.3 {withdraw and deiconify repeatedly, the window is drawn again} -constraints {
+    wayland testpixel
+} -setup {
+    toplevel .t -bg #00ff00 -width 100 -height 100
+    waitShown .t
+} -body {
+    for {set i 0} {$i < 10} {incr i} {
+	wm withdraw .t
+	if {$i % 2} {
+	    update
+	}
+	wm deiconify .t
+	if {$i % 3} {
+	    update
+	}
+    }
+    waitShown .t
+    list [winfo ismapped .t] [wm state .t] [testpixel .t 50 50]
+} -cleanup {
+    destroy .t
+} -result {1 normal #00ff00}
+test wayland-1.4 {iconify before the first map} -constraints {
+    wayland
+} -body {
+    toplevel .t
+    wm iconify .t
+    update
+
+    # The window is shown and then minimized by the compositor, which is
+    # when the window manager reports it as iconic.
+    waitFor {[wm state .t] eq "iconic"}
+    set result [wm state .t]
+    wm deiconify .t
+    waitShown .t
+    lappend result [wm state .t] [winfo ismapped .t]
+} -cleanup {
+    destroy .t
+} -result {iconic normal 1}
+test wayland-1.5 {iconify and deiconify a mapped window} -constraints {
+    wayland
+} -setup {
+    toplevel .t
+    waitShown .t
+} -body {
+    wm iconify .t
+    update
+    set result [wm state .t]
+    wm deiconify .t
+    waitShown .t
+    lappend result [wm state .t] [winfo ismapped .t]
+} -cleanup {
+    destroy .t
+} -result {iconic normal 1}
+test wayland-1.6 {destroy withdrawn and iconified toplevels} -constraints {
+    wayland
+} -body {
+    toplevel .t1
+    toplevel .t2
+    waitShown .t2
+    wm withdraw .t1
+    wm iconify .t2
+    update
+    destroy .t1 .t2
+    stillConnected
+} -result 1
+test wayland-1.7 {destroy a toplevel with a menubar} -constraints {
+    wayland
+} -body {
+    toplevel .t
+    menu .t.m
+    .t.m add cascade -label File -menu [menu .t.m.f]
+    .t configure -menu .t.m
+    waitShown .t
+    destroy .t
+    stillConnected
+} -result 1
+test wayland-1.8 {destroy the container of a transient} -constraints {
+    wayland
+} -body {
+    toplevel .t1
+    toplevel .t2
+    wm transient .t2 .t1
+    waitShown .t2
+    destroy .t1
+    update
+    set result [winfo exists .t2]
+    destroy .t2
+    lappend result [stillConnected]
+} -result {1 1}
+test wayland-1.9 {override-redirect set on a mapped toplevel} -constraints {
+    wayland
+} -body {
+    toplevel .t -width 50 -height 50
+    waitShown .t
+    wm overrideredirect .t 1
+    wm withdraw .t
+    update
+    wm deiconify .t
+    waitShown .t
+    set result [winfo ismapped .t]
+    wm overrideredirect .t 0
+    wm withdraw .t
+    wm deiconify .t
+    waitShown .t
+    lappend result [winfo ismapped .t]
+} -cleanup {
+    destroy .t
+} -result {1 1}
+test wayland-1.10 {resize a toplevel repeatedly} -constraints {
+    wayland testpixel
+} -body {
+    toplevel .t -bg #0000ff
+    for {set i 1} {$i <= 20} {incr i} {
+	wm geometry .t [expr {100 + 7 * $i}]x[expr {80 + 5 * $i}]
+	if {$i % 4 == 0} {
+	    update
+	}
+    }
+    waitShown .t
+    list [winfo width .t] [winfo height .t] [testpixel .t 200 150]
+} -cleanup {
+    destroy .t
+} -result {240 180 #0000ff}
+
+# Popups
+
+test wayland-2.1 {post and unpost a menu repeatedly} -constraints {
+    wayland
+} -setup {
+    toplevel .t
+    menu .t.m -tearoff 0
+    .t.m add command -label One
+    .t.m add command -label Two
+    waitShown .t
+} -body {
+    for {set i 0} {$i < 20} {incr i} {
+	.t.m post [winfo rootx .t] [winfo rooty .t]
+	if {$i % 2} {
+	    update
+	}
+	.t.m unpost
+    }
+    stillConnected
+} -cleanup {
+    destroy .t
+} -result 1
+test wayland-2.2 {destroy a menu while its cascade is posted} -constraints {
+    wayland
+} -setup {
+    toplevel .t
+    menu .t.m -tearoff 0
+    .t.m add cascade -label More -menu [menu .t.m.c -tearoff 0]
+    .t.m.c add command -label Sub
+    waitShown .t
+} -body {
+    .t.m post [winfo rootx .t] [winfo rooty .t]
+    update
+    .t.m activate 0
+    .t.m postcascade 0
+    update
+    destroy .t.m
+    update
+    stillConnected
+} -cleanup {
+    destroy .t
+} -result 1
+test wayland-2.3 {destroy a toplevel while its menu is posted} -constraints {
+    wayland
+} -body {
+    toplevel .t
+    menu .t.m -tearoff 0
+    .t.m add command -label One
+    waitShown .t
+    .t.m post [winfo rootx .t] [winfo rooty .t]
+    update
+    destroy .t
+    stillConnected
+} -result 1
+test wayland-2.4 {override-redirect window without a parent} -constraints {
+    wayland
+} -setup {
+    wm withdraw .
+    update
+} -body {
+    toplevel .t -width 60 -height 40 -bg red
+    wm overrideredirect .t 1
+    waitShown .t
+    winfo ismapped .t
+} -cleanup {
+    destroy .t
+    wm deiconify .
+    update
+} -result 1
+test wayland-2.5 {post and unpost a combobox dropdown} -constraints {
+    wayland
+} -setup {
+    toplevel .t
+    ttk::combobox .t.c -values {a b c}
+    pack .t.c
+    waitShown .t
+} -body {
+    for {set i 0} {$i < 5} {incr i} {
+	ttk::combobox::Post .t.c
+	update
+	ttk::combobox::Unpost .t.c
+	update
+    }
+    stillConnected
+} -cleanup {
+    destroy .t
+} -result 1
+test wayland-2.6 {tooltip-like windows created and destroyed quickly} -constraints {
+    wayland
+} -setup {
+    toplevel .t
+    waitShown .t
+} -body {
+    for {set i 0} {$i < 30} {incr i} {
+	toplevel .t.tip -bg lightyellow
+	wm overrideredirect .t.tip 1
+	label .t.tip.l -text "tip $i"
+	pack .t.tip.l
+	wm geometry .t.tip +[expr {[winfo rootx .t] + $i}]+[winfo rooty .t]
+	if {$i % 3} {
+	    update
+	}
+	destroy .t.tip
+    }
+    stillConnected
+} -cleanup {
+    destroy .t
+} -result 1
+test wayland-2.7 {a menu posted from a withdrawn toplevel} -constraints {
+    wayland
+} -body {
+    toplevel .t
+    menu .t.m -tearoff 0
+    .t.m add command -label One
+    waitShown .t
+    wm withdraw .t
+    update
+    .t.m post 10 10
+    update
+    .t.m unpost
+    destroy .t
+    stillConnected
+} -result 1
+
+# Drawing
+
+test wayland-3.1 {lines include their end points, as in X11} -constraints {
+    wayland testpixel
+} -setup {
+    toplevel .t
+    canvas .t.c -width 30 -height 30 -bg white -highlightthickness 0 -bd 0
+    pack .t.c
+    .t.c create line 2 2 10 2 -fill black
+    waitShown .t
+} -body {
+    join [list [testpixel .t.c 1 2] [testpixel .t.c 2 2] [testpixel .t.c 10 2] \
+	    [testpixel .t.c 11 2]]
+} -cleanup {
+    destroy .t
+} -result {#ffffff #000000 #000000 #ffffff}
+test wayland-3.2 {photo images are composited with their alpha channel} -constraints {
+    wayland testpixel
+} -setup {
+    toplevel .t -bg #0000ff
+    image create photo wl32 -width 10 -height 10
+    wl32 put #ff0000 -to 0 0 10 10
+    wl32 transparency set 5 5 1
+    label .t.l -image wl32 -bd 0 -padx 0 -pady 0 -highlightthickness 0 \
+	    -bg #0000ff
+    pack .t.l
+    waitShown .t
+} -body {
+    join [list [testpixel .t.l 2 2] [testpixel .t.l 5 5]]
+} -cleanup {
+    destroy .t
+    image delete wl32
+} -result {#ff0000 #0000ff}
+test wayland-3.3 {children are not drawn over by their parent} -constraints {
+    wayland testpixel
+} -setup {
+    toplevel .t -bg #ff0000 -width 100 -height 100
+    frame .t.f -bg #00ff00 -width 40 -height 40
+    place .t.f -x 30 -y 30
+    waitShown .t
+} -body {
+    .t configure -bg #ffff00
+    update
+    join [list [testpixel .t 10 10] [testpixel .t 50 50]]
+} -cleanup {
+    destroy .t
+} -result {#ffff00 #00ff00}
+test wayland-3.4 {a moved child exposes its parent} -constraints {
+    wayland testpixel
+} -setup {
+    toplevel .t -bg #ff0000 -width 100 -height 100
+    frame .t.f -bg #00ff00 -width 40 -height 40
+    place .t.f -x 0 -y 0
+    waitShown .t
+} -body {
+    place .t.f -x 60 -y 60
+    update
+    join [list [testpixel .t 10 10] [testpixel .t 70 70]]
+} -cleanup {
+    destroy .t
+} -result {#ff0000 #00ff00}
+test wayland-3.5 {scrolled text is drawn} -constraints {
+    wayland testpixel
+} -setup {
+    toplevel .t
+    text .t.t -width 20 -height 5 -font {Courier 12}
+    pack .t.t
+    for {set i 0} {$i < 50} {incr i} {
+	.t.t insert end "line $i\n"
+    }
+    .t.t tag configure red -background #ff0000
+    .t.t tag add red 30.0 30.end
+    waitShown .t
+} -body {
+    .t.t yview 28.0
+    update
+    lassign [.t.t bbox 30.0] x y
+    testpixel .t.t [expr {$x + 2}] [expr {$y + 2}]
+} -cleanup {
+    destroy .t
+} -result #ff0000
+
+# Window attributes
+
+test wayland-4.1 {wm attributes -alpha} -constraints {
+    wayland
+} -setup {
+    toplevel .t
+    waitShown .t
+} -body {
+    set result {}
+    foreach a {0.5 2 -1 1} {
+	wm attributes .t -alpha $a
+	update
+	lappend result [wm attributes .t -alpha]
+    }
+    lappend result [stillConnected]
+} -cleanup {
+    destroy .t
+} -result {0.5 1.0 0.0 1.0 1}
+test wayland-4.2 {wm attributes -fullscreen and -zoomed} -constraints {
+    wayland
+} -setup {
+    toplevel .t
+    waitShown .t
+} -body {
+    wm attributes .t -fullscreen 1
+    update
+    wm attributes .t -fullscreen 0
+    update
+    wm attributes .t -zoomed 1
+    update
+    wm attributes .t -zoomed 0
+    update
+    stillConnected
+} -cleanup {
+    destroy .t
+} -result 1
+test wayland-4.3 {window title with any characters} -constraints {
+    wayland
+} -setup {
+    toplevel .t
+    waitShown .t
+} -body {
+    foreach title [list "" "שלום ✓ \U1F600" [string repeat x 5000]] {
+	wm title .t $title
+	update
+    }
+    stillConnected
+} -cleanup {
+    destroy .t
+} -result 1
+
+# Cursors
+
+test wayland-5.1 {named cursors} -constraints {
+    wayland
+} -setup {
+    toplevel .t
+    waitShown .t
+} -body {
+    foreach c {xterm watch hand2 sb_h_double_arrow none {arrow red blue}} {
+	.t configure -cursor $c
+	update
+    }
+    .t cget -cursor
+} -cleanup {
+    destroy .t
+} -result {arrow red blue}
+test wayland-5.2 {bad cursor name} -constraints {
+    wayland
+} -body {
+    toplevel .t
+    .t configure -cursor no_such_cursor
+} -cleanup {
+    destroy .t
+} -returnCodes error -result {bad cursor spec "no_such_cursor"}
+test wayland-5.3 {cursors made of bitmap files} -constraints {
+    wayland
+} -setup {
+    set src [writeBitmap [makeFile {} wlsrc.xbm]]
+    set mask [writeBitmap [makeFile {} wlmask.xbm]]
+    toplevel .t
+    waitShown .t
+} -body {
+    .t configure -cursor [list @$src red]
+    update
+    .t configure -cursor [list @$src $mask red blue]
+    update
+    .t configure -cursor {}
+    stillConnected
+} -cleanup {
+    destroy .t
+    removeFile wlsrc.xbm
+    removeFile wlmask.xbm
+} -result 1
+test wayland-5.4 {cursor from a missing bitmap file} -constraints {
+    wayland
+} -body {
+    toplevel .t
+    .t configure -cursor {@/no/such/file.xbm red}
+} -cleanup {
+    destroy .t
+} -returnCodes error -match glob -result {*}
+test wayland-5.5 {cursor bitmaps of different sizes} -constraints {
+    wayland
+} -setup {
+    set src [writeBitmap [makeFile {} wlsrc.xbm] 8]
+    set mask [writeBitmap [makeFile {} wlmask.xbm] 16]
+} -body {
+    toplevel .t
+    .t configure -cursor [list @$src $mask red blue]
+} -cleanup {
+    destroy .t
+    removeFile wlsrc.xbm
+    removeFile wlmask.xbm
+} -returnCodes error -result {source and mask bitmaps have different sizes}
+test wayland-5.6 {cursor with a bad color} -constraints {
+    wayland
+} -setup {
+    set src [writeBitmap [makeFile {} wlsrc.xbm]]
+} -body {
+    toplevel .t
+    .t configure -cursor [list @$src no_such_color]
+} -cleanup {
+    destroy .t
+    removeFile wlsrc.xbm
+} -returnCodes error -result {invalid color name "no_such_color"}
+test wayland-5.7 {no cursor files in safe interpreters} -constraints {
+    wayland
+} -setup {
+    ::safe::interpCreate wlsafe
+    ::safe::loadTk wlsafe
+} -body {
+    wlsafe eval {. configure -cursor {@/etc/passwd red}}
+} -cleanup {
+    interp delete wlsafe
+} -returnCodes error -result {can't get cursor from a file in a safe interpreter}
+
+# Icons
+
+test wayland-6.1 {window icons of any sizes} -constraints {
+    wayland
+} -setup {
+    image create photo wlic1 -width 16 -height 16
+    image create photo wlic2 -width 48 -height 20
+    image create photo wlic3 -width 1 -height 1
+    wlic1 put #ff0000 -to 0 0 16 16
+    wlic2 put #00ff00 -to 0 0 48 20
+    toplevel .t
+    waitShown .t
+} -body {
+    wm iconphoto .t wlic1 wlic2 wlic3
+    update
+    wm iconphoto .t -default wlic2
+    update
+    stillConnected
+} -cleanup {
+    destroy .t
+    image delete wlic1 wlic2 wlic3
+} -result 1
+
+# Bidirectional text
+
+test wayland-7.1 {right-to-left text is measured as a whole} -constraints {
+    wayland bidi
+} -body {
+    set s "שלום עולם"
+    expr {[font measure TkDefaultFont $s] > 0
+	    && [font measure TkDefaultFont $s]
+	    == [font measure TkDefaultFont [string reverse $s]]}
+} -result 1
+test wayland-7.2 {Arabic is shaped: joined letters are narrower} -constraints {
+    wayland bidi
+} -body {
+    set joined [font measure TkDefaultFont "مرحبا"]
+    set isolated 0
+    foreach c [split "مرحبا" ""] {
+	incr isolated [font measure TkDefaultFont $c]
+    }
+    expr {$joined < $isolated}
+} -result 1
+test wayland-7.3 {mixed text in widgets} -constraints {
+    wayland bidi
+} -setup {
+    toplevel .t
+    entry .t.e
+    text .t.t -width 30 -height 3
+    canvas .t.c -width 100 -height 100
+    pack .t.e .t.t .t.c
+} -body {
+    .t.e insert 0 "abc שלום def ١٢٣"
+    .t.t insert end "price 100 السعر ١٠٠ end\nשלום"
+    .t.c create text 50 50 -text "مرحبا Tk" -angle 45
+    waitShown .t
+    .t.e icursor 5
+    .t.e selection range 2 8
+    .t.t tag add sel 1.3 1.12
+    update
+    list [.t.e index insert] [llength [.t.c bbox all]] [stillConnected]
+} -cleanup {
+    destroy .t
+} -result {5 4 1}
+
+# Selections and send, within the application
+
+test wayland-8.1 {the clipboard within the application} -constraints {
+    wayland
+} -body {
+    clipboard clear
+    clipboard append "ü ✓ \U1F600"
+    clipboard get
+} -result "ü ✓ \U1F600"
+test wayland-8.2 {the PRIMARY selection of an entry} -constraints {
+    wayland
+} -setup {
+    toplevel .t
+    entry .t.e
+    pack .t.e
+    .t.e insert 0 "selected text"
+    waitShown .t
+} -body {
+    .t.e selection range 0 8
+    selection get
+} -cleanup {
+    destroy .t
+} -result {selected}
+test wayland-8.3 {a missing type of a selection of the application} -constraints {
+    wayland
+} -body {
+    clipboard clear
+    clipboard append text
+    selection get -selection CLIPBOARD -type image/png
+} -returnCodes error -result {CLIPBOARD selection doesn't exist or form "image/png" not defined}
+test wayland-8.4 {send within the process} -constraints {
+    wayland
+} -body {
+    send [tk appname] {expr {6 * 7}}
+} -result 42
+
+# Fonts
+
+test wayland-9.1 {font families, XLFD and fixed fonts} -constraints {
+    wayland
+} -body {
+    list [expr {[llength [font families]] > 0}] \
+	    [expr {[font measure {-*-helvetica-medium-r-*-*-12-*-*-*-*-*-*-*} Hello] > 0}] \
+	    [expr {[font measure fixed Hello] > 0}]
+} -result {1 1 1}
+test wayland-9.2 {color emoji have the size of the font} -constraints {
+    wayland
+} -body {
+    set e [font measure {Sans 12} \U1F600]
+    set m [font measure {Sans 12} M]
+    expr {$e > 0 && $e < 4 * $m}
+} -result 1
+
+# Generated key events
+
+test wayland-10.1 {generated key events} -constraints {
+    wayland
+} -setup {
+    toplevel .t
+    entry .t.e
+    pack .t.e
+    waitShown .t
+    focus -force .t.e
+    update
+    set ::wlkeys {}
+    bind .t.e <Key> {lappend ::wlkeys %K %A}
+} -body {
+    event generate .t.e <Key-a>
+    event generate .t.e <Key-A>
+    event generate .t.e <Key-odiaeresis>
+    event generate .t.e <Key-space>
+    update
+    list $::wlkeys [.t.e get]
+} -cleanup {
+    destroy .t
+    unset -nocomplain ::wlkeys
+} -result {{a a A A ö ö space { }} {aAö }}
+
+# Input from the compositor (waylandInput, swayPointer)
+
+test wayland-11.1 {typing} -constraints {
+    waylandInput
+} -setup {
+    toplevel .t
+    wm title .t wltyping
+    entry .t.e
+    pack .t.e
+    waitShown .t
+    focusOn .t.e
+} -body {
+    type "Wayland ü ✓ \U1F600"
+    waitFor {[string length [.t.e get]] >= 14}
+    .t.e get
+} -cleanup {
+    destroy .t
+} -result "Wayland ü ✓ \U1F600"
+test wayland-11.2 {the clipboard is given to other clients} -constraints {
+    waylandInput
+} -setup {
+    toplevel .t
+    entry .t.e
+    pack .t.e
+    waitShown .t
+    focusOn .t.e
+    type
+    update
+} -body {
+    clipboard clear
+    clipboard append "from Tk ✓"
+    update
+
+    # wl-paste gets the data from this application, which must process its
+    # events meanwhile.
+    set file [makeFile {} wlpaste.txt]
+    set pid [exec wl-paste --no-newline > $file &]
+    waitFor {[catch {exec kill -0 $pid}]}
+    set f [open $file]
+    fconfigure $f -encoding utf-8
+    set result [read $f]
+    close $f
+    set result
+} -cleanup {
+    destroy .t
+    removeFile wlpaste.txt
+} -result "from Tk ✓"
+test wayland-11.3 {the clipboard and the primary selection of other clients} -constraints {
+    waylandInput
+} -body {
+    exec wl-copy "clipboard ✓"
+    exec wl-copy --primary "primary ✓"
+    after 200
+    update
+    list [clipboard get] [selection get]
+} -result {{clipboard ✓} {primary ✓}}
+test wayland-11.4 {other clients take the clipboard: SelectionClear} -constraints {
+    waylandInput
+} -setup {
+    toplevel .t
+    entry .t.e
+    pack .t.e
+    .t.e insert 0 "selected"
+    waitShown .t
+    focusOn .t.e
+    type
+    update
+} -body {
+    .t.e selection range 0 end
+    update
+    exec wl-copy --primary "other"
+    waitFor {![.t.e selection present]}
+    .t.e selection present
+} -cleanup {
+    destroy .t
+} -result 0
+test wayland-12.1 {click a button} -constraints {
+    swayPointer
+} -setup {
+    toplevel .t
+    wm title .t wlclick
+    set ::wlclicked 0
+    button .t.b -text Click -command {incr ::wlclicked}
+    pack .t.b -padx 20 -pady 20
+    waitShown .t
+} -body {
+    swayClick .t.b 10 10
+    waitFor {$::wlclicked}
+    set ::wlclicked
+} -cleanup {
+    destroy .t
+    unset -nocomplain ::wlclicked
+} -result 1
+test wayland-12.2 {a menu is dismissed by a click outside} -constraints {
+    swayPointer
+} -setup {
+    toplevel .t
+    wm title .t wlmenu
+    menubutton .t.mb -text Menu -menu .t.mb.m
+    menu .t.mb.m -tearoff 0
+    .t.mb.m add command -label One
+    pack .t.mb -padx 50 -pady 50
+    waitShown .t
+} -body {
+    swayClick .t.mb 5 5
+    set posted [waitFor {[winfo ismapped .t.mb.m]}]
+    after 200
+    swayClick .t 2 [expr {[winfo height .t] - 2}]
+    list $posted [expr {![waitFor {![winfo ismapped .t.mb.m]}]}]
+} -cleanup {
+    destroy .t
+} -result {1 0}
+test wayland-12.3 {a menu entry is invoked by a click} -constraints {
+    swayPointer
+} -setup {
+    toplevel .t
+    wm title .t wlinvoke
+    set ::wlinvoked 0
+    menubutton .t.mb -text Menu -menu .t.mb.m
+    menu .t.mb.m -tearoff 0
+    .t.mb.m add command -label One -command {incr ::wlinvoked}
+    pack .t.mb -padx 50 -pady 50
+    waitShown .t
+} -body {
+    swayClick .t.mb 5 5
+    waitFor {[winfo ismapped .t.mb.m]}
+    after 200
+    swayClick .t.mb 5 [expr {[winfo height .t.mb] + 8}]
+    waitFor {$::wlinvoked}
+    set ::wlinvoked
+} -cleanup {
+    destroy .t
+    unset -nocomplain ::wlinvoked
+} -result 1
+}
+
+#
+# TESTFILE CLEANUP
+#
+
+if {$::tk::test::wayland::pointer ne ""} {
+    close $::tk::test::wayland::pointer
+}
+namespace delete ::tk::test::wayland
+cleanupTests

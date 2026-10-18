@@ -285,6 +285,33 @@ GetLongs(
     return (long *)(void *)propPtr->data;
 }
 
+/*
+ * Wayland messages are limited to 4096 bytes, and a longer string closes the
+ * connection: titles and app_ids are truncated (on a character boundary).
+ */
+
+#define MAX_STRING 1024
+
+static char *
+TruncatedString(
+    const char *string,
+    Tcl_Size length)		/* Length in bytes, or -1. */
+{
+    Tcl_Size len = (length < 0) ? (Tcl_Size)strlen(string) : length;
+    char *result;
+
+    if (len > MAX_STRING) {
+	len = MAX_STRING;
+	while (len > 0 && (string[len] & 0xC0) == 0x80) {
+	    len--;
+	}
+    }
+    result = (char *)Tcl_Alloc(len + 1);
+    memcpy(result, string, len);
+    result[len] = '\0';
+    return result;
+}
+
 static void
 ApplyTitle(
     TkWlSurface *surfPtr)
@@ -296,7 +323,11 @@ ApplyTitle(
 	propPtr = TkWlGetProperty(surfPtr->winPtr, XA_WM_NAME);
     }
     if (propPtr && propPtr->format == 8) {
-	libdecor_frame_set_title(surfPtr->frame, (const char *)propPtr->data);
+	char *title = TruncatedString((const char *)propPtr->data,
+		(Tcl_Size)strlen((const char *)propPtr->data));
+
+	libdecor_frame_set_title(surfPtr->frame, title);
+	Tcl_Free(title);
     }
 }
 
@@ -314,11 +345,12 @@ ApplyClass(
 	 * The app_id is the class, which is the name of the application.
 	 */
 
-	if (nameLen + 1 < propPtr->nitems && name[nameLen + 1]) {
-	    libdecor_frame_set_app_id(surfPtr->frame, name + nameLen + 1);
-	} else {
-	    libdecor_frame_set_app_id(surfPtr->frame, name);
-	}
+	char *appId = TruncatedString(
+		(nameLen + 1 < propPtr->nitems && name[nameLen + 1])
+		? name + nameLen + 1 : name, -1);
+
+	libdecor_frame_set_app_id(surfPtr->frame, appId);
+	Tcl_Free(appId);
     }
 }
 
@@ -561,11 +593,20 @@ static void
 Minimize(
     TkWlSurface *surfPtr)
 {
-    if (surfPtr->committed) {
-	libdecor_frame_set_minimized(surfPtr->frame);
-    } else {
+    if (!surfPtr->committed) {
 	surfPtr->minimizePending = true;
+	return;
     }
+
+    /*
+     * X window managers unmap iconified windows, but Wayland surfaces stay
+     * mapped when they are minimized: the X window is unmapped, and the
+     * surface keeps its role.
+     */
+
+    libdecor_frame_set_minimized(surfPtr->frame);
+    surfPtr->iconic = true;
+    XUnmapWindow(surfPtr->winPtr->display, surfPtr->winPtr->id);
 }
 
 void
@@ -574,7 +615,7 @@ TkWlWmSurfaceCommitted(
 {
     if (surfPtr->minimizePending && surfPtr->frame) {
 	surfPtr->minimizePending = false;
-	libdecor_frame_set_minimized(surfPtr->frame);
+	Minimize(surfPtr);
     }
 }
 
@@ -637,6 +678,7 @@ MapToplevel(
     if (!winPtr->mapped || surfPtr->frame) {
 	return;
     }
+    TkWlSurfaceSetRole(surfPtr, TKWL_ROLE_TOPLEVEL);
     surfPtr->configured = false;
     surfPtr->committed = false;
     surfPtr->frame = libdecor_decorate(tkWlDisplay->decor, surfPtr->surface,
@@ -834,8 +876,6 @@ TkWlWmClientMessage(
 
 	if (surfPtr->frame && winPtr->mapped) {
 	    Minimize(surfPtr);
-	    surfPtr->iconic = true;
-	    XUnmapWindow(winPtr->display, winPtr->id);
 	}
     } else if (eventPtr->xclient.message_type == atoms._NET_ACTIVE_WINDOW) {
 	TkWlWmActivate(surfPtr);
@@ -1125,6 +1165,8 @@ MapPopup(
     if (tkWlDisplay->wmBase == NULL) {
 	return;
     }
+    TkWlSurfaceSetRole(surfPtr,
+	    parentPtr ? TKWL_ROLE_POPUP : TKWL_ROLE_TOPLEVEL);
     surfPtr->configured = false;
     surfPtr->committed = false;
     surfPtr->xdgSurface = xdg_wm_base_get_xdg_surface(tkWlDisplay->wmBase,

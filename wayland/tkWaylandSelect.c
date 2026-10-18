@@ -497,6 +497,19 @@ SourceCancelled(
 	XEvent event;
 
 	*currentPtr = NULL;
+
+	/*
+	 * The current offer, if any, is that of this source: the offer of the
+	 * new owner follows.
+	 */
+
+	if (srcPtr->primary) {
+	    FreeOffer(primaryOffer);
+	    primaryOffer = NULL;
+	} else {
+	    FreeOffer(clipboardOffer);
+	    clipboardOffer = NULL;
+	}
 	memset(&event, 0, sizeof(XEvent));
 	event.xselectionclear.type = SelectionClear;
 	event.xselectionclear.display = tkWlDisplay->display;
@@ -799,6 +812,12 @@ TkSelGetSelection(
     Tcl_DString ds;
     int i, result;
 
+    /*
+     * Get the current offers, as Xlib asks the X server: another client may
+     * have just taken the selection.
+     */
+
+    wl_display_roundtrip(tkWlDisplay->wlDisplay);
     if (selection == XA_PRIMARY) {
 	offerPtr = primaryOffer;
     } else if (selection == Tk_InternAtom(tkwin, "CLIPBOARD")) {
