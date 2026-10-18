@@ -419,12 +419,23 @@ SendData(
 	    srcPtr->owner);
     Tcl_DString ds;
     Tcl_InterpState state;
+    Tcl_Interp *interp = NULL;
     const char *p;
     Tcl_Size left;
 
     Tcl_DStringInit(&ds);
-    if (winPtr && winPtr->mainPtr && winPtr->mainPtr->interp) {
-	Tcl_Interp *interp = winPtr->mainPtr->interp;
+
+    /*
+     * The clipboard is owned by a window which belongs to no application:
+     * the application is the one which last appended to the clipboard.
+     */
+
+    if (winPtr && winPtr->mainPtr) {
+	interp = winPtr->mainPtr->interp;
+    } else if (winPtr && winPtr->dispPtr->clipboardAppPtr) {
+	interp = winPtr->dispPtr->clipboardAppPtr->interp;
+    }
+    if (interp) {
 	Atom target = IsTextType(type)
 		? Tk_InternAtom((Tk_Window)winPtr, "UTF8_STRING")
 		: Tk_InternAtom((Tk_Window)winPtr, type);

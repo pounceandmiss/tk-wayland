@@ -1583,6 +1583,16 @@ XUnmapWindow(
 	    wl_surface_attach(surfPtr->surface, NULL, 0, 0);
 	    wl_surface_commit(surfPtr->surface);
 	}
+
+	/*
+	 * An unmapped surface gets no frame callbacks: the next present must
+	 * not wait for one.
+	 */
+
+	if (surfPtr->frameCallback) {
+	    wl_callback_destroy(surfPtr->frameCallback);
+	    surfPtr->frameCallback = NULL;
+	}
 	surfPtr->committed = false;
 	surfPtr->configured = false;
 	surfPtr->presented = false;

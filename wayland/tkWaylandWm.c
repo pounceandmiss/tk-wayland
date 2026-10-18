@@ -1208,6 +1208,10 @@ DestroyRole(
 		wl_surface_commit(p->surface);
 		p->committed = false;
 	    }
+	    if (p->frameCallback) {
+		wl_callback_destroy(p->frameCallback);
+		p->frameCallback = NULL;
+	    }
 	    p->configured = false;
 	    p->presented = false;
 	}
