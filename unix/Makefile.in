@@ -462,7 +462,8 @@ WAYLAND_OBJS = tkUnix.o tkUnix3d.o tkUnixAccessibility.o tkUnixButton.o \
 	tkUnixScrlbr.o tkUnixSend.o tkUnixSysNotify.o tkUnixWm.o tkUnixXId.o \
 	tkUnixPrint.o tkPointer.o xcolors.o xdraw.o xgc.o ximage.o \
 	tkWaylandCursor.o tkWaylandDraw.o tkWaylandEvent.o tkWaylandFont.o \
-	tkWaylandMisc.o tkWaylandSelect.o tkWaylandWindow.o tkWaylandWm.o \
+	tkWaylandMisc.o tkWaylandSelect.o tkWaylandTextInput.o \
+	tkWaylandWindow.o tkWaylandWm.o \
 	tkWaylandXlib.o \
 	$(WAYLAND_PROTOCOL_OBJS)
 

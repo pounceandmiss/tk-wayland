@@ -42,7 +42,7 @@ static void		LinkWindow(TkWlWindow *winPtr, TkWlWindow *parentPtr,
 			    TkWlWindow *belowPtr);
 
 static const struct wl_callback_listener frameListener = {
-    FrameDone
+    .done = FrameDone
 };
 
 /*
@@ -663,6 +663,7 @@ SurfaceLeave(
     }
 }
 
+#ifdef WL_SURFACE_PREFERRED_BUFFER_SCALE_SINCE_VERSION
 static void
 SurfacePreferredScale(
     void *data,
@@ -674,6 +675,7 @@ SurfacePreferredScale(
     surfPtr->preferredScale = factor;
     TkWlUpdateScale(surfPtr);
 }
+#endif
 
 static void
 FractionalPreferredScale(
@@ -688,9 +690,10 @@ FractionalPreferredScale(
 }
 
 static const struct wp_fractional_scale_v1_listener fractionalListener = {
-    FractionalPreferredScale
+    .preferred_scale = FractionalPreferredScale
 };
 
+#ifdef WL_SURFACE_PREFERRED_BUFFER_SCALE_SINCE_VERSION
 static void
 SurfacePreferredTransform(
     void *data,
@@ -699,12 +702,15 @@ SurfacePreferredTransform(
 {
     (void)data;
 }
+#endif
 
 static const struct wl_surface_listener surfaceListener = {
-    SurfaceEnter,
-    SurfaceLeave,
-    SurfacePreferredScale,
-    SurfacePreferredTransform
+    .enter = SurfaceEnter,
+    .leave = SurfaceLeave,
+#ifdef WL_SURFACE_PREFERRED_BUFFER_SCALE_SINCE_VERSION
+    .preferred_buffer_scale = SurfacePreferredScale,
+    .preferred_buffer_transform = SurfacePreferredTransform
+#endif
 };
 
 static TkWlSurface *
@@ -1068,7 +1074,7 @@ BufferRelease(
 }
 
 static const struct wl_buffer_listener bufferListener = {
-    BufferRelease
+    .release = BufferRelease
 };
 
 static bool

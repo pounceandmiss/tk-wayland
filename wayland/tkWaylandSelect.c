@@ -180,9 +180,9 @@ DataOfferAction(
 }
 
 static const struct wl_data_offer_listener dataOfferListener = {
-    DataOfferOffer,
-    DataOfferSourceActions,
-    DataOfferAction
+    .offer = DataOfferOffer,
+    .source_actions = DataOfferSourceActions,
+    .action = DataOfferAction
 };
 
 static void
@@ -286,12 +286,12 @@ DataDeviceSelection(
 }
 
 static const struct wl_data_device_listener dataDeviceListener = {
-    DataDeviceDataOffer,
-    DataDeviceEnter,
-    DataDeviceLeave,
-    DataDeviceMotion,
-    DataDeviceDrop,
-    DataDeviceSelection
+    .data_offer = DataDeviceDataOffer,
+    .enter = DataDeviceEnter,
+    .leave = DataDeviceLeave,
+    .motion = DataDeviceMotion,
+    .drop = DataDeviceDrop,
+    .selection = DataDeviceSelection
 };
 
 static void
@@ -548,12 +548,12 @@ DataSourceAction(
 }
 
 static const struct wl_data_source_listener dataSourceListener = {
-    DataSourceTarget,
-    DataSourceSend,
-    DataSourceCancelled,
-    DataSourceDndDropPerformed,
-    DataSourceDndFinished,
-    DataSourceAction
+    .target = DataSourceTarget,
+    .send = DataSourceSend,
+    .cancelled = DataSourceCancelled,
+    .dnd_drop_performed = DataSourceDndDropPerformed,
+    .dnd_finished = DataSourceDndFinished,
+    .action = DataSourceAction
 };
 
 static void

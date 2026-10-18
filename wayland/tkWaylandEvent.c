@@ -124,6 +124,7 @@ OutputScale(
     ((TkWlOutput *)data)->scale = factor;
 }
 
+#ifdef WL_OUTPUT_NAME_SINCE_VERSION
 static void
 OutputName(
     TCL_UNUSED(void *),
@@ -139,14 +140,17 @@ OutputDescription(
     TCL_UNUSED(const char *))
 {
 }
+#endif
 
 static const struct wl_output_listener outputListener = {
-    OutputGeometry,
-    OutputMode,
-    OutputDone,
-    OutputScale,
-    OutputName,
-    OutputDescription
+    .geometry = OutputGeometry,
+    .mode = OutputMode,
+    .done = OutputDone,
+    .scale = OutputScale,
+#ifdef WL_OUTPUT_NAME_SINCE_VERSION
+    .name = OutputName,
+    .description = OutputDescription
+#endif
 };
 
 /*
@@ -369,6 +373,7 @@ PointerAxisDiscrete(
     }
 }
 
+#ifdef WL_POINTER_AXIS_VALUE120_SINCE_VERSION
 static void
 PointerAxisValue120(
     TCL_UNUSED(void *),
@@ -381,6 +386,9 @@ PointerAxisValue120(
     }
 }
 
+#endif
+
+#ifdef WL_POINTER_AXIS_RELATIVE_DIRECTION_SINCE_VERSION
 static void
 PointerAxisRelativeDirection(
     TCL_UNUSED(void *),
@@ -389,6 +397,7 @@ PointerAxisRelativeDirection(
     TCL_UNUSED(uint32_t))
 {
 }
+#endif
 
 static void
 QueueScrollEvent(
@@ -468,30 +477,22 @@ PointerFrame(
     axisSource = WL_POINTER_AXIS_SOURCE_WHEEL;
 }
 
-static void
-PointerWarp(
-    TCL_UNUSED(void *),
-    TCL_UNUSED(struct wl_pointer *),
-    wl_fixed_t x,
-    wl_fixed_t y)
-{
-    tkWlDisplay->pointerX = wl_fixed_to_double(x);
-    tkWlDisplay->pointerY = wl_fixed_to_double(y);
-}
-
 static const struct wl_pointer_listener pointerListener = {
-    PointerEnter,
-    PointerLeave,
-    PointerMotion,
-    PointerButton,
-    PointerAxis,
-    PointerFrame,
-    PointerAxisSource,
-    PointerAxisStop,
-    PointerAxisDiscrete,
-    PointerAxisValue120,
-    PointerAxisRelativeDirection,
-    PointerWarp
+    .enter = PointerEnter,
+    .leave = PointerLeave,
+    .motion = PointerMotion,
+    .button = PointerButton,
+    .axis = PointerAxis,
+    .frame = PointerFrame,
+    .axis_source = PointerAxisSource,
+    .axis_stop = PointerAxisStop,
+    .axis_discrete = PointerAxisDiscrete,
+#ifdef WL_POINTER_AXIS_VALUE120_SINCE_VERSION
+    .axis_value120 = PointerAxisValue120,
+#endif
+#ifdef WL_POINTER_AXIS_RELATIVE_DIRECTION_SINCE_VERSION
+    .axis_relative_direction = PointerAxisRelativeDirection
+#endif
 };
 
 /*
@@ -822,12 +823,12 @@ KeyboardRepeatInfo(
 }
 
 static const struct wl_keyboard_listener keyboardListener = {
-    KeyboardKeymap,
-    KeyboardEnter,
-    KeyboardLeave,
-    KeyboardKey,
-    KeyboardModifiers,
-    KeyboardRepeatInfo
+    .keymap = KeyboardKeymap,
+    .enter = KeyboardEnter,
+    .leave = KeyboardLeave,
+    .key = KeyboardKey,
+    .modifiers = KeyboardModifiers,
+    .repeat_info = KeyboardRepeatInfo
 };
 
 /*
@@ -871,8 +872,8 @@ SeatName(
 }
 
 static const struct wl_seat_listener seatListener = {
-    SeatCapabilities,
-    SeatName
+    .capabilities = SeatCapabilities,
+    .name = SeatName
 };
 
 static void
@@ -885,8 +886,31 @@ WmBasePing(
 }
 
 static const struct xdg_wm_base_listener wmBaseListener = {
-    WmBasePing
+    .ping = WmBasePing
 };
+
+/*
+ * The versions of the interfaces whose events this file handles depend on
+ * the version of the header.
+ */
+
+#if defined(WL_POINTER_AXIS_RELATIVE_DIRECTION_SINCE_VERSION)
+#   define SEAT_VERSION 9
+#elif defined(WL_POINTER_AXIS_VALUE120_SINCE_VERSION)
+#   define SEAT_VERSION 8
+#else
+#   define SEAT_VERSION 7
+#endif
+#ifdef WL_OUTPUT_NAME_SINCE_VERSION
+#   define OUTPUT_VERSION 4
+#else
+#   define OUTPUT_VERSION 3
+#endif
+#ifdef WL_SURFACE_PREFERRED_BUFFER_SCALE_SINCE_VERSION
+#   define COMPOSITOR_VERSION 6
+#else
+#   define COMPOSITOR_VERSION 5
+#endif
 
 static void
 RegistryGlobal(
@@ -897,19 +921,20 @@ RegistryGlobal(
     uint32_t version)
 {
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
-    if (TkWlSelectionBind(registry, name, interface, version)) {
+    if (TkWlSelectionBind(registry, name, interface, version)
+	    || TkWlTextInputBind(registry, name, interface)) {
 	return;
     }
     if (!strcmp(interface, wl_compositor_interface.name)) {
 	tkWlDisplay->compositor = (struct wl_compositor *)wl_registry_bind(
-		registry, name, &wl_compositor_interface, MIN(version, 6));
+		registry, name, &wl_compositor_interface, MIN(version, COMPOSITOR_VERSION));
     } else if (!strcmp(interface, wl_shm_interface.name)) {
 	tkWlDisplay->shm = (struct wl_shm *)wl_registry_bind(registry, name,
 		&wl_shm_interface, 1);
     } else if (!strcmp(interface, wl_seat_interface.name)
 	    && tkWlDisplay->seat == NULL) {
 	tkWlDisplay->seat = (struct wl_seat *)wl_registry_bind(registry, name,
-		&wl_seat_interface, MIN(version, 9));
+		&wl_seat_interface, MIN(version, SEAT_VERSION));
 	wl_seat_add_listener(tkWlDisplay->seat, &seatListener, NULL);
     } else if (!strcmp(interface, wp_viewporter_interface.name)) {
 	tkWlDisplay->viewporter = (struct wp_viewporter *)wl_registry_bind(
@@ -935,7 +960,7 @@ RegistryGlobal(
 	outPtr->name = name;
 	outPtr->scale = 1;
 	outPtr->output = (struct wl_output *)wl_registry_bind(registry, name,
-		&wl_output_interface, MIN(version, 4));
+		&wl_output_interface, MIN(version, OUTPUT_VERSION));
 	wl_output_add_listener(outPtr->output, &outputListener, outPtr);
 	while (*lastPtrPtr) {
 	    lastPtrPtr = &(*lastPtrPtr)->nextPtr;
@@ -968,8 +993,8 @@ RegistryGlobalRemove(
 }
 
 static const struct wl_registry_listener registryListener = {
-    RegistryGlobal,
-    RegistryGlobalRemove
+    .global = RegistryGlobal,
+    .global_remove = RegistryGlobalRemove
 };
 
 static void
@@ -1080,6 +1105,7 @@ TkpOpenDisplay(
 
     tkWlDisplay->decor = libdecor_new(wlDisplay, &decorInterface);
     TkWlSelectionInit();
+    TkWlTextInputInit();
 
     /*
      * Without a keyboard (as on a headless compositor), use the default
@@ -1181,6 +1207,7 @@ DisplaySetupProc(
 
 	Tcl_SetMaxBlockTime(&blockTime);
     }
+    TkWlTextInputUpdate();
     wl_display_flush(tkWlDisplay->wlDisplay);
 }
 

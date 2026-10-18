@@ -769,7 +769,7 @@ TokenDone(
 }
 
 static const struct xdg_activation_token_v1_listener tokenListener = {
-    TokenDone
+    .done = TokenDone
 };
 
 void
@@ -824,7 +824,7 @@ XdgSurfaceConfigure(
 }
 
 static const struct xdg_surface_listener xdgSurfaceListener = {
-    XdgSurfaceConfigure
+    .configure = XdgSurfaceConfigure
 };
 
 static void
@@ -859,18 +859,9 @@ PopupDone(
     Tk_UpdatePointer(NULL, -10000, -10000, state);
 }
 
-static void
-PopupRepositioned(
-    TCL_UNUSED(void *),
-    TCL_UNUSED(struct xdg_popup *),
-    TCL_UNUSED(uint32_t))
-{
-}
-
 static const struct xdg_popup_listener popupListener = {
-    PopupConfigure,
-    PopupDone,
-    PopupRepositioned
+    .configure = PopupConfigure,
+    .popup_done = PopupDone
 };
 
 /*
@@ -896,28 +887,9 @@ ToplevelClose(
     FrameClose(NULL, data);
 }
 
-static void
-ToplevelConfigureBounds(
-    TCL_UNUSED(void *),
-    TCL_UNUSED(struct xdg_toplevel *),
-    TCL_UNUSED(int32_t),
-    TCL_UNUSED(int32_t))
-{
-}
-
-static void
-ToplevelWmCapabilities(
-    TCL_UNUSED(void *),
-    TCL_UNUSED(struct xdg_toplevel *),
-    TCL_UNUSED(struct wl_array *))
-{
-}
-
 static const struct xdg_toplevel_listener toplevelListener = {
-    ToplevelConfigure,
-    ToplevelClose,
-    ToplevelConfigureBounds,
-    ToplevelWmCapabilities
+    .configure = ToplevelConfigure,
+    .close = ToplevelClose
 };
 
 static struct xdg_surface *
