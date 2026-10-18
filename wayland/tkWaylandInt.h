@@ -330,6 +330,12 @@ MODULE_SCOPE unsigned long TkWlNextRequest(Display *display);
 MODULE_SCOPE Time	TkWlCurrentTime(void);
 MODULE_SCOPE void	TkWlUpdateCursor(void);
 
+/* tkWaylandSelect.c */
+MODULE_SCOPE bool	TkWlSelectionBind(struct wl_registry *registry,
+			    uint32_t name, const char *interface,
+			    uint32_t version);
+MODULE_SCOPE void	TkWlSelectionInit(void);
+
 /* tkWaylandWm.c */
 MODULE_SCOPE void	TkWlSurfaceSetFrame(TkWlSurface *surfPtr,
 			    struct libdecor_frame *frame);

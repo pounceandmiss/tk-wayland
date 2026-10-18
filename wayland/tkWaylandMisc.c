@@ -4,9 +4,8 @@
  *	Functions of the Wayland port which are not yet implemented with
  *	their Wayland counterparts.
  *
- *	TODO: the selection and the clipboard (wl_data_device and the primary
- *	selection protocol), the system tray (StatusNotifierItem) and input
- *	methods (text-input-v3).
+ *	TODO: the system tray (StatusNotifierItem) and input methods
+ *	(text-input-v3).
  *
  * Copyright © 2026 The Tk developers.
  *
@@ -15,59 +14,6 @@
  */
 
 #include "tkWaylandInt.h"
-#include "tkSelect.h"
-
-/*
- *----------------------------------------------------------------------
- *
- * Selection --
- *
- *	Selections owned by Tk applications of this process are handled by
- *	tkSelect.c without calling these functions; other selections are not
- *	available yet.
- *
- *----------------------------------------------------------------------
- */
-
-int
-TkSelGetSelection(
-    Tcl_Interp *interp,
-    Tk_Window tkwin,
-    Atom selection,
-    Atom target,
-    TCL_UNUSED(Tk_GetSelProc *),
-    TCL_UNUSED(void *))
-{
-    Tcl_SetObjResult(interp, Tcl_ObjPrintf(
-	    "%s selection doesn't exist or form \"%s\" not defined",
-	    Tk_GetAtomName(tkwin, selection), Tk_GetAtomName(tkwin, target)));
-    Tcl_SetErrorCode(interp, "TK", "SELECTION", "EXISTS", (char *)NULL);
-    return TCL_ERROR;
-}
-
-void
-TkSelEventProc(
-    TCL_UNUSED(Tk_Window),
-    TCL_UNUSED(XEvent *))
-{
-}
-
-void
-TkSelPropProc(
-    TCL_UNUSED(XEvent *))
-{
-}
-
-int
-XSetSelectionOwner(
-    Display *display,
-    TCL_UNUSED(Atom),
-    TCL_UNUSED(Window),
-    TCL_UNUSED(Time))
-{
-    TkWlNextRequest(display);
-    return Success;
-}
 
 /*
  *----------------------------------------------------------------------

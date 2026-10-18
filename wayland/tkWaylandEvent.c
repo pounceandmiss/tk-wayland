@@ -892,6 +892,9 @@ RegistryGlobal(
     uint32_t version)
 {
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
+    if (TkWlSelectionBind(registry, name, interface, version)) {
+	return;
+    }
     if (!strcmp(interface, wl_compositor_interface.name)) {
 	tkWlDisplay->compositor = (struct wl_compositor *)wl_registry_bind(
 		registry, name, &wl_compositor_interface, MIN(version, 6));
@@ -1051,6 +1054,7 @@ TkpOpenDisplay(
     wl_display_roundtrip(wlDisplay);
 
     tkWlDisplay->decor = libdecor_new(wlDisplay, &decorInterface);
+    TkWlSelectionInit();
 
     /*
      * Without a keyboard (as on a headless compositor), use the default

@@ -462,10 +462,11 @@ WAYLAND_OBJS = tkUnix.o tkUnix3d.o tkUnixAccessibility.o tkUnixButton.o \
 	tkUnixScrlbr.o tkUnixSend.o tkUnixSysNotify.o tkUnixWm.o tkUnixXId.o \
 	tkUnixPrint.o tkPointer.o xcolors.o xdraw.o xgc.o ximage.o \
 	tkWaylandCursor.o tkWaylandDraw.o tkWaylandEvent.o tkWaylandFont.o \
-	tkWaylandMisc.o tkWaylandWindow.o tkWaylandWm.o tkWaylandXlib.o \
+	tkWaylandMisc.o tkWaylandSelect.o tkWaylandWindow.o tkWaylandWm.o \
+	tkWaylandXlib.o \
 	$(WAYLAND_PROTOCOL_OBJS)
 
-WAYLAND_PROTOCOLS = xdg-shell
+WAYLAND_PROTOCOLS = xdg-shell primary-selection-unstable-v1
 
 WAYLAND_PROTOCOL_OBJS = $(WAYLAND_PROTOCOLS:%=%-protocol.o)
 
@@ -1442,6 +1443,12 @@ xdg-shell-client-protocol.h: $(WAYLAND_PROTOCOLS_DIR)/stable/xdg-shell/xdg-shell
 
 xdg-shell-protocol.c: $(WAYLAND_PROTOCOLS_DIR)/stable/xdg-shell/xdg-shell.xml
 	$(WAYLAND_SCANNER) private-code $(WAYLAND_PROTOCOLS_DIR)/stable/xdg-shell/xdg-shell.xml $@
+
+primary-selection-unstable-v1-client-protocol.h: $(WAYLAND_PROTOCOLS_DIR)/unstable/primary-selection/primary-selection-unstable-v1.xml
+	$(WAYLAND_SCANNER) client-header $(WAYLAND_PROTOCOLS_DIR)/unstable/primary-selection/primary-selection-unstable-v1.xml $@
+
+primary-selection-unstable-v1-protocol.c: $(WAYLAND_PROTOCOLS_DIR)/unstable/primary-selection/primary-selection-unstable-v1.xml
+	$(WAYLAND_SCANNER) private-code $(WAYLAND_PROTOCOLS_DIR)/unstable/primary-selection/primary-selection-unstable-v1.xml $@
 
 %-protocol.o: %-protocol.c
 	$(CC) -c $(CC_SWITCHES) $<
