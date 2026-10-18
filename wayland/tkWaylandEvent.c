@@ -921,6 +921,9 @@ RegistryGlobal(
     uint32_t version)
 {
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
+    if (!strncmp(interface, "weston_", 7)) {
+	tkWlDisplay->weston = true;
+    }
     if (TkWlSelectionBind(registry, name, interface, version)
 	    || TkWlTextInputBind(registry, name, interface)) {
 	return;
@@ -944,6 +947,11 @@ RegistryGlobal(
 	tkWlDisplay->fractionalScaleManager =
 		(struct wp_fractional_scale_manager_v1 *)wl_registry_bind(
 		registry, name, &wp_fractional_scale_manager_v1_interface, 1);
+    } else if (!strcmp(interface,
+	    xdg_toplevel_icon_manager_v1_interface.name)) {
+	tkWlDisplay->iconManager = (struct xdg_toplevel_icon_manager_v1 *)
+		wl_registry_bind(registry, name,
+		&xdg_toplevel_icon_manager_v1_interface, 1);
     } else if (!strcmp(interface, xdg_activation_v1_interface.name)) {
 	tkWlDisplay->activation = (struct xdg_activation_v1 *)
 		wl_registry_bind(registry, name, &xdg_activation_v1_interface,

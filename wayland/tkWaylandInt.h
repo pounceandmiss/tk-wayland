@@ -47,6 +47,7 @@
 #include "viewporter-client-protocol.h"
 #include "fractional-scale-v1-client-protocol.h"
 #include "xdg-activation-v1-client-protocol.h"
+#include "xdg-toplevel-icon-v1-client-protocol.h"
 
 /*
  * Kinds of drawables. Both structures start with the type.
@@ -148,6 +149,8 @@ typedef struct TkWlBuffer {
     void *data;
     size_t size;
     int width, height, stride;	/* In pixels of the buffer. */
+    uint32_t format;		/* WL_SHM_FORMAT_XRGB8888, or ARGB8888 for
+				 * translucent windows. */
     bool busy;			/* The compositor still uses it. */
     pixman_region32_t damage;	/* Part of the backing image which is more
 				 * recent than this buffer, in surface
@@ -177,6 +180,7 @@ typedef struct TkWlSurface {
     bool iconic;		/* The window was iconified: the X window is
 				 * unmapped, but the surface keeps its role,
 				 * since Wayland has no iconic state. */
+    double opacity;		/* From _NET_WM_WINDOW_OPACITY. */
     bool rolePending;		/* The role is created at idle time. */
     bool minimizePending;	/* Minimize after the first commit. */
     bool inConfigure;		/* The window is being resized by the
@@ -238,6 +242,10 @@ typedef struct TkWlDisplay {
     struct wp_viewporter *viewporter;
     struct wp_fractional_scale_manager_v1 *fractionalScaleManager;
     struct xdg_activation_v1 *activation;
+    struct xdg_toplevel_icon_manager_v1 *iconManager;
+    bool weston;		/* The compositor is Weston, whose version 15
+				 * crashes positioning popups which may slide
+				 * or flip. */
     double forcedScale;		/* Scale set with TK_WAYLAND_SCALE, for
 				 * testing, or 0. */
     struct wl_seat *seat;
@@ -335,6 +343,8 @@ MODULE_SCOPE TkWlProperty *TkWlGetProperty(TkWlWindow *winPtr, Atom name);
 MODULE_SCOPE void	TkWlFreeProperties(TkWlWindow *winPtr);
 MODULE_SCOPE TkWlSurface *TkWlGetSurface(Window w);
 MODULE_SCOPE void	TkWlUpdateScale(TkWlSurface *surfPtr);
+MODULE_SCOPE void	TkWlSurfaceSetOpacity(TkWlSurface *surfPtr,
+			    double opacity);
 MODULE_SCOPE bool	TkWlIntegralScale(TkWlSurface *surfPtr);
 
 /* tkWaylandDraw.c */
@@ -349,6 +359,7 @@ MODULE_SCOPE void	TkWlSetScreenSize(Display *display, int width,
 			    int height, int mmWidth, int mmHeight);
 MODULE_SCOPE pixman_region32_t *TkWlPixmanRegion(Region r);
 MODULE_SCOPE unsigned long TkWlNextRequest(Display *display);
+MODULE_SCOPE struct _FcPattern *TkWlXlfdParse(const char *name);
 
 /* tkWaylandEvent.c */
 MODULE_SCOPE Time	TkWlCurrentTime(void);

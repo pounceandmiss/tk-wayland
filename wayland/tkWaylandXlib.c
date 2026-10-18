@@ -14,6 +14,7 @@
 
 #define XLIB_ILLEGAL_ACCESS
 #include "tkWaylandInt.h"
+#include <fontconfig/fontconfig.h>
 
 /*
  * Regions are pixman regions.
@@ -1112,6 +1113,125 @@ XmbLookupString(
 	*statusPtr = XLookupNone;
     }
     return 0;
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWlXlfdParse --
+ *
+ *	Make a fontconfig pattern from an XLFD font name, which Tk expects to
+ *	work as on X11.
+ *
+ *----------------------------------------------------------------------
+ */
+
+FcPattern *
+TkWlXlfdParse(
+    const char *name)
+{
+    FcPattern *pattern;
+    const char *fields[14];
+    char *copy, *p;
+    int n = 0;
+
+    if (name[0] != '-') {
+	return NULL;
+    }
+    copy = (char *)Tcl_Alloc(strlen(name) + 1);
+    strcpy(copy, name + 1);
+    p = copy;
+    fields[n++] = p;
+    while (*p && n < 14) {
+	if (*p == '-') {
+	    *p = '\0';
+	    fields[n++] = p + 1;
+	}
+	p++;
+    }
+    if (n < 8) {
+	Tcl_Free(copy);
+	return NULL;
+    }
+    pattern = FcPatternCreate();
+
+    /*
+     * Fields: foundry, family, weight, slant, setwidth, addstyle, pixel
+     * size, point size (in tenths), ...
+     */
+
+    if (strcmp(fields[1], "*") && fields[1][0]) {
+	FcPatternAddString(pattern, FC_FAMILY, (const FcChar8 *)fields[1]);
+    }
+    if (!strcmp(fields[2], "bold") || !strcmp(fields[2], "demibold")) {
+	FcPatternAddInteger(pattern, FC_WEIGHT, FC_WEIGHT_BOLD);
+    } else if (strcmp(fields[2], "*")) {
+	FcPatternAddInteger(pattern, FC_WEIGHT, FC_WEIGHT_MEDIUM);
+    }
+    if (!strcmp(fields[3], "i")) {
+	FcPatternAddInteger(pattern, FC_SLANT, FC_SLANT_ITALIC);
+    } else if (!strcmp(fields[3], "o")) {
+	FcPatternAddInteger(pattern, FC_SLANT, FC_SLANT_OBLIQUE);
+    } else if (strcmp(fields[3], "*")) {
+	FcPatternAddInteger(pattern, FC_SLANT, FC_SLANT_ROMAN);
+    }
+    if (strcmp(fields[7], "*") && atoi(fields[7]) > 0) {
+	FcPatternAddDouble(pattern, FC_SIZE, atoi(fields[7]) / 10.0);
+    } else if (strcmp(fields[6], "*") && atoi(fields[6]) > 0) {
+	FcPatternAddDouble(pattern, FC_PIXEL_SIZE, atoi(fields[6]));
+    } else {
+	FcPatternAddDouble(pattern, FC_SIZE, 12.0);
+    }
+    Tcl_Free(copy);
+    return pattern;
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Fonts and GCs --
+ *
+ *	Tk draws text with its own font code, so server fonts are only ids.
+ *
+ *----------------------------------------------------------------------
+ */
+
+Font
+XLoadFont(
+    Display *display,
+    TCL_UNUSED(const char *))
+{
+    TkWlNextRequest(display);
+    return (Font)1;
+}
+
+int
+XUnloadFont(
+    Display *display,
+    TCL_UNUSED(Font))
+{
+    TkWlNextRequest(display);
+    return Success;
+}
+
+Status
+XGetGCValues(
+    TCL_UNUSED(Display *),
+    GC gc,
+    TCL_UNUSED(unsigned long),
+    XGCValues *values)
+{
+    *values = *gc;
+    return 1;
+}
+
+int
+XQueryColor(
+    Display *display,
+    Colormap colormap,
+    XColor *colorPtr)
+{
+    return XQueryColors(display, colormap, colorPtr, 1);
 }
 
 /*

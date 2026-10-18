@@ -461,14 +461,15 @@ WAYLAND_OBJS = tkUnix.o tkUnix3d.o tkUnixAccessibility.o tkUnixButton.o \
 	tkIcu.o tkUnixInit.o tkUnixMenu.o tkUnixMenubu.o tkUnixScale.o \
 	tkUnixScrlbr.o tkUnixSend.o tkUnixSysNotify.o tkUnixWm.o tkUnixXId.o \
 	tkUnixPrint.o tkPointer.o xcolors.o xdraw.o xgc.o ximage.o \
-	tkWaylandCursor.o tkWaylandDraw.o tkWaylandEvent.o tkWaylandFont.o \
+	tkWaylandCursor.o tkWaylandDraw.o tkWaylandEvent.o $(FONT_OBJS) \
 	tkWaylandMisc.o tkWaylandSelect.o tkWaylandTextInput.o \
 	tkWaylandWindow.o tkWaylandWm.o \
 	tkWaylandXlib.o \
 	$(WAYLAND_PROTOCOL_OBJS)
 
 WAYLAND_PROTOCOLS = xdg-shell primary-selection-unstable-v1 viewporter \
-	fractional-scale-v1 xdg-activation-v1 text-input-unstable-v3
+	fractional-scale-v1 xdg-activation-v1 text-input-unstable-v3 \
+	xdg-toplevel-icon-v1
 
 WAYLAND_PROTOCOL_OBJS = $(WAYLAND_PROTOCOLS:%=%-protocol.o)
 
@@ -1451,6 +1452,8 @@ WAYLAND_PROTOCOL_fractional-scale-v1 = \
 	staging/fractional-scale/fractional-scale-v1.xml
 WAYLAND_PROTOCOL_xdg-activation-v1 = \
 	staging/xdg-activation/xdg-activation-v1.xml
+WAYLAND_PROTOCOL_xdg-toplevel-icon-v1 = \
+	staging/xdg-toplevel-icon/xdg-toplevel-icon-v1.xml
 
 %-client-protocol.h:
 	$(WAYLAND_SCANNER) client-header \

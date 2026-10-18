@@ -723,6 +723,7 @@ NewSurface(
     memset(surfPtr, 0, sizeof(TkWlSurface));
     surfPtr->winPtr = winPtr;
     surfPtr->scale = 1.0;
+    surfPtr->opacity = 1.0;
     pixman_region32_init(&surfPtr->damage);
     for (i = 0; i < TKWL_NUM_BUFFERS; i++) {
 	pixman_region32_init(&surfPtr->buffers[i].damage);
@@ -1080,7 +1081,8 @@ static const struct wl_buffer_listener bufferListener = {
 static bool
 AllocBuffer(
     TkWlBuffer *bufPtr,
-    int width, int height)
+    int width, int height,
+    uint32_t format)
 {
     struct wl_shm_pool *pool;
     int fd, stride = width * 4;
@@ -1102,7 +1104,8 @@ AllocBuffer(
     }
     pool = wl_shm_create_pool(tkWlDisplay->shm, fd, (int32_t)size);
     bufPtr->buffer = wl_shm_pool_create_buffer(pool, 0, width, height,
-	    stride, WL_SHM_FORMAT_XRGB8888);
+	    stride, format);
+    bufPtr->format = format;
     wl_shm_pool_destroy(pool);
     close(fd);
     wl_buffer_add_listener(bufPtr->buffer, &bufferListener, bufPtr);
@@ -1122,7 +1125,9 @@ Present(
     TkWlBuffer *bufPtr = NULL;
     int i, n, width, height;
     pixman_box32_t *boxes;
-    pixman_image_t *src, *dst;
+    pixman_image_t *src, *dst, *mask = NULL;
+    uint32_t format = (surfPtr->opacity < 1.0) ? WL_SHM_FORMAT_ARGB8888
+	    : WL_SHM_FORMAT_XRGB8888;
 
     TkWlProcessExposures(surfPtr);
     if (!surfPtr->configured || surfPtr->backing == NULL
@@ -1157,9 +1162,9 @@ Present(
 	return;
     }
     if (bufPtr->buffer == NULL || bufPtr->width != width
-	    || bufPtr->height != height) {
+	    || bufPtr->height != height || bufPtr->format != format) {
 	FreeBuffer(bufPtr);
-	if (!AllocBuffer(bufPtr, width, height)) {
+	if (!AllocBuffer(bufPtr, width, height, format)) {
 	    return;
 	}
 	pixman_region32_fini(&bufPtr->damage);
@@ -1175,18 +1180,32 @@ Present(
     src = pixman_image_create_bits(PIXMAN_x8r8g8b8, width, height,
 	    (uint32_t *)cairo_image_surface_get_data(surfPtr->backing),
 	    cairo_image_surface_get_stride(surfPtr->backing));
-    dst = pixman_image_create_bits(PIXMAN_x8r8g8b8, width, height,
+    dst = pixman_image_create_bits((format == WL_SHM_FORMAT_ARGB8888)
+	    ? PIXMAN_a8r8g8b8 : PIXMAN_x8r8g8b8, width, height,
 	    (uint32_t *)bufPtr->data, bufPtr->stride);
+    if (format == WL_SHM_FORMAT_ARGB8888) {
+	/*
+	 * A translucent window: the pixels are multiplied by its opacity.
+	 */
+
+	pixman_color_t alpha = {0, 0, 0,
+		(uint16_t)(surfPtr->opacity * 0xFFFF)};
+
+	mask = pixman_image_create_solid_fill(&alpha);
+    }
     boxes = pixman_region32_rectangles(&bufPtr->damage, &n);
     for (i = 0; i < n; i++) {
 	int x, y, w, h;
 
 	BufferBox(surfPtr, &boxes[i], &x, &y, &w, &h);
-	pixman_image_composite32(PIXMAN_OP_SRC, src, NULL, dst, x, y, 0, 0,
+	pixman_image_composite32(PIXMAN_OP_SRC, src, mask, dst, x, y, 0, 0,
 		x, y, w, h);
     }
     pixman_image_unref(src);
     pixman_image_unref(dst);
+    if (mask) {
+	pixman_image_unref(mask);
+    }
     pixman_region32_clear(&bufPtr->damage);
 
     wl_surface_attach(surfPtr->surface, bufPtr->buffer, 0, 0);
@@ -1221,6 +1240,39 @@ Present(
     surfPtr->committed = true;
     TkWlWmSurfaceCommitted(surfPtr);
     wl_display_flush(tkWlDisplay->wlDisplay);
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWlSurfaceSetOpacity --
+ *
+ *	Set the opacity of a surface ([wm attributes -alpha]), which is
+ *	applied when the backing image is copied to the buffers.
+ *
+ *----------------------------------------------------------------------
+ */
+
+void
+TkWlSurfaceSetOpacity(
+    TkWlSurface *surfPtr,
+    double opacity)
+{
+    pixman_region32_t all;
+
+    if (opacity < 0.0) {
+	opacity = 0.0;
+    } else if (opacity > 1.0) {
+	opacity = 1.0;
+    }
+    if (opacity == surfPtr->opacity) {
+	return;
+    }
+    surfPtr->opacity = opacity;
+    pixman_region32_init_rect(&all, 0, 0, (unsigned)surfPtr->width,
+	    (unsigned)surfPtr->height);
+    TkWlAddDamage(surfPtr, &all);
+    pixman_region32_fini(&all);
 }
 
 /*

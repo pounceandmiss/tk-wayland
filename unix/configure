@@ -9003,8 +9003,43 @@ printf '%s\n' "$as_me: WARNING: Can't find xft configuration or xft is unusable 
     fi
 
 
+elif test $tk_wayland = yes; then
+    # Wayland path: the bidi font code of X11 (tkUnixBidiFont.c) runs on
+    # the Xft emulation of tkWaylandXft.c if HarfBuzz is available, otherwise
+    # tkWaylandFont.c is used.
+    enable_xft=no
+    UNIX_FONT_OBJS="tkWaylandFont.o"
+    BIDI_CFLAGS=""
+    HB_CFLAGS=""
+    HB_LIBS=""
+    { printf '%s\n' "$as_me:${as_lineno-$LINENO}: checking whether to enable bidirectional (Bidi) text support" >&5
+printf %s "checking whether to enable bidirectional (Bidi) text support... " >&6; }
+    if test "$enable_bidi" != "no" && pkg-config --atleast-version=2.8.2 harfbuzz; then
+	enable_bidi=yes
+	HB_CFLAGS=`pkg-config --cflags harfbuzz`
+	HB_LIBS=`pkg-config --libs harfbuzz`
+	BIDI_CFLAGS="-I${TK_SRC_DIR}/unix/bidi/Headers \
+		     -I${TK_SRC_DIR}/unix/bidi/Source \
+		     -I${TK_SRC_DIR}/unix/bidi \
+		     -DSB_CONFIG_UNITY -DSB_CONFIG_EXPERIMENTAL_TEXT_API -w \
+		     $HB_CFLAGS"
+
+printf '%s\n' "#define HAVE_BIDI 1" >>confdefs.h
+
+	UNIX_FONT_OBJS="tkUnixBidiFont.o SheenBidi.o tkWaylandXft.o"
+    else
+	enable_bidi=no
+    fi
+    { printf '%s\n' "$as_me:${as_lineno-$LINENO}: result: $enable_bidi" >&5
+printf '%s\n' "$enable_bidi" >&6; }
+    FONTSYSTEM="fontconfig"
+
+
+
+
+
 else
-    # Aqua (macOS) and Wayland path
+    # Aqua (macOS) path
     enable_xft=no
     enable_bidi=no
     UNIX_FONT_OBJS="tkUnixFont.o"

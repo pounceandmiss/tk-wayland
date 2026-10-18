@@ -17,7 +17,9 @@
  * this file, and for a DISCLAIMER OF ALL WARRANTIES.
  */
 
+#define _GNU_SOURCE		/* For memfd_create. */
 #include "tkWaylandInt.h"
+#include <sys/mman.h>
 
 static void		FrameConfigure(struct libdecor_frame *frame,
 			    struct libdecor_configuration *configuration,
@@ -47,7 +49,8 @@ static struct {
     Atom WM_PROTOCOLS, WM_DELETE_WINDOW, WM_CHANGE_STATE, UTF8_STRING,
 	_NET_WM_NAME, _NET_WM_STATE, _NET_WM_STATE_MAXIMIZED_VERT,
 	_NET_WM_STATE_MAXIMIZED_HORZ, _NET_WM_STATE_FULLSCREEN,
-	_NET_WM_STATE_HIDDEN, _NET_ACTIVE_WINDOW;
+	_NET_WM_STATE_HIDDEN, _NET_ACTIVE_WINDOW, _NET_WM_WINDOW_OPACITY,
+	_NET_WM_ICON;
 } atoms;
 
 static void
@@ -69,6 +72,8 @@ InitAtoms(
     ATOM(_NET_WM_STATE_FULLSCREEN);
     ATOM(_NET_WM_STATE_HIDDEN);
     ATOM(_NET_ACTIVE_WINDOW);
+    ATOM(_NET_WM_WINDOW_OPACITY);
+    ATOM(_NET_WM_ICON);
 #undef ATOM
 }
 
@@ -358,6 +363,133 @@ ApplyTransient(
 }
 
 /*
+ * Set the icon of a toplevel from the images in _NET_WM_ICON ([wm
+ * iconphoto]): each image is an array of longs, the width, the height and
+ * the pixels, 0xAARRGGBB. Icons must be square, so images are centered in
+ * squares, and their pixels premultiplied, as Wayland expects.
+ */
+
+static struct wl_buffer *
+IconBuffer(
+    const long *pixels,
+    int width, int height,
+    void **dataPtr,
+    size_t *sizePtr)
+{
+    int side = (width > height) ? width : height, x, y, fd;
+    int x0 = (side - width) / 2, y0 = (side - height) / 2;
+    size_t size = (size_t)side * side * 4;
+    struct wl_shm_pool *pool;
+    struct wl_buffer *buffer;
+    uint32_t *data;
+
+    fd = memfd_create("tk-icon", MFD_CLOEXEC);
+    if (fd < 0) {
+	return NULL;
+    }
+    if (ftruncate(fd, (off_t)size) < 0) {
+	close(fd);
+	return NULL;
+    }
+    data = (uint32_t *)mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED,
+	    fd, 0);
+    if (data == MAP_FAILED) {
+	close(fd);
+	return NULL;
+    }
+    memset(data, 0, size);
+    for (y = 0; y < height; y++) {
+	for (x = 0; x < width; x++) {
+	    uint32_t p = (uint32_t)pixels[y * width + x];
+	    uint32_t a = p >> 24;
+
+	    data[(y + y0) * side + x + x0] = (a << 24)
+		    | ((((p >> 16) & 0xFF) * a / 255) << 16)
+		    | ((((p >> 8) & 0xFF) * a / 255) << 8)
+		    | ((p & 0xFF) * a / 255);
+	}
+    }
+    pool = wl_shm_create_pool(tkWlDisplay->shm, fd, (int32_t)size);
+    buffer = wl_shm_pool_create_buffer(pool, 0, side, side, side * 4,
+	    WL_SHM_FORMAT_ARGB8888);
+    wl_shm_pool_destroy(pool);
+    close(fd);
+    *dataPtr = data;
+    *sizePtr = size;
+    return buffer;
+}
+
+static void
+ApplyIcon(
+    TkWlSurface *surfPtr)
+{
+    TkWlProperty *propPtr = TkWlGetProperty(surfPtr->winPtr,
+	    atoms._NET_WM_ICON);
+    struct xdg_toplevel *toplevel;
+    struct xdg_toplevel_icon_v1 *icon;
+    struct {
+	struct wl_buffer *buffer;
+	void *data;
+	size_t size;
+	int side;
+    } buffers[16];
+    int numBuffers = 0, i;
+    unsigned long n = 0;
+    const long *data;
+
+    if (tkWlDisplay->iconManager == NULL || surfPtr->frame == NULL
+	    || (toplevel = libdecor_frame_get_xdg_toplevel(surfPtr->frame))
+		== NULL) {
+	return;
+    }
+    if (propPtr == NULL || propPtr->format != 32) {
+	xdg_toplevel_icon_manager_v1_set_icon(tkWlDisplay->iconManager,
+		toplevel, NULL);
+	return;
+    }
+    data = (const long *)(void *)propPtr->data;
+    icon = xdg_toplevel_icon_manager_v1_create_icon(tkWlDisplay->iconManager);
+    while (n + 2 <= propPtr->nitems && numBuffers < 16) {
+	int width = (int)data[n], height = (int)data[n + 1];
+	int side = (width > height) ? width : height;
+	bool duplicate = false;
+
+	if (width <= 0 || height <= 0
+		|| n + 2 + (unsigned long)width * height > propPtr->nitems) {
+	    break;
+	}
+	for (i = 0; i < numBuffers; i++) {
+	    duplicate |= (buffers[i].side == side);
+	}
+	if (!duplicate) {
+	    buffers[numBuffers].buffer = IconBuffer(data + n + 2, width,
+		    height, &buffers[numBuffers].data,
+		    &buffers[numBuffers].size);
+	    if (buffers[numBuffers].buffer) {
+		buffers[numBuffers].side = side;
+		xdg_toplevel_icon_v1_add_buffer(icon,
+			buffers[numBuffers].buffer, 1);
+		numBuffers++;
+	    }
+	}
+	n += 2 + (unsigned long)width * height;
+    }
+    xdg_toplevel_icon_manager_v1_set_icon(tkWlDisplay->iconManager, toplevel,
+	    numBuffers ? icon : NULL);
+
+    /*
+     * The toplevel keeps its icon: the icon and its buffers are no longer
+     * needed.
+     */
+
+    xdg_toplevel_icon_v1_destroy(icon);
+    for (i = 0; i < numBuffers; i++) {
+	wl_buffer_destroy(buffers[i].buffer);
+	munmap(buffers[i].data, buffers[i].size);
+    }
+}
+
+/*
  * Apply the states in _NET_WM_STATE.
  */
 
@@ -515,6 +647,7 @@ MapToplevel(
     ApplyTransient(surfPtr);
     ApplyNetWmState(surfPtr);
     libdecor_frame_map(surfPtr->frame);
+    ApplyIcon(surfPtr);
 
     /*
      * The first window of an application started by a launcher which gave
@@ -639,10 +772,17 @@ TkWlWmPropertyChanged(
     TkWlSurface *surfPtr,
     Atom property)
 {
+    InitAtoms(surfPtr->winPtr->display);
+    if (property == atoms._NET_WM_WINDOW_OPACITY) {
+	long *opacity = GetLongs(surfPtr->winPtr, property, 1);
+
+	TkWlSurfaceSetOpacity(surfPtr, opacity
+		? (unsigned long)opacity[0] / (double)0xFFFFFFFFul : 1.0);
+	return;
+    }
     if (surfPtr->frame == NULL) {
 	return;
     }
-    InitAtoms(surfPtr->winPtr->display);
     if (property == XA_WM_NAME || property == atoms._NET_WM_NAME) {
 	ApplyTitle(surfPtr);
     } else if (property == XA_WM_CLASS) {
@@ -651,6 +791,8 @@ TkWlWmPropertyChanged(
 	ApplySizeHints(surfPtr);
     } else if (property == XA_WM_TRANSIENT_FOR) {
 	ApplyTransient(surfPtr);
+    } else if (property == atoms._NET_WM_ICON) {
+	ApplyIcon(surfPtr);
     }
 }
 
@@ -1019,11 +1161,13 @@ MapPopup(
 	xdg_positioner_set_anchor(positioner, XDG_POSITIONER_ANCHOR_TOP_LEFT);
 	xdg_positioner_set_gravity(positioner,
 		XDG_POSITIONER_GRAVITY_BOTTOM_RIGHT);
-	xdg_positioner_set_constraint_adjustment(positioner,
-		XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_FLIP_X
-		| XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_FLIP_Y
-		| XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_SLIDE_X
-		| XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_SLIDE_Y);
+	if (!tkWlDisplay->weston) {
+	    xdg_positioner_set_constraint_adjustment(positioner,
+		    XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_FLIP_X
+		    | XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_FLIP_Y
+		    | XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_SLIDE_X
+		    | XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_SLIDE_Y);
+	}
 	surfPtr->xdgPopup = xdg_surface_get_popup(surfPtr->xdgSurface,
 		RoleXdgSurface(parentPtr), positioner);
 	xdg_positioner_destroy(positioner);

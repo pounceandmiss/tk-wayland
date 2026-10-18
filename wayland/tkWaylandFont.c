@@ -375,66 +375,6 @@ FinishedWithFont(
  *----------------------------------------------------------------------
  */
 
-static FcPattern *
-XlfdParse(
-    const char *name)
-{
-    FcPattern *pattern;
-    const char *fields[14];
-    char *copy, *p;
-    int n = 0;
-
-    if (name[0] != '-') {
-	return NULL;
-    }
-    copy = (char *)Tcl_Alloc(strlen(name) + 1);
-    strcpy(copy, name + 1);
-    p = copy;
-    fields[n++] = p;
-    while (*p && n < 14) {
-	if (*p == '-') {
-	    *p = '\0';
-	    fields[n++] = p + 1;
-	}
-	p++;
-    }
-    if (n < 8) {
-	Tcl_Free(copy);
-	return NULL;
-    }
-    pattern = FcPatternCreate();
-
-    /*
-     * Fields: foundry, family, weight, slant, setwidth, addstyle, pixel
-     * size, point size (in tenths), ...
-     */
-
-    if (strcmp(fields[1], "*") && fields[1][0]) {
-	FcPatternAddString(pattern, FC_FAMILY, (const FcChar8 *)fields[1]);
-    }
-    if (!strcmp(fields[2], "bold") || !strcmp(fields[2], "demibold")) {
-	FcPatternAddInteger(pattern, FC_WEIGHT, FC_WEIGHT_BOLD);
-    } else if (strcmp(fields[2], "*")) {
-	FcPatternAddInteger(pattern, FC_WEIGHT, FC_WEIGHT_MEDIUM);
-    }
-    if (!strcmp(fields[3], "i")) {
-	FcPatternAddInteger(pattern, FC_SLANT, FC_SLANT_ITALIC);
-    } else if (!strcmp(fields[3], "o")) {
-	FcPatternAddInteger(pattern, FC_SLANT, FC_SLANT_OBLIQUE);
-    } else if (strcmp(fields[3], "*")) {
-	FcPatternAddInteger(pattern, FC_SLANT, FC_SLANT_ROMAN);
-    }
-    if (strcmp(fields[7], "*") && atoi(fields[7]) > 0) {
-	FcPatternAddDouble(pattern, FC_SIZE, atoi(fields[7]) / 10.0);
-    } else if (strcmp(fields[6], "*") && atoi(fields[6]) > 0) {
-	FcPatternAddDouble(pattern, FC_PIXEL_SIZE, atoi(fields[6]));
-    } else {
-	FcPatternAddDouble(pattern, FC_SIZE, 12.0);
-    }
-    Tcl_Free(copy);
-    return pattern;
-}
-
 TkFont *
 TkpGetNativeFont(
     Tk_Window tkwin,
@@ -446,7 +386,7 @@ TkpGetNativeFont(
     if (!strcmp(name, "fixed")) {
 	pattern = FcNameParse((const FcChar8 *)"monospace:size=10");
     } else {
-	pattern = XlfdParse(name);
+	pattern = TkWlXlfdParse(name);
     }
     if (pattern == NULL) {
 	return NULL;

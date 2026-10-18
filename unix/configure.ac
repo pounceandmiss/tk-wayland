@@ -600,8 +600,39 @@ Please install the HarfBuzz development package:
     fi
     AC_SUBST(FONTSYSTEM)
 
+elif test $tk_wayland = yes; then
+    # Wayland path: the bidi font code of X11 (tkUnixBidiFont.c) runs on
+    # the Xft emulation of tkWaylandXft.c if HarfBuzz is available, otherwise
+    # tkWaylandFont.c is used.
+    enable_xft=no
+    UNIX_FONT_OBJS="tkWaylandFont.o"
+    BIDI_CFLAGS=""
+    HB_CFLAGS=""
+    HB_LIBS=""
+    AC_MSG_CHECKING([whether to enable bidirectional (Bidi) text support])
+    if test "$enable_bidi" != "no" && pkg-config --atleast-version=2.8.2 harfbuzz; then
+	enable_bidi=yes
+	HB_CFLAGS=`pkg-config --cflags harfbuzz`
+	HB_LIBS=`pkg-config --libs harfbuzz`
+	BIDI_CFLAGS="-I${TK_SRC_DIR}/unix/bidi/Headers \
+		     -I${TK_SRC_DIR}/unix/bidi/Source \
+		     -I${TK_SRC_DIR}/unix/bidi \
+		     -DSB_CONFIG_UNITY -DSB_CONFIG_EXPERIMENTAL_TEXT_API -w \
+		     $HB_CFLAGS"
+	AC_DEFINE(HAVE_BIDI, 1, [Define to 1 if bidirectional text support is enabled])
+	UNIX_FONT_OBJS="tkUnixBidiFont.o SheenBidi.o tkWaylandXft.o"
+    else
+	enable_bidi=no
+    fi
+    AC_MSG_RESULT([$enable_bidi])
+    FONTSYSTEM="fontconfig"
+    AC_SUBST(FONTSYSTEM)
+    AC_SUBST(BIDI_CFLAGS)
+    AC_SUBST(UNIX_FONT_OBJS)
+    AC_SUBST(HB_CFLAGS)
+    AC_SUBST(HB_LIBS)
 else
-    # Aqua (macOS) and Wayland path
+    # Aqua (macOS) path
     enable_xft=no
     enable_bidi=no
     UNIX_FONT_OBJS="tkUnixFont.o"
