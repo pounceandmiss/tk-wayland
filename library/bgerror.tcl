@@ -169,7 +169,7 @@ proc ::tk::dialog::error::bgerror {err {flag 1}} {
     wm iconname $dlg ErrorDialog
     wm protocol $dlg WM_DELETE_WINDOW [namespace code DeleteByProtocol]
 
-    if {$windowingsystem eq "x11"} {
+    if {$windowingsystem in {x11 wayland}} {
 	wm attributes $dlg -type dialog
     }
 

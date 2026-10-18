@@ -863,6 +863,19 @@ static const struct wl_seat_listener seatListener = {
 };
 
 static void
+WmBasePing(
+    TCL_UNUSED(void *),
+    struct xdg_wm_base *wmBase,
+    uint32_t serial)
+{
+    xdg_wm_base_pong(wmBase, serial);
+}
+
+static const struct xdg_wm_base_listener wmBaseListener = {
+    WmBasePing
+};
+
+static void
 RegistryGlobal(
     TCL_UNUSED(void *),
     struct wl_registry *registry,
@@ -882,6 +895,10 @@ RegistryGlobal(
 	tkWlDisplay->seat = (struct wl_seat *)wl_registry_bind(registry, name,
 		&wl_seat_interface, MIN(version, 9));
 	wl_seat_add_listener(tkWlDisplay->seat, &seatListener, NULL);
+    } else if (!strcmp(interface, xdg_wm_base_interface.name)) {
+	tkWlDisplay->wmBase = (struct xdg_wm_base *)wl_registry_bind(
+		registry, name, &xdg_wm_base_interface, 1);
+	xdg_wm_base_add_listener(tkWlDisplay->wmBase, &wmBaseListener, NULL);
     } else if (!strcmp(interface, wl_output_interface.name)) {
 	TkWlOutput *outPtr = (TkWlOutput *)Tcl_Alloc(sizeof(TkWlOutput));
 	TkWlOutput **lastPtrPtr = &tkWlDisplay->outputs;

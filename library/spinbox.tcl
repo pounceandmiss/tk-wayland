@@ -53,7 +53,7 @@ bind Spinbox <<Copy>> {
 }
 bind Spinbox <<Paste>> {
     catch {
-	if {[tk windowingsystem] ne "x11"} {
+	if {[tk windowingsystem] ni {x11 wayland}} {
 	    catch {
 		%W delete sel.first sel.last
 	    }

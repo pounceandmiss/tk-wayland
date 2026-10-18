@@ -7,7 +7,7 @@
 #
 
 switch -- [tk windowingsystem] {
-    x11 -
+    x11 - wayland -
     win32 {
 	option add *TSizegrip.cursor [ttk::cursor seresize] widgetDefault
     }

@@ -114,8 +114,9 @@ switch -- [tk windowingsystem] {
 	font configure TkSmallCaptionFont -family $family -size $labelsize
     }
     default -
-    x11 {
-	if {![catch {tk::pkgconfig get fontsystem} fs] && $fs eq "xft"} {
+    x11 - wayland {
+	if {![catch {tk::pkgconfig get fontsystem} fs]
+		&& $fs in {xft fontconfig}} {
 	    set family "sans-serif"
 	    set fixed  "monospace"
 	} else {

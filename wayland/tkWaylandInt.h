@@ -161,8 +161,12 @@ typedef struct TkWlSurface {
     struct libdecor_frame *frame;
 				/* The decorated xdg_toplevel, or NULL. */
     struct xdg_surface *xdgSurface;
-				/* For popups (override-redirect windows). */
+				/* For popups (override-redirect windows) and
+				 * undecorated toplevels. */
     struct xdg_popup *xdgPopup;
+    struct xdg_toplevel *xdgToplevel;
+    struct TkWlSurface *popupParent;
+				/* The surface a popup is attached to. */
     bool configured;		/* The compositor has sent the first
 				 * configure event. */
     bool iconic;		/* The window was iconified: the X window is
@@ -181,6 +185,7 @@ typedef struct TkWlSurface {
     TkWlBuffer buffers[TKWL_NUM_BUFFERS];
     struct wl_callback *frameCallback;
     bool presentPending;	/* A present is scheduled at idle time. */
+    bool presentDeferred;	/* The present was already deferred once. */
     bool exposePending;		/* The window tree changed; Expose events
 				 * have to be generated. */
     struct TkWlSurface *nextPtr;
@@ -209,6 +214,7 @@ typedef struct TkWlDisplay {
     struct wl_registry *registry;
     struct wl_compositor *compositor;
     struct wl_shm *shm;
+    struct xdg_wm_base *wmBase;
     struct wl_seat *seat;
     struct wl_pointer *pointer;
     struct wl_keyboard *keyboard;

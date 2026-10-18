@@ -701,7 +701,7 @@ DestroySurface(
     if (surfPtr->frameCallback) {
 	wl_callback_destroy(surfPtr->frameCallback);
     }
-    TkWlSurfaceSetFrame(surfPtr, NULL);
+    TkWlWmUnmapSurface(surfPtr);
     for (i = 0; i < TKWL_NUM_BUFFERS; i++) {
 	FreeBuffer(&surfPtr->buffers[i]);
 	pixman_region32_fini(&surfPtr->buffers[i].damage);
@@ -846,14 +846,13 @@ PresentIdle(
     void *clientData)
 {
     TkWlSurface *surfPtr = (TkWlSurface *)clientData;
-    static TkWlSurface *deferred = NULL;
 
-    if (deferred != surfPtr) {
-	deferred = surfPtr;
+    if (!surfPtr->presentDeferred) {
+	surfPtr->presentDeferred = true;
 	Tcl_DoWhenIdle(PresentIdle, surfPtr);
 	return;
     }
-    deferred = NULL;
+    surfPtr->presentDeferred = false;
     surfPtr->presentPending = false;
     Present(surfPtr);
 }

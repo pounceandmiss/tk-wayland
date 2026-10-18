@@ -8,7 +8,8 @@
  *	children of the root window which are not override-redirect the role
  *	of decorated xdg_toplevels (with libdecor), and translates the hints
  *	in their properties to xdg_toplevel requests, and the configure and
- *	close events of the compositor to X events.
+ *	close events of the compositor to X events. Override-redirect windows
+ *	(menus, combobox dropdowns, tooltips) get the role of xdg_popups.
  *
  * Copyright © 2026 The Tk developers.
  *
@@ -25,6 +26,9 @@ static void		FrameClose(struct libdecor_frame *frame, void *data);
 static void		FrameCommit(struct libdecor_frame *frame, void *data);
 static void		FrameDismissPopup(struct libdecor_frame *frame,
 			    const char *seatName, void *data);
+
+static void		DestroyRole(TkWlSurface *surfPtr);
+static void		MapPopup(TkWlSurface *surfPtr);
 
 static struct libdecor_frame_interface frameInterface = {
     FrameConfigure,
@@ -430,13 +434,11 @@ TkWlWmMapSurface(
 	surfPtr->iconic = false;
 	return;
     }
-    if (winPtr->overrideRedirect || surfPtr->frame
-	    || tkWlDisplay->decor == NULL) {
-	/*
-	 * TODO: override-redirect windows (menus, tooltips) need the role of
-	 * popups.
-	 */
-
+    if (surfPtr->frame || surfPtr->xdgSurface) {
+	return;
+    }
+    if (winPtr->overrideRedirect || tkWlDisplay->decor == NULL) {
+	MapPopup(surfPtr);
 	return;
     }
     surfPtr->configured = false;
@@ -460,7 +462,7 @@ void
 TkWlWmUnmapSurface(
     TkWlSurface *surfPtr)
 {
-    TkWlSurfaceSetFrame(surfPtr, NULL);
+    DestroyRole(surfPtr);
 }
 
 void
@@ -657,6 +659,315 @@ TkWlWmClientMessage(
 	}
     }
     return true;
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Popups --
+ *
+ *	Override-redirect windows are positioned by Tk relative to other
+ *	windows of the application, so they are popups of the surface which
+ *	received the input that posted them. Their position relative to that
+ *	surface is the one Tk computed, and the compositor may slide or flip
+ *	them to keep them on the screen. Menus and combobox dropdowns grab
+ *	the input, which makes the compositor dismiss them when the user
+ *	clicks elsewhere.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static void
+XdgSurfaceConfigure(
+    void *data,
+    struct xdg_surface *xdgSurface,
+    uint32_t serial)
+{
+    xdg_surface_ack_configure(xdgSurface, serial);
+    TkWlSurfaceConfigured((TkWlSurface *)data);
+}
+
+static const struct xdg_surface_listener xdgSurfaceListener = {
+    XdgSurfaceConfigure
+};
+
+static void
+PopupConfigure(
+    TCL_UNUSED(void *),
+    TCL_UNUSED(struct xdg_popup *),
+    TCL_UNUSED(int32_t),
+    TCL_UNUSED(int32_t),
+    TCL_UNUSED(int32_t),
+    TCL_UNUSED(int32_t))
+{
+}
+
+/*
+ * The compositor dismissed a popup, because the user clicked outside of
+ * it. Tell Tk as the X server would: the click goes to the window which
+ * has the grab.
+ */
+
+static void
+PopupDone(
+    void *data,
+    TCL_UNUSED(struct xdg_popup *))
+{
+    TkWlSurface *surfPtr = (TkWlSurface *)data;
+    unsigned int state = tkWlDisplay->modState;
+
+    if (!surfPtr->winPtr->mapped || TkpGetCapture() == NULL) {
+	return;
+    }
+    Tk_UpdatePointer(NULL, -10000, -10000, state | Button1Mask);
+    Tk_UpdatePointer(NULL, -10000, -10000, state);
+}
+
+static void
+PopupRepositioned(
+    TCL_UNUSED(void *),
+    TCL_UNUSED(struct xdg_popup *),
+    TCL_UNUSED(uint32_t))
+{
+}
+
+static const struct xdg_popup_listener popupListener = {
+    PopupConfigure,
+    PopupDone,
+    PopupRepositioned
+};
+
+/*
+ * Undecorated toplevels, for override-redirect windows which have no
+ * surface to be a popup of.
+ */
+
+static void
+ToplevelConfigure(
+    TCL_UNUSED(void *),
+    TCL_UNUSED(struct xdg_toplevel *),
+    TCL_UNUSED(int32_t),
+    TCL_UNUSED(int32_t),
+    TCL_UNUSED(struct wl_array *))
+{
+}
+
+static void
+ToplevelClose(
+    void *data,
+    TCL_UNUSED(struct xdg_toplevel *))
+{
+    FrameClose(NULL, data);
+}
+
+static void
+ToplevelConfigureBounds(
+    TCL_UNUSED(void *),
+    TCL_UNUSED(struct xdg_toplevel *),
+    TCL_UNUSED(int32_t),
+    TCL_UNUSED(int32_t))
+{
+}
+
+static void
+ToplevelWmCapabilities(
+    TCL_UNUSED(void *),
+    TCL_UNUSED(struct xdg_toplevel *),
+    TCL_UNUSED(struct wl_array *))
+{
+}
+
+static const struct xdg_toplevel_listener toplevelListener = {
+    ToplevelConfigure,
+    ToplevelClose,
+    ToplevelConfigureBounds,
+    ToplevelWmCapabilities
+};
+
+static struct xdg_surface *
+RoleXdgSurface(
+    TkWlSurface *surfPtr)
+{
+    if (surfPtr->frame) {
+	return libdecor_frame_get_xdg_surface(surfPtr->frame);
+    }
+    return surfPtr->xdgSurface;
+}
+
+/*
+ * Whether a surface can be the parent of a popup: it must have a role, and
+ * not be the popup or one of its descendants.
+ */
+
+static bool
+CanBeParent(
+    TkWlSurface *parentPtr,
+    TkWlSurface *surfPtr)
+{
+    TkWlSurface *p;
+
+    if (parentPtr == NULL || !parentPtr->winPtr->mapped
+	    || !parentPtr->configured || RoleXdgSurface(parentPtr) == NULL) {
+	return false;
+    }
+    for (p = parentPtr; p; p = p->popupParent) {
+	if (p == surfPtr) {
+	    return false;
+	}
+    }
+    return true;
+}
+
+static TkWlSurface *
+FindPopupParent(
+    TkWlSurface *surfPtr)
+{
+    TkWlSurface *p;
+
+    if (CanBeParent(tkWlDisplay->pointerSurface, surfPtr)) {
+	return tkWlDisplay->pointerSurface;
+    }
+    if (CanBeParent(tkWlDisplay->keyboardSurface, surfPtr)) {
+	return tkWlDisplay->keyboardSurface;
+    }
+    for (p = tkWlDisplay->surfaces; p; p = p->nextPtr) {
+	if (CanBeParent(p, surfPtr)) {
+	    return p;
+	}
+    }
+    return NULL;
+}
+
+/*
+ * Whether a popup grabs the input: the Tk window in it is a menu or a
+ * combobox dropdown.
+ */
+
+static bool
+PopupGrabs(
+    TkWlWindow *winPtr)
+{
+    TkWlWindow *childPtr;
+
+    for (childPtr = winPtr; childPtr; childPtr = childPtr->firstChild) {
+	Tk_Window tkwin = Tk_IdToWindow(winPtr->display, childPtr->id);
+
+	if (tkwin && !(((TkWindow *)tkwin)->flags & TK_WRAPPER)) {
+	    const char *className = Tk_Class(tkwin);
+
+	    return className && (!strcmp(className, "Menu")
+		    || !strcmp(className, "ComboboxPopdown"));
+	}
+    }
+    return false;
+}
+
+static void
+MapPopup(
+    TkWlSurface *surfPtr)
+{
+    TkWlWindow *winPtr = surfPtr->winPtr;
+    TkWlSurface *parentPtr = FindPopupParent(surfPtr);
+    int width = winPtr->width + 2 * winPtr->borderWidth;
+    int height = winPtr->height + 2 * winPtr->borderWidth;
+
+    if (tkWlDisplay->wmBase == NULL) {
+	return;
+    }
+    surfPtr->configured = false;
+    surfPtr->committed = false;
+    surfPtr->xdgSurface = xdg_wm_base_get_xdg_surface(tkWlDisplay->wmBase,
+	    surfPtr->surface);
+    xdg_surface_add_listener(surfPtr->xdgSurface, &xdgSurfaceListener,
+	    surfPtr);
+    if (parentPtr) {
+	struct xdg_positioner *positioner =
+		xdg_wm_base_create_positioner(tkWlDisplay->wmBase);
+	TkWlWindow *parentWinPtr = parentPtr->winPtr;
+	int x = winPtr->x - parentWinPtr->x;
+	int y = winPtr->y - parentWinPtr->y;
+	int anchorX = x, anchorY = y;
+
+	/*
+	 * The anchor must be within the parent; the rest of the distance is
+	 * an offset.
+	 */
+
+	if (anchorX < 0) {
+	    anchorX = 0;
+	} else if (anchorX > parentWinPtr->width - 1) {
+	    anchorX = parentWinPtr->width - 1;
+	}
+	if (anchorY < 0) {
+	    anchorY = 0;
+	} else if (anchorY > parentWinPtr->height - 1) {
+	    anchorY = parentWinPtr->height - 1;
+	}
+	xdg_positioner_set_size(positioner, width > 0 ? width : 1,
+		height > 0 ? height : 1);
+	xdg_positioner_set_anchor_rect(positioner, anchorX, anchorY, 1, 1);
+	xdg_positioner_set_offset(positioner, x - anchorX, y - anchorY);
+	xdg_positioner_set_anchor(positioner, XDG_POSITIONER_ANCHOR_TOP_LEFT);
+	xdg_positioner_set_gravity(positioner,
+		XDG_POSITIONER_GRAVITY_BOTTOM_RIGHT);
+	xdg_positioner_set_constraint_adjustment(positioner,
+		XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_FLIP_X
+		| XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_FLIP_Y
+		| XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_SLIDE_X
+		| XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_SLIDE_Y);
+	surfPtr->xdgPopup = xdg_surface_get_popup(surfPtr->xdgSurface,
+		RoleXdgSurface(parentPtr), positioner);
+	xdg_positioner_destroy(positioner);
+	xdg_popup_add_listener(surfPtr->xdgPopup, &popupListener, surfPtr);
+	surfPtr->popupParent = parentPtr;
+	if (PopupGrabs(winPtr) && tkWlDisplay->seat) {
+	    xdg_popup_grab(surfPtr->xdgPopup, tkWlDisplay->seat,
+		    tkWlDisplay->lastSerial);
+	}
+    } else {
+	surfPtr->xdgToplevel = xdg_surface_get_toplevel(surfPtr->xdgSurface);
+	xdg_toplevel_add_listener(surfPtr->xdgToplevel, &toplevelListener,
+		surfPtr);
+    }
+    wl_surface_commit(surfPtr->surface);
+    wl_display_flush(tkWlDisplay->wlDisplay);
+}
+
+/*
+ * Destroy the role of a surface, after those of the popups attached to it.
+ */
+
+static void
+DestroyRole(
+    TkWlSurface *surfPtr)
+{
+    TkWlSurface *p;
+
+    for (p = tkWlDisplay->surfaces; p; p = p->nextPtr) {
+	if (p->popupParent == surfPtr) {
+	    DestroyRole(p);
+	    if (p->committed) {
+		wl_surface_attach(p->surface, NULL, 0, 0);
+		wl_surface_commit(p->surface);
+		p->committed = false;
+	    }
+	    p->configured = false;
+	}
+    }
+    if (surfPtr->xdgPopup) {
+	xdg_popup_destroy(surfPtr->xdgPopup);
+	surfPtr->xdgPopup = NULL;
+    }
+    if (surfPtr->xdgToplevel) {
+	xdg_toplevel_destroy(surfPtr->xdgToplevel);
+	surfPtr->xdgToplevel = NULL;
+    }
+    if (surfPtr->xdgSurface) {
+	xdg_surface_destroy(surfPtr->xdgSurface);
+	surfPtr->xdgSurface = NULL;
+    }
+    surfPtr->popupParent = NULL;
+    TkWlSurfaceSetFrame(surfPtr, NULL);
 }
 
 /*
