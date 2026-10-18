@@ -11,7 +11,7 @@
 #   compositors do not have: run "wtype -s 86400000" in the background.
 # - swayPointer: swaymsg, to find windows on sway, and a virtual pointer
 #   (a program reading the commands "move X Y", "press N" and "release N",
-#   such as tools/vpointer.c of the wayland-cairo branch), whose command is
+#   such as wayland/tools/vpointer.c), whose command is
 #   given in the environment variable TK_WAYLAND_VPOINTER, followed by the
 #   size of the layout.
 #
@@ -223,7 +223,7 @@ test wayland-1.4 {iconify before the first map} -constraints {
 
     # The window is shown and then minimized by the compositor, which is
     # when the window manager reports it as iconic.
-    waitFor {[wm state .t] eq "iconic"}
+    waitFor {[wm state .t] eq "iconic"} 10000
     set result [wm state .t]
     wm deiconify .t
     waitShown .t
@@ -802,6 +802,73 @@ test wayland-10.1 {generated key events} -constraints {
     destroy .t
     unset -nocomplain ::wlkeys
 } -result {{a a A A ö ö space { }} {aAö }}
+
+# Random sequences of operations
+
+test wayland-13.1 {random window operations} -constraints {
+    wayland
+} -setup {
+    set seed 4242
+    expr {srand($seed)}
+    proc pick {list} {
+	lindex $list [expr {int(rand() * [llength $list])}]
+    }
+    proc tops {} {
+	lmap w [winfo children .] {
+	    if {[string match .wls* $w]} {set w} continue
+	}
+    }
+} -body {
+    set n 0
+    for {set i 0} {$i < 500} {incr i} {
+	set t [pick [tops]]
+	set op [pick {create destroy withdraw deiconify iconify resize
+		override menu unpost tooltip alpha update}]
+	if {$t eq "" && $op ne "update"} {
+	    set op create
+	}
+	switch $op {
+	    create {
+		set t .wls[incr n]
+		toplevel $t
+		menu $t.m -tearoff 0
+		$t.m add command -label One
+	    }
+	    destroy {destroy $t}
+	    withdraw {wm withdraw $t}
+	    deiconify {wm deiconify $t}
+	    iconify {catch {wm iconify $t}}
+	    resize {
+		wm geometry $t [expr {50 + int(rand() * 300)}]x[expr {30 + int(rand() * 200)}]
+	    }
+	    override {
+		wm overrideredirect $t [expr {![wm overrideredirect $t]}]
+		wm withdraw $t
+		wm deiconify $t
+	    }
+	    menu {catch {$t.m post [winfo rootx $t] [winfo rooty $t]}}
+	    unpost {catch {$t.m unpost}}
+	    tooltip {
+		set tip $t.tip[incr n]
+		toplevel $tip
+		wm overrideredirect $tip 1
+		after [expr {int(rand() * 100)}] [list destroy $tip]
+	    }
+	    alpha {wm attributes $t -alpha [expr {rand()}]}
+	    update {update}
+	}
+	if {rand() < 0.3} {
+	    update
+	}
+    }
+    update
+    destroy {*}[tops]
+    stillConnected
+} -cleanup {
+    destroy {*}[tops]
+    rename pick {}
+    rename tops {}
+} -result 1
 
 # Input from the compositor (waylandInput, swayPointer)
 
