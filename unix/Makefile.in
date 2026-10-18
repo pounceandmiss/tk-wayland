@@ -155,10 +155,14 @@ X11_INCLUDES		= @XINCLUDES@
 
 AQUA_INCLUDES		= -I$(MAC_OSX_DIR) -I$(XLIB_DIR)
 
+WAYLAND_INCLUDES	= -I$(WAYLAND_DIR) -I$(XLIB_DIR) -I. @WAYLAND_CFLAGS@
+
 # Linker switch(es) to use to link with the X11 library archive (the
 # configure script will try to set this value automatically, but you
 # can override it).
 X11_LIB_SWITCHES	= $(XFT_LIBS) $(HB_LIBS) $(XRENDER_LIBS) @XLIBSW@
+AQUA_LIB_SWITCHES	= $(X11_LIB_SWITCHES)
+WAYLAND_LIB_SWITCHES	= @WAYLAND_LIBS@
 
 # To turn off the security checks that disallow incoming sends when
 # the X server appears to be insecure, reverse the comments on the
@@ -264,8 +268,8 @@ TCL_STUB_FLAGS		= @TCL_STUB_FLAGS@
 
 # Libraries to use when linking.  This definition is determined by the
 # configure script.
-LIBS = @LIBS@ $(X11_LIB_SWITCHES) @TCL_LIBS@ @CUPS_LIBS@ @ATK_LIBS@ @SPEECHD_LIBS@ @HB_LIBS@
-WISH_LIBS = $(TCL_LIB_SPEC) @LIBS@ $(X11_LIB_SWITCHES) @TCL_LIBS@ @CUPS_LIBS@ @ATK_LIBS@ @SPEECHD_LIBS@ @HB_LIBS@ @EXTRA_WISH_LIBS@
+LIBS = @LIBS@ $(@TK_WINDOWINGSYSTEM@_LIB_SWITCHES) @TCL_LIBS@ @CUPS_LIBS@ @ATK_LIBS@ @SPEECHD_LIBS@ @HB_LIBS@
+WISH_LIBS = $(TCL_LIB_SPEC) @LIBS@ $(@TK_WINDOWINGSYSTEM@_LIB_SWITCHES) @TCL_LIBS@ @CUPS_LIBS@ @ATK_LIBS@ @SPEECHD_LIBS@ @HB_LIBS@ @EXTRA_WISH_LIBS@
 
 # The symbols below provide support for dynamic loading and shared
 # libraries.  See configure.ac for a description of what the
@@ -349,6 +353,9 @@ TOOL_DIR		= $(TCLDIR)/tools
 TEST_DIR		= $(TOP_DIR)/tests
 MAC_OSX_DIR		= $(TOP_DIR)/macosx
 XLIB_DIR		= $(TOP_DIR)/xlib
+WAYLAND_DIR		= $(TOP_DIR)/wayland
+WAYLAND_PROTOCOLS_DIR	= @WAYLAND_PROTOCOLS_DIR@
+WAYLAND_SCANNER		= @WAYLAND_SCANNER@
 
 #----------------------------------------------------------------
 # The information below should be usable as is.  The configure
@@ -446,6 +453,23 @@ AQUA_OBJS = tkMacOSXAccessibility.o tkMacOSXBitmap.o tkMacOSXButton.o tkMacOSXCl
 	ttkMacOSXTheme.o
 
 AQUA_TKTEST_OBJS = tkMacOSXTest.o
+
+# The Wayland port shares the X11 code, which runs on the Xlib emulation of
+# the port; tkPointer.c and xlib/ are shared with the Aqua and Windows ports.
+WAYLAND_OBJS = tkUnix.o tkUnix3d.o tkUnixAccessibility.o tkUnixButton.o \
+	tkUnixColor.o tkUnixConfig.o tkUnixDraw.o tkUnixEmbed.o tkUnixFocus.o \
+	tkIcu.o tkUnixInit.o tkUnixMenu.o tkUnixMenubu.o tkUnixScale.o \
+	tkUnixScrlbr.o tkUnixSend.o tkUnixSysNotify.o tkUnixWm.o tkUnixXId.o \
+	tkUnixPrint.o tkPointer.o xcolors.o xdraw.o xgc.o ximage.o \
+	tkWaylandCursor.o tkWaylandDraw.o tkWaylandEvent.o tkWaylandFont.o \
+	tkWaylandMisc.o tkWaylandWindow.o tkWaylandWm.o tkWaylandXlib.o \
+	$(WAYLAND_PROTOCOL_OBJS)
+
+WAYLAND_PROTOCOLS = xdg-shell
+
+WAYLAND_PROTOCOL_OBJS = $(WAYLAND_PROTOCOLS:%=%-protocol.o)
+
+WAYLAND_PROTOCOL_HDRS = $(WAYLAND_PROTOCOLS:%=%-client-protocol.h)
 
 OBJS =  $(GENERIC_OBJS) $(WIDG_OBJS) $(CANV_OBJS) $(IMAGE_OBJS) $(TEXT_OBJS) \
 	$(STUB_OBJS) $(TTK_OBJS) \
@@ -1408,6 +1432,19 @@ tkUnixWm.o: $(UNIX_DIR)/tkUnixWm.c
 
 tkUnixXId.o: $(UNIX_DIR)/tkUnixXId.c
 	$(CC) -c $(CC_SWITCHES) $(UNIX_DIR)/tkUnixXId.c
+
+xdg-shell-client-protocol.h: $(WAYLAND_PROTOCOLS_DIR)/stable/xdg-shell/xdg-shell.xml
+	$(WAYLAND_SCANNER) client-header $(WAYLAND_PROTOCOLS_DIR)/stable/xdg-shell/xdg-shell.xml $@
+
+xdg-shell-protocol.c: $(WAYLAND_PROTOCOLS_DIR)/stable/xdg-shell/xdg-shell.xml
+	$(WAYLAND_SCANNER) private-code $(WAYLAND_PROTOCOLS_DIR)/stable/xdg-shell/xdg-shell.xml $@
+
+%-protocol.o: %-protocol.c
+	$(CC) -c $(CC_SWITCHES) $<
+
+tkWayland%.o: $(WAYLAND_DIR)/tkWayland%.c $(WAYLAND_DIR)/tkWaylandInt.h \
+		$(WAYLAND_DIR)/tkWaylandPort.h $(WAYLAND_PROTOCOL_HDRS)
+	$(CC) -c $(CC_SWITCHES) $(WAYLAND_DIR)/tkWayland$*.c
 
 tkMacOSXAccessibility.o: $(MAC_OSX_DIR)/tkMacOSXAccessibility.c
 	$(CC) -c $(CC_SWITCHES) $(MAC_OSX_DIR)/tkMacOSXAccessibility.c

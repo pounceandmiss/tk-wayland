@@ -80,11 +80,20 @@ TkGetDefaultScreenName(
     const char *screenName)	/* Screen name from command line, or NULL. */
 {
     if ((screenName == NULL) || (screenName[0] == '\0')) {
+#ifdef TK_USE_WAYLAND
+	screenName = Tcl_GetVar2(interp, "env", "WAYLAND_DISPLAY",
+		TCL_GLOBAL_ONLY);
+	if (screenName == NULL) {
+	    screenName = "wayland-0";
+	}
+#else
 	screenName = Tcl_GetVar2(interp, "env", "DISPLAY", TCL_GLOBAL_ONLY);
+#endif
     }
     return screenName;
 }
 
+#ifndef TK_USE_WAYLAND
 /*
  *----------------------------------------------------------------------
  *
@@ -118,6 +127,8 @@ Tk_UpdatePointer(
    */
 }
 
+#endif /* TK_USE_WAYLAND */
+
 /*
  *----------------------------------------------------------------------
  *

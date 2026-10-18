@@ -18,6 +18,10 @@
 #include "tkWinInt.h"
 #endif
 
+#ifdef TK_USE_WAYLAND
+#include "tkWaylandInt.h"
+#endif
+
 #if defined(MAC_OSX_TK)
 #include "tkMacOSXInt.h"
 #endif

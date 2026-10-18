@@ -251,6 +251,20 @@ else
     tk_aqua=no
 fi
 
+#--------------------------------------------------------------------
+#	On other unixes, we can build either with X11 or with Wayland
+#--------------------------------------------------------------------
+
+tk_wayland=no
+if test $tk_aqua = no; then
+    AC_MSG_CHECKING([whether to use Wayland])
+    AC_ARG_ENABLE(wayland,
+	AS_HELP_STRING([--enable-wayland],
+	    [use Wayland windowingsystem instead of X11 (default: no)]),
+	[tk_wayland=$enableval], [tk_wayland=no])
+    AC_MSG_RESULT([$tk_wayland])
+fi
+
 if test $tk_aqua = yes; then
     AC_DEFINE(MAC_OSX_TK, 1, [Are we building TkAqua?])
     LIBS="$LIBS -framework Cocoa -framework Carbon -framework IOKit -framework QuartzCore -framework Security -framework CoreGraphics"
@@ -272,9 +286,43 @@ else
     #	no include files, so double-check its result just to be safe.
     #--------------------------------------------------------------------
 
-    SC_PATH_X
-    TK_WINDOWINGSYSTEM=X11
+    if test $tk_wayland = no; then
+	SC_PATH_X
+	TK_WINDOWINGSYSTEM=X11
+    fi
 fi
+
+#--------------------------------------------------------------------
+#	The Wayland port, like the Aqua and Windows ports, implements the
+#	part of Xlib that Tk uses, with the X11 headers in ../xlib.
+#--------------------------------------------------------------------
+
+WAYLAND_CFLAGS=""
+WAYLAND_LIBS=""
+WAYLAND_PROTOCOLS_DIR=""
+if test $tk_wayland = yes; then
+    AC_DEFINE(TK_USE_WAYLAND, 1, [Are we building Tk for Wayland?])
+    TK_WINDOWINGSYSTEM=WAYLAND
+    tk_wayland_pkgs="wayland-client wayland-cursor xkbcommon cairo pixman-1 fontconfig freetype2 libdecor-0"
+    AC_MSG_CHECKING([for $tk_wayland_pkgs])
+    if pkg-config --exists $tk_wayland_pkgs wayland-protocols; then
+	AC_MSG_RESULT([yes])
+    else
+	AC_MSG_RESULT([no])
+	AC_MSG_ERROR([--enable-wayland requires the development files of:
+    $tk_wayland_pkgs wayland-protocols])
+    fi
+    WAYLAND_CFLAGS="`pkg-config --cflags $tk_wayland_pkgs`"
+    WAYLAND_LIBS="`pkg-config --libs $tk_wayland_pkgs` -lm"
+    WAYLAND_PROTOCOLS_DIR="`pkg-config --variable=pkgdatadir wayland-protocols`"
+    AC_PATH_PROG(WAYLAND_SCANNER, wayland-scanner, no)
+    if test "$WAYLAND_SCANNER" = no; then
+	AC_MSG_ERROR([--enable-wayland requires wayland-scanner])
+    fi
+fi
+AC_SUBST(WAYLAND_CFLAGS)
+AC_SUBST(WAYLAND_LIBS)
+AC_SUBST(WAYLAND_PROTOCOLS_DIR)
 
 #--------------------------------------------------------------------
 #	Various manipulations on the search path used at runtime to
@@ -317,7 +365,7 @@ fi
 #	   if -lsocket doesn't work by itself.
 #--------------------------------------------------------------------
 
-if test $tk_aqua = no; then
+if test $TK_WINDOWINGSYSTEM = X11; then
     AC_CHECK_LIB(Xbsd, main, [LIBS="$LIBS -lXbsd"])
 fi
 
@@ -332,7 +380,7 @@ fi
 # because it can't deal with the "-" in the library name.
 #--------------------------------------------------------------------
 
-if test -d /usr/include/mit -a $tk_aqua = no; then
+if test -d /usr/include/mit -a $TK_WINDOWINGSYSTEM = X11; then
     AC_MSG_CHECKING([MIT X libraries])
     tk_oldCFlags=$CFLAGS
     CFLAGS="$CFLAGS -I/usr/include/mit"
@@ -355,7 +403,7 @@ fi
 #	Check for freetype / fontconfig / Xft support and Bidirectional text
 #--------------------------------------------------------------------
 
-if test $tk_aqua = no; then
+if test $TK_WINDOWINGSYSTEM = X11; then
 
     #--------------------------------------------------------------------
     # --enable-xft (default: yes) — independent switch
@@ -553,7 +601,7 @@ Please install the HarfBuzz development package:
     AC_SUBST(FONTSYSTEM)
 
 else
-    # Aqua (macOS) path
+    # Aqua (macOS) and Wayland path
     enable_xft=no
     enable_bidi=no
     UNIX_FONT_OBJS="tkUnixFont.o"
@@ -571,7 +619,7 @@ fi
 
 XRENDER_CFLAGS=""
 XRENDER_LIBS=""
-if test $tk_aqua = no; then
+if test $TK_WINDOWINGSYSTEM = X11; then
     AC_MSG_CHECKING([whether to use xrender])
     AC_ARG_ENABLE(xrender,
 	AS_HELP_STRING([--enable-xrender],
@@ -675,7 +723,7 @@ ATK_LIBS=""
 SPEECHD_CFLAGS=""
 SPEECHD_LIBS=""
 
-if test "$tk_aqua" = no; then
+if test $TK_WINDOWINGSYSTEM = X11; then
   AC_MSG_CHECKING([whether to enable accessibility support])
   AC_ARG_ENABLE(accessibility,
       AS_HELP_STRING([--enable-accessibility],
@@ -758,7 +806,7 @@ AC_SUBST([enable_accessibility])
 # XScreenSaver is needed for Tk_GetUserInactiveTime().
 #--------------------------------------------------------------------
 
-if test $tk_aqua = no; then
+if test $TK_WINDOWINGSYSTEM = X11; then
     tk_oldCFlags=$CFLAGS
     CFLAGS="$CFLAGS $XINCLUDES"
     tk_oldLibs=$LIBS

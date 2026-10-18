@@ -534,7 +534,7 @@ XDrawPoints(
     return res;
 }
 
-#if !defined(MAC_OSX_TK)
+#if !defined(MAC_OSX_TK) && !defined(TK_USE_WAYLAND)
 int
 XDrawSegments(
     TCL_UNUSED(Display *),
@@ -574,6 +574,7 @@ XListProperties(
     return (Atom *) 0;
 }
 
+#ifndef TK_USE_WAYLAND
 int
 XMapRaised(
     TCL_UNUSED(Display *),
@@ -581,6 +582,7 @@ XMapRaised(
 {
     return Success;
 }
+#endif /* TK_USE_WAYLAND */
 
 int
 XQueryTextExtents(
@@ -596,6 +598,7 @@ XQueryTextExtents(
     return Success;
 }
 
+#ifndef TK_USE_WAYLAND
 int
 XReparentWindow(
     TCL_UNUSED(Display *),
@@ -606,7 +609,9 @@ XReparentWindow(
 {
     return BadWindow;
 }
+#endif /* TK_USE_WAYLAND */
 
+#ifndef TK_USE_WAYLAND
 int
 XUndefineCursor(
     TCL_UNUSED(Display *),
@@ -614,6 +619,7 @@ XUndefineCursor(
 {
     return Success;
 }
+#endif /* TK_USE_WAYLAND */
 
 XVaNestedList
 XVaCreateNestedList(
@@ -642,6 +648,7 @@ XSetICFocus(
 {
 }
 
+#ifndef TK_USE_WAYLAND
 Window
 XCreateWindow(
     TCL_UNUSED(Display *),
@@ -659,7 +666,9 @@ XCreateWindow(
 {
 	return 0;
 }
+#endif /* TK_USE_WAYLAND */
 
+#ifndef TK_USE_WAYLAND
 Region
 XPolygonRegion(
     TCL_UNUSED(XPoint *),
@@ -668,6 +677,7 @@ XPolygonRegion(
 {
     return 0;
 }
+#endif /* TK_USE_WAYLAND */
 
 void
 XDestroyIC(
@@ -675,6 +685,7 @@ XDestroyIC(
 {
 }
 
+#ifndef TK_USE_WAYLAND
 Cursor
 XCreatePixmapCursor(
     TCL_UNUSED(Display *),
@@ -687,7 +698,9 @@ XCreatePixmapCursor(
 {
     return (Cursor) NULL;
 }
+#endif /* TK_USE_WAYLAND */
 
+#ifndef TK_USE_WAYLAND
 Cursor
 XCreateGlyphCursor(
     TCL_UNUSED(Display *),
@@ -700,6 +713,7 @@ XCreateGlyphCursor(
 {
     return (Cursor) NULL;
 }
+#endif /* TK_USE_WAYLAND */
 
 XFontSet
 XCreateFontSet(

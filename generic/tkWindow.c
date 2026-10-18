@@ -1612,7 +1612,7 @@ Tk_DestroyWindow(
 	TkWmRemoveFromColormapWindows(winPtr);
     }
     if (winPtr->window != None) {
-#if defined(MAC_OSX_TK) || defined(_WIN32)
+#if defined(MAC_OSX_TK) || defined(_WIN32) || defined(TK_USE_WAYLAND)
 	XDestroyWindow(winPtr->display, winPtr->window);
 #else
 	if ((winPtr->flags & TK_TOP_HIERARCHY)
