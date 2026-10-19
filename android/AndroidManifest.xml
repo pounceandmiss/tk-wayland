@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The manifest of wish for Android: a NativeActivity (TkActivity.java, which
+  adds the input of text from the soft keyboard), which loads libmain.so
+  (tkAndroidMain.c and Tcl and Tk). The activity
+  handles the changes of configuration itself, since Tk lives as long as
+  the activity; the window is resized for the soft keyboard.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="tk.wish"
+    android:versionCode="1"
+    android:versionName="9.1">
+
+  <!-- Tcl has sockets. -->
+  <uses-permission android:name="android.permission.INTERNET"/>
+
+  <application
+      android:label="Wish"
+      android:hasCode="true"
+      android:extractNativeLibs="false">
+    <activity
+        android:name="tk.android.TkActivity"
+        android:label="Wish"
+        android:exported="true"
+        android:launchMode="singleTask"
+        android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|density|fontScale|uiMode|locale|layoutDirection"
+        android:windowSoftInputMode="adjustResize"
+        android:theme="@style/Tk">
+      <meta-data android:name="android.app.lib_name" android:value="main"/>
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN"/>
+        <category android:name="android.intent.category.LAUNCHER"/>
+      </intent-filter>
+    </activity>
+  </application>
+</manifest>

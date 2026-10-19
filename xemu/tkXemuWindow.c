@@ -4,7 +4,7 @@
  *	The window part of the X server emulation: the window tree, the
  *	visible regions of windows and Expose events. The surfaces of the
  *	children of the root window, which present the images Tk draws into,
- *	are given by the port (tkWaylandSurface.c).
+ *	are given by the port (tkWaylandSurface.c, tkAndroidSurface.c).
  *
  * Copyright © 2026 The Tk developers.
  *
@@ -1974,9 +1974,10 @@ XQueryTree(
  *
  *	Compute the position of the inside of a window in root coordinates.
  *	The root coordinates of a toplevel are the position of its wrapper
- *	window. Wayland clients do not know where their windows are on the
- *	screen, and these are the coordinates Tk thinks it has, which keeps
- *	them consistent within the application.
+ *	window. On Android, the window manager puts it there; Wayland clients
+ *	do not know where their windows are on the screen, and these are the
+ *	coordinates Tk thinks it has, which keeps them consistent within the
+ *	application.
  *
  * Results:
  *	The position is stored in *xPtr and *yPtr.

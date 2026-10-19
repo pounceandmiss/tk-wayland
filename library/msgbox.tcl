@@ -294,7 +294,7 @@ proc ::tk::MessageBox {args} {
 	wm transient $w $data(-parent)
     }
 
-    if {$windowingsystem in {x11 wayland}} {
+    if {$windowingsystem in {x11 wayland android}} {
 	wm attributes $w -type dialog
     }
 

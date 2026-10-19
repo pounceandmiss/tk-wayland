@@ -799,7 +799,7 @@ namespace eval ::tk::print {
 
 # Some output configuration that on other platforms is managed through
 # the printer driver/dialog is configured through the canvas postscript command.
-if {[tk windowingsystem] in {x11 wayland}} {
+if {[tk windowingsystem] in {x11 wayland android}} {
     if {[info commands ::tk::print::cups] eq ""} {
 	namespace eval ::tk::print::cups {
 	    # Pure Tcl cups ensemble command implementation
@@ -1419,8 +1419,8 @@ proc ::tk::print {w} {
 	"Text,win32" {
 	    tailcall ::tk::print::_print $w
 	}
-	"Canvas,x11" - "Canvas,wayland" -
-	"Text,x11" - "Text,wayland" {
+	"Canvas,x11" - "Canvas,wayland" - "Canvas,android" -
+	"Text,x11" - "Text,wayland" - "Text,android" {
 	    tailcall ::tk::print::_print $w
 	}
 	"Canvas,aqua" {

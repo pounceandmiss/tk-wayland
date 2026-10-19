@@ -107,7 +107,7 @@ option add *TCombobox*Listbox.highlightThickness 0 widgetDefault
 ## Platform-specific settings.
 #
 switch -- [tk windowingsystem] {
-    x11 - wayland {
+    x11 - wayland - android {
 	option add *TCombobox*Listbox.background white widgetDefault
     }
 }
@@ -330,7 +330,7 @@ proc ttk::combobox::PopdownToplevel {w} {
     wm withdraw $w
     switch -- [tk windowingsystem] {
 	default -
-	x11 - wayland {
+	x11 - wayland - android {
 	    $w configure -relief flat -borderwidth 0
 	    wm attributes $w -type combo
 	    wm overrideredirect $w true
@@ -508,7 +508,9 @@ if {[tk windowingsystem] ne "aqua"} {
 	PlacePopdown $cb $popdown
 	# See <<NOTE-WM-TRANSIENT>>
 	switch -- [tk windowingsystem] {
-	    x11 - wayland - win32 { wm transient $popdown [winfo toplevel $cb] }
+	    x11 - wayland - android - win32 {
+		wm transient $popdown [winfo toplevel $cb]
+	    }
 	}
 
 	# Post the listbox:

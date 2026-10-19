@@ -1410,6 +1410,8 @@ WindowingsystemCmd(
     windowingsystem = "win32";
 #elif defined(MAC_OSX_TK)
     windowingsystem = "aqua";
+#elif defined(TK_USE_ANDROID)
+    windowingsystem = "android";
 #elif defined(TK_USE_WAYLAND)
     windowingsystem = "wayland";
 #else

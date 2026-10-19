@@ -158,12 +158,16 @@ AQUA_INCLUDES		= -I$(MAC_OSX_DIR) -I$(XLIB_DIR)
 WAYLAND_INCLUDES	= -I$(WAYLAND_DIR) -I$(XEMU_DIR) -I$(XLIB_DIR) -I. \
 			  @WAYLAND_CFLAGS@
 
+ANDROID_INCLUDES	= -I$(ANDROID_DIR) -I$(XEMU_DIR) -I$(XLIB_DIR) -I. \
+			  @ANDROID_CFLAGS@
+
 # Linker switch(es) to use to link with the X11 library archive (the
 # configure script will try to set this value automatically, but you
 # can override it).
 X11_LIB_SWITCHES	= $(XFT_LIBS) $(HB_LIBS) $(XRENDER_LIBS) @XLIBSW@
 AQUA_LIB_SWITCHES	= $(X11_LIB_SWITCHES)
 WAYLAND_LIB_SWITCHES	= @WAYLAND_LIBS@
+ANDROID_LIB_SWITCHES	= @ANDROID_LIBS@
 
 # To turn off the security checks that disallow incoming sends when
 # the X server appears to be insecure, reverse the comments on the
@@ -358,6 +362,7 @@ XEMU_DIR		= $(TOP_DIR)/xemu
 WAYLAND_DIR		= $(TOP_DIR)/wayland
 WAYLAND_PROTOCOLS_DIR	= @WAYLAND_PROTOCOLS_DIR@
 WAYLAND_SCANNER		= @WAYLAND_SCANNER@
+ANDROID_DIR		= $(TOP_DIR)/android
 
 #----------------------------------------------------------------
 # The information below should be usable as is.  The configure
@@ -459,7 +464,7 @@ AQUA_TKTEST_OBJS = tkMacOSXTest.o
 
 # The Wayland port shares the X11 code, which runs on the Xlib emulation of
 # the port; tkPointer.c and xlib/ are shared with the Aqua and Windows ports.
-# The X server emulation, on which the Wayland port runs.
+# The X server emulation shared by the Wayland and Android ports.
 XEMU_OBJS = tkXemuDraw.o $(FONT_OBJS) tkXemuHints.o tkXemuMisc.o \
 	tkXemuWindow.o tkXemuXlib.o
 
@@ -480,6 +485,17 @@ WAYLAND_PROTOCOLS = xdg-shell primary-selection-unstable-v1 viewporter \
 WAYLAND_PROTOCOL_OBJS = $(WAYLAND_PROTOCOLS:%=%-protocol.o)
 
 WAYLAND_PROTOCOL_HDRS = $(WAYLAND_PROTOCOLS:%=%-client-protocol.h)
+
+# The Android port runs on the X server emulation, as the Wayland port does,
+# with its own surfaces, events and window manager.
+ANDROID_OBJS = tkUnix.o tkUnix3d.o tkUnixAccessibility.o tkUnixButton.o \
+	tkUnixColor.o tkUnixConfig.o tkUnixDraw.o tkUnixEmbed.o tkUnixFocus.o \
+	tkIcu.o tkUnixInit.o tkUnixMenu.o tkUnixMenubu.o tkUnixScale.o \
+	tkUnixScrlbr.o tkUnixSend.o tkUnixSysNotify.o tkUnixWm.o tkUnixXId.o \
+	tkUnixPrint.o tkPointer.o xcolors.o xdraw.o xgc.o ximage.o \
+	$(XEMU_OBJS) \
+	tkAndroidCmds.o tkAndroidCursor.o tkAndroidEvent.o tkAndroidKey.o \
+	tkAndroidSelect.o tkAndroidSurface.o tkAndroidWm.o
 
 OBJS =  $(GENERIC_OBJS) $(WIDG_OBJS) $(CANV_OBJS) $(IMAGE_OBJS) $(TEXT_OBJS) \
 	$(STUB_OBJS) $(TTK_OBJS) \
@@ -1491,6 +1507,10 @@ tkWayland%.o: $(WAYLAND_DIR)/tkWayland%.c $(WAYLAND_DIR)/tkWaylandInt.h \
 		$(XEMU_DIR)/tkXemuInt.h $(XEMU_DIR)/tkXemuPort.h \
 		$(@TK_WINDOWINGSYSTEM@_PROTOCOL_HDRS)
 	$(CC) -c $(CC_SWITCHES) $(WAYLAND_DIR)/tkWayland$*.c
+
+tkAndroid%.o: $(ANDROID_DIR)/tkAndroid%.c $(ANDROID_DIR)/tkAndroidInt.h \
+		$(XEMU_DIR)/tkXemuInt.h $(XEMU_DIR)/tkXemuPort.h
+	$(CC) -c $(CC_SWITCHES) $(ANDROID_DIR)/tkAndroid$*.c
 
 tkMacOSXAccessibility.o: $(MAC_OSX_DIR)/tkMacOSXAccessibility.c
 	$(CC) -c $(CC_SWITCHES) $(MAC_OSX_DIR)/tkMacOSXAccessibility.c

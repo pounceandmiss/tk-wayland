@@ -2,7 +2,7 @@
  * tkXemuInt.h --
  *
  *	Declarations of the X server emulation shared by the ports of Tk to
- *	systems without X (Wayland), which run the X11 code of Tk
+ *	systems without X (Wayland and Android), which run the X11 code of Tk
  *	on an X server emulated inside the process:
  *
  *	- Every X window is a TkXeWindow in a window tree rooted at an
@@ -23,7 +23,7 @@
  *
  *	A port (a backend) shows the backing images of the surfaces, gives
  *	Tk its input as X events, and is the window manager. Its header
- *	(tkWaylandInt.h), included at the end of this one,
+ *	(tkWaylandInt.h, tkAndroidInt.h), included at the end of this one,
  *	defines the structures of the surfaces and of the display, with at
  *	least the members which the emulation uses:
  *
@@ -287,7 +287,9 @@ MODULE_SCOPE void	TkXeWmActivate(TkXeSurface *surfPtr);
  * The declarations of the port.
  */
 
-#if defined(TK_USE_WAYLAND)
+#if defined(TK_USE_ANDROID)
+#include "tkAndroidInt.h"
+#elif defined(TK_USE_WAYLAND)
 #include "tkWaylandInt.h"
 #endif
 

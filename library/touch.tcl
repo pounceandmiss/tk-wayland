@@ -1,7 +1,7 @@
 # touch.tcl --
 #
-# Adaptations of Tk to touchscreens, which applications can apply with
-# ::tk::touch::Adapt:
+# Adaptations of Tk to touchscreens, applied on Android, and which other
+# applications can apply with ::tk::touch::Adapt:
 #
 # - Larger targets: the widgets which take clicks get more padding, and the
 #   rows of treeviews and the entries of menus are taller, so that a finger

@@ -73,7 +73,7 @@ if {"win32" eq [tk windowingsystem]} {
 	tk::CheckRadioEnter %W
     }
 }
-if {[tk windowingsystem] in {x11 wayland}} {
+if {[tk windowingsystem] in {x11 wayland android}} {
     bind Checkbutton <Return> {
 	if {!$tk_strictMotif} {
 	    tk::CheckInvoke %W
@@ -337,7 +337,7 @@ proc ::tk::CheckRadioDown w {
 
 }
 
-if {[tk windowingsystem] in {x11 wayland}} {
+if {[tk windowingsystem] in {x11 wayland android}} {
 
 #####################
 # Unix implementation

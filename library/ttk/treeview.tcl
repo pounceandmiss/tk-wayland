@@ -135,7 +135,7 @@ bind Treeview	<Shift-Tab>		{ ::ttk::treeview::ActivateInvoke %W prev; break }
 bind Treeview	<Control-Tab>		[bind all <<NextWindow>>]
 bind Treeview	<Control-Shift-Tab>	[bind all <<PrevWindow>>]
 
-if {[tk windowingsystem] in {x11 wayland}} {
+if {[tk windowingsystem] in {x11 wayland android}} {
 bind Treeview	<ISO_Left_Tab>		{ ::ttk::treeview::ActivateInvoke %W prev; break }
 bind Treeview	<Control-ISO_Left_Tab>	[bind all <<PrevWindow>>]
 }

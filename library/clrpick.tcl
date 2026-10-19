@@ -74,7 +74,9 @@ proc ::tk::dialog::color:: {args} {
 	    destroy $w
 	}
 	toplevel $w -class TkColorDialog -screen $sc
-	if {[tk windowingsystem] in {x11 wayland}} {wm attributes $w -type dialog}
+	if {[tk windowingsystem] in {x11 wayland android}} {
+	    wm attributes $w -type dialog
+	}
 	BuildDialog $w
     }
 

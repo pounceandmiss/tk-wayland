@@ -265,7 +265,27 @@ if test $tk_aqua = no; then
     AC_MSG_RESULT([$tk_wayland])
 fi
 
-tk_xemu=$tk_wayland
+#--------------------------------------------------------------------
+#	The Android port runs on the X server emulation of ../xemu, as the
+#	Wayland port does, with its own surfaces, window manager and events.
+#--------------------------------------------------------------------
+
+tk_android=no
+if test $tk_aqua = no; then
+    AC_MSG_CHECKING([whether to build for Android])
+    AC_ARG_ENABLE(android,
+	AS_HELP_STRING([--enable-android],
+	    [build for Android, with the NDK (default: no)]),
+	[tk_android=$enableval], [tk_android=no])
+    AC_MSG_RESULT([$tk_android])
+    if test $tk_android = yes; then
+	tk_wayland=no
+    fi
+fi
+tk_xemu=no
+if test $tk_wayland = yes -o $tk_android = yes; then
+    tk_xemu=yes
+fi
 
 if test $tk_aqua = yes; then
     AC_DEFINE(MAC_OSX_TK, 1, [Are we building TkAqua?])
@@ -295,7 +315,7 @@ else
 fi
 
 #--------------------------------------------------------------------
-#	The ports on the X server emulation of ../xemu (Wayland), like the
+#	The ports on the X server emulation (Wayland and Android), like the
 #	Aqua and Windows ports, implement the part of Xlib that Tk uses, with
 #	the X11 headers in ../xlib.
 #--------------------------------------------------------------------
@@ -303,10 +323,27 @@ fi
 WAYLAND_CFLAGS=""
 WAYLAND_LIBS=""
 WAYLAND_PROTOCOLS_DIR=""
+ANDROID_CFLAGS=""
+ANDROID_LIBS=""
 if test $tk_xemu = yes; then
     AC_DEFINE(TK_USE_XEMU, 1, [Are we building Tk on the X server emulation?])
 fi
-if test $tk_wayland = yes; then
+if test $tk_android = yes; then
+    AC_DEFINE(TK_USE_ANDROID, 1, [Are we building Tk for Android?])
+    TK_WINDOWINGSYSTEM=ANDROID
+    tk_android_pkgs="cairo pixman-1 fontconfig freetype2"
+    AC_MSG_CHECKING([for $tk_android_pkgs])
+    if pkg-config --exists $tk_android_pkgs; then
+	AC_MSG_RESULT([yes])
+    else
+	AC_MSG_RESULT([no])
+	AC_MSG_ERROR([--enable-android requires the development files of:
+    $tk_android_pkgs])
+    fi
+    ANDROID_CFLAGS="`pkg-config --cflags $tk_android_pkgs`"
+    ANDROID_LIBS="`pkg-config --static --libs $tk_android_pkgs`"
+    ANDROID_LIBS="$ANDROID_LIBS -landroid -llog -lm"
+elif test $tk_wayland = yes; then
     AC_DEFINE(TK_USE_WAYLAND, 1, [Are we building Tk for Wayland?])
     TK_WINDOWINGSYSTEM=WAYLAND
     tk_wayland_pkgs="wayland-client wayland-cursor xkbcommon cairo pixman-1 fontconfig freetype2 libdecor-0"
@@ -329,6 +366,8 @@ fi
 AC_SUBST(WAYLAND_CFLAGS)
 AC_SUBST(WAYLAND_LIBS)
 AC_SUBST(WAYLAND_PROTOCOLS_DIR)
+AC_SUBST(ANDROID_CFLAGS)
+AC_SUBST(ANDROID_LIBS)
 
 #--------------------------------------------------------------------
 #	Various manipulations on the search path used at runtime to
@@ -607,7 +646,7 @@ Please install the HarfBuzz development package:
     AC_SUBST(FONTSYSTEM)
 
 elif test $tk_xemu = yes; then
-    # X server emulation (Wayland): the bidi font code of X11
+    # X server emulation (Wayland, Android): the bidi font code of X11
     # (tkUnixBidiFont.c) runs on the Xft emulation of tkXemuXft.c if
     # HarfBuzz is available, otherwise tkXemuFont.c is used.
     enable_xft=no

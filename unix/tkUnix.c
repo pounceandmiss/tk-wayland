@@ -80,7 +80,10 @@ TkGetDefaultScreenName(
     const char *screenName)	/* Screen name from command line, or NULL. */
 {
     if ((screenName == NULL) || (screenName[0] == '\0')) {
-#ifdef TK_USE_WAYLAND
+#if defined(TK_USE_ANDROID)
+	(void)interp;
+	screenName = "android";
+#elif defined(TK_USE_WAYLAND)
 	screenName = Tcl_GetVar2(interp, "env", "WAYLAND_DISPLAY",
 		TCL_GLOBAL_ONLY);
 	if (screenName == NULL) {

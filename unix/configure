@@ -695,6 +695,8 @@ XFT_LIBS
 XFT_CFLAGS
 HB_LIBS
 HB_CFLAGS
+ANDROID_LIBS
+ANDROID_CFLAGS
 WAYLAND_PROTOCOLS_DIR
 WAYLAND_LIBS
 WAYLAND_CFLAGS
@@ -811,6 +813,7 @@ enable_load
 enable_symbols
 enable_aqua
 enable_wayland
+enable_android
 with_x
 enable_xft
 enable_bidi
@@ -1471,6 +1474,7 @@ Optional Features:
   --enable-aqua=yes|no    use Aqua windowingsystem on Mac OS X (default: no)
   --enable-wayland        use Wayland windowingsystem instead of X11 (default:
                           no)
+  --enable-android        build for Android, with the NDK (default: no)
   --enable-xft            use freetype/fontconfig/xft for antialiased fonts
                           (default: yes)
   --enable-bidi           enable bidirectional/RTL text support using
@@ -7987,7 +7991,34 @@ fi
 printf '%s\n' "$tk_wayland" >&6; }
 fi
 
-tk_xemu=$tk_wayland
+#--------------------------------------------------------------------
+#	The Android port runs on the X server emulation of ../xemu, as the
+#	Wayland port does, with its own surfaces, window manager and events.
+#--------------------------------------------------------------------
+
+tk_android=no
+if test $tk_aqua = no; then
+    { printf '%s\n' "$as_me:${as_lineno-$LINENO}: checking whether to build for Android" >&5
+printf %s "checking whether to build for Android... " >&6; }
+    # Check whether --enable-android was given.
+if test ${enable_android+y}
+then :
+  enableval=$enable_android; tk_android=$enableval
+else case e in #(
+  e) tk_android=no ;;
+esac
+fi
+
+    { printf '%s\n' "$as_me:${as_lineno-$LINENO}: result: $tk_android" >&5
+printf '%s\n' "$tk_android" >&6; }
+    if test $tk_android = yes; then
+	tk_wayland=no
+    fi
+fi
+tk_xemu=no
+if test $tk_wayland = yes -o $tk_android = yes; then
+    tk_xemu=yes
+fi
 
 if test $tk_aqua = yes; then
 
@@ -8390,7 +8421,7 @@ printf '%s\n' "could not find any!  Using -lX11." >&6; }
 fi
 
 #--------------------------------------------------------------------
-#	The ports on the X server emulation of ../xemu (Wayland), like the
+#	The ports on the X server emulation (Wayland and Android), like the
 #	Aqua and Windows ports, implement the part of Xlib that Tk uses, with
 #	the X11 headers in ../xlib.
 #--------------------------------------------------------------------
@@ -8398,12 +8429,34 @@ fi
 WAYLAND_CFLAGS=""
 WAYLAND_LIBS=""
 WAYLAND_PROTOCOLS_DIR=""
+ANDROID_CFLAGS=""
+ANDROID_LIBS=""
 if test $tk_xemu = yes; then
 
 printf '%s\n' "#define TK_USE_XEMU 1" >>confdefs.h
 
 fi
-if test $tk_wayland = yes; then
+if test $tk_android = yes; then
+
+printf '%s\n' "#define TK_USE_ANDROID 1" >>confdefs.h
+
+    TK_WINDOWINGSYSTEM=ANDROID
+    tk_android_pkgs="cairo pixman-1 fontconfig freetype2"
+    { printf '%s\n' "$as_me:${as_lineno-$LINENO}: checking for $tk_android_pkgs" >&5
+printf %s "checking for $tk_android_pkgs... " >&6; }
+    if pkg-config --exists $tk_android_pkgs; then
+	{ printf '%s\n' "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+printf '%s\n' "yes" >&6; }
+    else
+	{ printf '%s\n' "$as_me:${as_lineno-$LINENO}: result: no" >&5
+printf '%s\n' "no" >&6; }
+	as_fn_error $? "--enable-android requires the development files of:
+    $tk_android_pkgs" "$LINENO" 5
+    fi
+    ANDROID_CFLAGS="`pkg-config --cflags $tk_android_pkgs`"
+    ANDROID_LIBS="`pkg-config --static --libs $tk_android_pkgs`"
+    ANDROID_LIBS="$ANDROID_LIBS -landroid -llog -lm"
+elif test $tk_wayland = yes; then
 
 printf '%s\n' "#define TK_USE_WAYLAND 1" >>confdefs.h
 
@@ -8474,6 +8527,8 @@ fi
 	as_fn_error $? "--enable-wayland requires wayland-scanner" "$LINENO" 5
     fi
 fi
+
+
 
 
 
@@ -9012,7 +9067,7 @@ printf '%s\n' "$as_me: WARNING: Can't find xft configuration or xft is unusable 
 
 
 elif test $tk_xemu = yes; then
-    # X server emulation (Wayland): the bidi font code of X11
+    # X server emulation (Wayland, Android): the bidi font code of X11
     # (tkUnixBidiFont.c) runs on the Xft emulation of tkXemuXft.c if
     # HarfBuzz is available, otherwise tkXemuFont.c is used.
     enable_xft=no

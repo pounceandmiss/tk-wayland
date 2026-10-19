@@ -2,11 +2,12 @@
 
 This directory holds an X server emulated inside the process, on which the
 ports of Tk to systems without X run the X11 code of Tk: the Wayland port
-(`../wayland`). Like the Aqua and Windows ports, they compile against the X11 headers in `../xlib` and implement the
+(`../wayland`) and the Android port (`../android`). Like the Aqua and Windows
+ports, they compile against the X11 headers in `../xlib` and implement the
 part of Xlib which Tk uses (`tkIntXlibDecls.h`); unlike them, they emulate it
 far enough that `tkUnixWm.c`, `tkUnixMenu.c`, `tkUnixEmbed.c` (within the
 process), `tkUnixSend.c` (within the process), the widgets and the library
-run as on X11. These ports are configured with `TK_USE_XEMU` defined.
+run as on X11. Both ports are configured with `TK_USE_XEMU` defined.
 
 ## Design
 
@@ -48,5 +49,5 @@ emulation uses, the functions of surfaces (`TkXeNewSurface`,
 `TkXeResizeBacking`, `TkXeAddDamage`, ...), of input (`TkXeCurrentTime`,
 `TkXeUpdateCursor`) and of the window manager (`TkXeWmMapSurface`,
 `TkXeWmPropertyChanged`, ...), and the part of xkbcommon which the Xlib
-emulation uses. Its header (`tkWaylandInt.h`) is included at the end of
-`tkXemuInt.h`.
+emulation uses. Its header (`tkWaylandInt.h`, `tkAndroidInt.h`) is included
+at the end of `tkXemuInt.h`.

@@ -15,7 +15,7 @@
 #-------------------------------------------------------------------------
 
 # Standard Motif bindings:
-if {[tk windowingsystem] in {x11 wayland} || [tk windowingsystem] eq "aqua"} {
+if {[tk windowingsystem] in {x11 wayland android aqua}} {
 
 bind Scrollbar <Enter> {
     if {$tk_strictMotif} {

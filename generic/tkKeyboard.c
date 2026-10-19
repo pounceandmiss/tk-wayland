@@ -1,11 +1,11 @@
 /*
  * tkKeyboard.c --
  *
- *	On-screen keyboards ("tk keyboard"). The ports which have one (Wayland,
- *	where it is shown by the compositor when text input is enabled)
- *	register a procedure with TkSetKeyboardProc, which shows or hides it,
- *	and tell with TkKeyboardChanged when it was shown or hidden, if they
- *	know.
+ *	On-screen keyboards ("tk keyboard"). The ports which have one (Android,
+ *	and Wayland, where it is shown by the compositor when text input is
+ *	enabled) register a procedure with TkSetKeyboardProc, which shows or
+ *	hides it, and tell with TkKeyboardChanged when it was shown or hidden,
+ *	if they know.
  *
  *	In the automatic mode (the default), the keyboard follows the focus:
  *	it is shown when the focus is in a widget which shows an insertion

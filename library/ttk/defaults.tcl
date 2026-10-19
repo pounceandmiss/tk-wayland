@@ -23,7 +23,7 @@ namespace eval ttk::theme::default {
 
     # On X11, if the user specifies their own choice of colour scheme via
     # X resources, then set the colour palette based on the user's choice.
-    if {[tk windowingsystem] in {x11 wayland}} {
+    if {[tk windowingsystem] in {x11 wayland android}} {
 	foreach \
 		xResourceName {
 		    {	background		Background		}

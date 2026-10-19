@@ -3066,10 +3066,10 @@ DisplayCanvas(
     /*
      * Compute the intersection between the area that needs redrawing and the
      * area that's visible on the screen. Where a pixel of the canvas is a
-     * fraction of the pixels of the screen (Wayland), an edge drawn in the
-     * pixmap may fall on a pixel of the screen just outside the area, and
-     * would be left behind when the item moves: the area is then one pixel
-     * larger on each side.
+     * fraction of the pixels of the screen (Wayland, Android), an edge drawn
+     * in the pixmap may fall on a pixel of the screen just outside the
+     * area, and would be left behind when the item moves: the area is then
+     * one pixel larger on each side.
      */
 
     margin = 0;

@@ -316,7 +316,7 @@ proc ::tk::ScreenChanged screen {
 	selectMode	char
     }
     set Priv(screen) $screen
-    set Priv(tearoff) [expr {[tk windowingsystem] in {x11 wayland}}]
+    set Priv(tearoff) [expr {[tk windowingsystem] in {x11 wayland android}}]
     set Priv(window) {}
 }
 
@@ -407,7 +407,7 @@ event add <<ContextMenu>>	<Button-3>
 event add <<PasteSelection>>	<ButtonRelease-2>
 
 switch -exact -- [tk windowingsystem] {
-    "x11" - "wayland" {
+    "x11" - "wayland" - "android" {
 	event add <<Cut>>		<Control-x> <F20> <Control-Lock-X>
 	event add <<Copy>>		<Control-c> <F16> <Control-Lock-C>
 	event add <<Paste>>		<Control-v> <F18> <Control-Lock-V>
@@ -541,7 +541,8 @@ if {$::tk_library ne ""} {
 	# accessibility support. These cause interpreter failures or Tk to
 	# crash.
 	if {![interp issafe] &&
-		!($::tcl_platform(os) eq "Darwin" && [tk windowingsystem] in {x11 wayland}) &&
+		!($::tcl_platform(os) eq "Darwin"
+		    && [tk windowingsystem] in {x11 wayland android}) &&
 		![catch {tk::accessible::check_screenreader} r] &&
 		![string match -nocase "*warning*" $r]} {
 	    SourceLibFile accessibility
@@ -1026,13 +1027,19 @@ option add *Scale.sliderLength		22.5p widgetDefault
 option add *Scale.width			11.25p widgetDefault
 
 # Scale the default scrollbar width on X11
-if {[tk windowingsystem] in {x11 wayland}} {
+if {[tk windowingsystem] in {x11 wayland android}} {
     option add *Scrollbar.width		8.25p widgetDefault
 }
 
 # Run the Ttk themed widget set initialization
 if {$::ttk::library ne ""} {
     uplevel \#0 [list source $::ttk::library/ttk.tcl]
+}
+
+# Adapt Tk to touchscreens on Android (touch.tcl)
+if {[tk windowingsystem] eq "android" && $::tk_library ne ""} {
+    uplevel \#0 [list source [file join $::tk_library touch.tcl]]
+    ::tk::touch::Adapt
 }
 
 

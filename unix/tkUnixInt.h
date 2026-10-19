@@ -33,7 +33,9 @@ MODULE_SCOPE  int       Tktray_Init (Tcl_Interp* interp);
 MODULE_SCOPE  int       SysNotify_Init (Tcl_Interp* interp);
 MODULE_SCOPE  int       Cups_Init (Tcl_Interp* interp);
 MODULE_SCOPE  int       TkAtkAccessibility_Init (Tcl_Interp *interp) ;
-#ifdef TK_USE_WAYLAND
+#if defined(TK_USE_ANDROID)
+MODULE_SCOPE  int       TkAndroidCmdsInit (Tcl_Interp *interp);
+#elif defined(TK_USE_WAYLAND)
 MODULE_SCOPE  int       TkWaylandCmdsInit (Tcl_Interp *interp);
 #endif
 

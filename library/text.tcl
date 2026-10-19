@@ -1206,7 +1206,7 @@ proc ::tk_textPaste w {
 	    $w configure -autoseparators 0
 	    $w edit separator
 	}
-	if {[tk windowingsystem] ni {x11 wayland}} {
+	if {[tk windowingsystem] ni {x11 wayland android}} {
 	    catch { $w delete sel.first sel.last }
 	}
 	$w insert insert $sel

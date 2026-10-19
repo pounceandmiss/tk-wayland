@@ -46,7 +46,9 @@ TkpInit(
     Icu_Init(interp);
     Cups_Init(interp);
     TkAtkAccessibility_Init(interp);
-#ifdef TK_USE_WAYLAND
+#if defined(TK_USE_ANDROID)
+    TkAndroidCmdsInit(interp);
+#elif defined(TK_USE_WAYLAND)
     TkWaylandCmdsInit(interp);
 #endif
     return TCL_OK;

@@ -154,7 +154,8 @@ proc ::tk_setPalette {args} {
 
     array set ::tk::Palette [array get new]
 
-    if {[tk windowingsystem] ni {x11 wayland} || [ttk::style theme use] ne "default"} {
+    if {[tk windowingsystem] ni {x11 wayland android}
+	    || [ttk::style theme use] ne "default"} {
 	return
     }
 

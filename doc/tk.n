@@ -111,8 +111,8 @@ error if tried.
 \fBtk keyboard type \fIwindow\fR ?\fItype\fR?
 .
 Controls the on-screen keyboard, on the windowing systems which have one
-(\fBwayland\fR, where the compositor shows it while text input is
-enabled). Without a subcommand, returns \fBshown\fR or \fBhidden\fR:
+(\fBandroid\fR, and \fBwayland\fR, where the compositor shows it while text
+input is enabled). Without a subcommand, returns \fBshown\fR or \fBhidden\fR:
 what the windowing system said, or else what Tk asked for. \fBshow\fR and
 \fBhide\fR show and hide the keyboard. In the \fBauto\fR mode, the default,
 the keyboard follows the focus: it is shown when the focus moves to a widget
@@ -206,9 +206,9 @@ state is returned.  This is turned on by default for the main display.
 \fBtk touch mode \fIwindow\fR ?\fBauto\fR|\fBscroll\fR|\fBmouse\fR|\fBraw\fR?
 .
 Sets and queries how touching \fIwindow\fR on a touchscreen is handled, on
-the windowing systems which have touch input (\fBwayland\fR). Tk turns the
-touches into the events widgets know: a tap is a click of the first button;
-dragging scrolls, with \fBTouchpadScroll\fR events,
+the windowing systems which have touch input (\fBandroid\fR and
+\fBwayland\fR). Tk turns the touches into the events widgets know: a tap is a
+click of the first button; dragging scrolls, with \fBTouchpadScroll\fR events,
 and goes on for a while when the finger is lifted while moving; a long press
 is a click of the third button, or, if the finger then moves, a drag with the
 first button; two fingers scroll, and pinching generates \fB<<Pinch>>\fR
@@ -234,19 +234,20 @@ dragging draws, for instance, should have the mode \fBmouse\fR. The mode is
 returned.
 .RS
 .PP
-Applications on touchscreens can also adapt the widgets to fingers with
-\fB::tk::touch::Adapt\fR: the widgets get larger targets (more padding,
-taller rows and menu entries), and a long press in an entry, a text, a
-spinbox or a combobox selects the word there, and shows the selection with
-two handles, which can be dragged to move its ends, and a toolbar to cut,
-copy, paste and select all.
+On \fBandroid\fR, the widgets also have larger targets for fingers (more
+padding, taller rows and menu entries), and a long press in an entry, a
+text, a spinbox or a combobox selects the word there, and shows the
+selection with two handles, which can be dragged to move its ends, and a
+toolbar to cut, copy, paste and select all. Applications on other
+touchscreens can adapt the widgets in the same way with
+\fB::tk::touch::Adapt\fR.
 .RE
 .\" METHOD: windowingsystem
 .TP
 \fBtk windowingsystem\fR
 .
 Returns the current Tk windowing system, one of
-\fBx11\fR (X11-based), \fBwayland\fR (Wayland),
+\fBx11\fR (X11-based), \fBwayland\fR (Wayland), \fBandroid\fR (Android),
 \fBwin32\fR (MS Windows), or \fBaqua\fR (macOS Aqua).
 .SH "SEE ALSO"
 attribtable(n), busy(n), fontchooser(n), print(n), send(n), sysnotify(n),

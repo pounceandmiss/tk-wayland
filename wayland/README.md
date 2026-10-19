@@ -1,7 +1,8 @@
 # Tk on Wayland
 
 This directory holds a Wayland port of Tk which runs the X11 code of Tk on the
-X server emulated inside the process of `../xemu`. It is built with
+X server emulated inside the process of `../xemu`, shared with the Android
+port. It is built with
 
     ./configure --enable-wayland
 

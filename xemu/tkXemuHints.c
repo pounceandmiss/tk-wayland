@@ -3,7 +3,7 @@
  *
  *	The Xlib functions with which Tk gives hints to the window manager.
  *	As in Xlib, they only set properties, which the window manager of
- *	the port (tkWaylandWm.c) reads.
+ *	the port (tkWaylandWm.c, tkAndroidWm.c) reads.
  *
  * Copyright © 2026 The Tk developers.
  *
