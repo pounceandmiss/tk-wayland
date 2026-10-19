@@ -46,6 +46,13 @@ struct _XftDraw {
  *	bitmap faces, the factor which scales their bitmaps to the requested
  *	size. Both go into the font matrix of Cairo.
  *
+ * Results:
+ *	The font, or NULL if it cannot be opened (the pattern is then still
+ *	owned by the caller).
+ *
+ * Side effects:
+ *	Allocates the font and a Cairo scaled font.
+ *
  *----------------------------------------------------------------------
  */
 
@@ -124,7 +131,19 @@ XftFontOpenPattern(
 }
 
 /*
- * Open the font matching a list of pattern elements, ended by NULL.
+ *----------------------------------------------------------------------
+ *
+ * XftFontOpen --
+ *
+ *	Open the font matching a list of pattern elements, ended by NULL.
+ *
+ * Results:
+ *	The font, or NULL if no font matches or it cannot be opened.
+ *
+ * Side effects:
+ *	Allocates the font, which owns the matched pattern.
+ *
+ *----------------------------------------------------------------------
  */
 
 XftFont *
@@ -158,6 +177,22 @@ XftFontOpen(
     return fontPtr;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * XftFontClose --
+ *
+ *	Close a font opened by XftFontOpenPattern or XftFontOpen.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Frees the font, its Cairo scaled font and its pattern.
+ *
+ *----------------------------------------------------------------------
+ */
+
 void
 XftFontClose(
     TCL_UNUSED(Display *),
@@ -169,6 +204,24 @@ XftFontClose(
     FcPatternDestroy(fontPtr->pub.pattern);
     Tcl_Free(fontPtr);
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XftLockFace, XftUnlockFace --
+ *
+ *	Lock the FreeType face of a font, for direct use with FreeType, and
+ *	unlock it.
+ *
+ * Results:
+ *	XftLockFace returns the face, or NULL if it cannot be locked.
+ *	XftUnlockFace returns nothing.
+ *
+ * Side effects:
+ *	The face is locked by Cairo until it is unlocked.
+ *
+ *----------------------------------------------------------------------
+ */
 
 FT_Face
 XftLockFace(
@@ -183,6 +236,22 @@ XftUnlockFace(
 {
     cairo_ft_scaled_font_unlock_face(((WlXftFont *)font)->scaledFont);
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XftCharIndex --
+ *
+ *	The glyph of a character in a font.
+ *
+ * Results:
+ *	The index of the glyph, or 0 if the font has none for the character.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
 
 FT_UInt
 XftCharIndex(
@@ -207,6 +276,12 @@ XftCharIndex(
  *
  *	The ink extents and the advance of a run of glyphs. Advances are
  *	rounded to whole pixels, as with hinted Xft fonts.
+ *
+ * Results:
+ *	None; the extents are stored in *extents.
+ *
+ * Side effects:
+ *	None.
  *
  *----------------------------------------------------------------------
  */
@@ -270,6 +345,22 @@ XftGlyphExtents(
  *----------------------------------------------------------------------
  */
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * XftDefaultSubstitute --
+ *
+ *	Add the default values of fontconfig to a pattern.
+ *
+ * Results:
+ *	True.
+ *
+ * Side effects:
+ *	The pattern is modified.
+ *
+ *----------------------------------------------------------------------
+ */
+
 Bool
 XftDefaultSubstitute(
     TCL_UNUSED(Display *),
@@ -279,6 +370,22 @@ XftDefaultSubstitute(
     FcDefaultSubstitute(pattern);
     return True;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XftXlfdParse --
+ *
+ *	Make a pattern from an XLFD font name.
+ *
+ * Results:
+ *	The new pattern, or NULL if the name is not an XLFD name.
+ *
+ * Side effects:
+ *	Allocates the pattern, which the caller destroys.
+ *
+ *----------------------------------------------------------------------
+ */
 
 FcPattern *
 XftXlfdParse(
@@ -290,8 +397,20 @@ XftXlfdParse(
 }
 
 /*
- * List the fonts matching a list of pattern elements ended by NULL, with the
- * objects in a list of object names ended by NULL.
+ *----------------------------------------------------------------------
+ *
+ * XftListFonts --
+ *
+ *	List the fonts matching a list of pattern elements ended by NULL, with
+ *	the objects in a list of object names ended by NULL.
+ *
+ * Results:
+ *	The set of the fonts found, which the caller destroys.
+ *
+ * Side effects:
+ *	Allocates the font set.
+ *
+ *----------------------------------------------------------------------
  */
 
 XftFontSet *
@@ -328,6 +447,22 @@ XftListFonts(
  *----------------------------------------------------------------------
  */
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * XftDrawCreate --
+ *
+ *	Make the drawing context of Xft for a drawable.
+ *
+ * Results:
+ *	The new drawing context.
+ *
+ * Side effects:
+ *	Allocates the drawing context.
+ *
+ *----------------------------------------------------------------------
+ */
+
 XftDraw *
 XftDrawCreate(
     Display *display,
@@ -343,6 +478,22 @@ XftDrawCreate(
     return draw;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * XftDrawChange --
+ *
+ *	Change the drawable of a drawing context.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The context draws into the new drawable.
+ *
+ *----------------------------------------------------------------------
+ */
+
 void
 XftDrawChange(
     XftDraw *draw,
@@ -350,6 +501,22 @@ XftDrawChange(
 {
     draw->drawable = drawable;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XftDrawDestroy --
+ *
+ *	Destroy a drawing context.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Frees the context and its clip region.
+ *
+ *----------------------------------------------------------------------
+ */
 
 void
 XftDrawDestroy(
@@ -360,6 +527,23 @@ XftDrawDestroy(
     }
     Tcl_Free(draw);
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XftDrawSetClip --
+ *
+ *	Set the clip region of a drawing context, or remove it if the region
+ *	is NULL.
+ *
+ * Results:
+ *	True.
+ *
+ * Side effects:
+ *	The context keeps a copy of the region, and frees its previous one.
+ *
+ *----------------------------------------------------------------------
+ */
 
 Bool
 XftDrawSetClip(
@@ -376,6 +560,23 @@ XftDrawSetClip(
     }
     return True;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XftDrawGlyphFontSpec --
+ *
+ *	Draw glyphs, each with its font and position, in a color.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The glyphs are drawn in the drawable of the context, clipped by its
+ *	clip region, and the area drawn is damaged.
+ *
+ *----------------------------------------------------------------------
+ */
 
 void
 XftDrawGlyphFontSpec(

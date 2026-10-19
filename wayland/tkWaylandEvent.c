@@ -46,6 +46,23 @@ static void		RepeatProc(void *clientData);
  *----------------------------------------------------------------------
  */
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * UpdateScreenSize --
+ *
+ *	Set the size of the screen of the X display to that of the first
+ *	output, in logical pixels.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The size of the screen changes.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static void
 UpdateScreenSize(void)
 {
@@ -60,6 +77,26 @@ UpdateScreenSize(void)
     TkWlSetScreenSize(tkWlDisplay->display, outPtr->width / scale,
 	    outPtr->height / scale, outPtr->mmWidth, outPtr->mmHeight);
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * OutputGeometry, OutputMode, OutputDone, OutputScale,
+ * OutputName, OutputDescription --
+ *
+ *	The events of a wl_output, whose physical size, mode and scale are
+ *	recorded. When the compositor has sent all the properties of an
+ *	output, the screen and the scales of the surfaces are updated.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The properties of the output change. OutputDone updates the size of
+ *	the screen and the scale of all surfaces.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static void
 OutputGeometry(
@@ -143,13 +180,13 @@ OutputDescription(
 #endif
 
 static const struct wl_output_listener outputListener = {
-    .geometry = OutputGeometry,
-    .mode = OutputMode,
-    .done = OutputDone,
-    .scale = OutputScale,
+    OutputGeometry,
+    OutputMode,
+    OutputDone,
+    OutputScale,
 #ifdef WL_OUTPUT_NAME_SINCE_VERSION
-    .name = OutputName,
-    .description = OutputDescription
+    OutputName,
+    OutputDescription
 #endif
 };
 
@@ -166,9 +203,21 @@ static const struct wl_output_listener outputListener = {
  */
 
 /*
- * Root coordinates of a point of a surface. Wayland clients do not know
- * where their windows are, so the position of the window is the one Tk
- * believes it has.
+ *----------------------------------------------------------------------
+ *
+ * SurfaceToRoot --
+ *
+ *	Root coordinates of a point of a surface. Wayland clients do not know
+ *	where their windows are, so the position of the window is the one Tk
+ *	believes it has.
+ *
+ * Results:
+ *	None; the coordinates are stored in *rootXPtr and *rootYPtr.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
  */
 
 static void
@@ -184,7 +233,20 @@ SurfaceToRoot(
 }
 
 /*
- * The Tk window at the position of the pointer.
+ *----------------------------------------------------------------------
+ *
+ * WindowAtPointer --
+ *
+ *	The Tk window at a point of a surface: the innermost window there, or
+ *	its nearest ancestor which is a Tk window.
+ *
+ * Results:
+ *	The window, or NULL if there is none.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
  */
 
 static Tk_Window
@@ -209,11 +271,45 @@ WindowAtPointer(
     return NULL;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * CurrentState --
+ *
+ *	The state of the modifiers and the buttons, as in the state of X
+ *	events.
+ *
+ * Results:
+ *	The state.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static unsigned int
 CurrentState(void)
 {
     return tkWlDisplay->modState | tkWlDisplay->buttonState;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * UpdatePointer --
+ *
+ *	Give the position of the pointer and a state to Tk_UpdatePointer.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Tk_UpdatePointer generates the crossing, motion and button events of
+ *	the change, and handles the grabs.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static void
 UpdatePointer(
@@ -231,6 +327,27 @@ UpdatePointer(
     SurfaceToRoot(surfPtr, x, y, &rootX, &rootY);
     Tk_UpdatePointer(WindowAtPointer(surfPtr, x, y), rootX, rootY, state);
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * PointerEnter, PointerLeave, PointerMotion,
+ * PointerButton --
+ *
+ *	The events of the wl_pointer for its position and its buttons.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Updates the position, the surface and the buttons of the pointer, and
+ *	generates the X events of the changes. PointerEnter sets the cursor of
+ *	the surface; PointerLeave releases the buttons still pressed. The
+ *	serial and time of the events are recorded for the requests which need
+ *	them.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static void
 PointerEnter(
@@ -333,12 +450,32 @@ PointerButton(
 
 /*
  * Scrolling: wheels generate MouseWheel events, of 120 units per notch,
- * and touchpads TouchpadScroll events, as on Aqua.
+ * and touchpads TouchpadScroll events, as on Aqua. The amounts of a frame
+ * of pointer events are accumulated here.
  */
 
 static uint32_t axisSource = WL_POINTER_AXIS_SOURCE_WHEEL;
 static int axisValue120[2];
 static double axisValue[2];
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * PointerAxis, PointerAxisSource, PointerAxisStop,
+ * PointerAxisDiscrete, PointerAxisValue120,
+ * PointerAxisRelativeDirection --
+ *
+ *	The scroll events of the wl_pointer, which are accumulated until the
+ *	end of the frame (see PointerFrame).
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The amounts and the source of the scrolling of the frame change.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static void
 PointerAxis(
@@ -410,6 +547,24 @@ PointerAxisRelativeDirection(
 }
 #endif
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * QueueScrollEvent --
+ *
+ *	Queue a MouseWheel or TouchpadScroll event, with its amount in the
+ *	keycode, for the window with the pointer capture, or else the window
+ *	under the pointer.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	An event is queued.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static void
 QueueScrollEvent(
     int type,
@@ -443,6 +598,24 @@ QueueScrollEvent(
     event.xkey.keycode = value;
     Tk_QueueWindowEvent(&event, TCL_QUEUE_TAIL);
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * PointerFrame --
+ *
+ *	The end of a frame of events of the wl_pointer: the scrolling
+ *	accumulated during the frame is turned into MouseWheel events (wheels)
+ *	or TouchpadScroll events (touchpads).
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Scroll events are queued, and the accumulated scrolling is reset.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static void
 PointerFrame(
@@ -488,21 +661,25 @@ PointerFrame(
     axisSource = WL_POINTER_AXIS_SOURCE_WHEEL;
 }
 
+/*
+ * The last events are in newer versions of the protocol only.
+ */
+
 static const struct wl_pointer_listener pointerListener = {
-    .enter = PointerEnter,
-    .leave = PointerLeave,
-    .motion = PointerMotion,
-    .button = PointerButton,
-    .axis = PointerAxis,
-    .frame = PointerFrame,
-    .axis_source = PointerAxisSource,
-    .axis_stop = PointerAxisStop,
-    .axis_discrete = PointerAxisDiscrete,
+    PointerEnter,
+    PointerLeave,
+    PointerMotion,
+    PointerButton,
+    PointerAxis,
+    PointerFrame,
+    PointerAxisSource,
+    PointerAxisStop,
+    PointerAxisDiscrete,
 #ifdef WL_POINTER_AXIS_VALUE120_SINCE_VERSION
-    .axis_value120 = PointerAxisValue120,
+    PointerAxisValue120,
 #endif
 #ifdef WL_POINTER_AXIS_RELATIVE_DIRECTION_SINCE_VERSION
-    .axis_relative_direction = PointerAxisRelativeDirection
+    PointerAxisRelativeDirection
 #endif
 };
 
@@ -523,6 +700,23 @@ static const char *const modNames[8] = {
     "Mod2", "Mod3", "Mod4", "Mod5"
 };
 static xkb_mod_index_t modIndices[8];
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * InitModIndices --
+ *
+ *	Find the indices in a keymap of the modifiers which correspond to the
+ *	X modifiers Shift, Lock, Control and Mod1 to Mod5.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The indices of the modifiers are set.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static void
 InitModIndices(
@@ -549,6 +743,24 @@ InitModIndices(
 	modIndices[6] = xkb_keymap_mod_get_index(keymap, XKB_MOD_NAME_LOGO);
     }
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * KeyboardKeymap --
+ *
+ *	The keymap event of the wl_keyboard: the keymap of the keyboard, which
+ *	the compositor gives as a file descriptor.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Replaces the keymap and the keyboard state, and marks the key bindings
+ *	of all displays as stale. The file descriptor is closed.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static void
 KeyboardKeymap(
@@ -595,6 +807,22 @@ KeyboardKeymap(
     }
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * ModState --
+ *
+ *	The state of the X modifiers, from the state of the keyboard.
+ *
+ * Results:
+ *	The modifier bits of the state of X events.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static unsigned int
 ModState(void)
 {
@@ -614,6 +842,22 @@ ModState(void)
     return state;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * QueueFocusEvent --
+ *
+ *	Queue a FocusIn or FocusOut event for a window.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	An event is queued.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static void
 QueueFocusEvent(
     int type,
@@ -629,6 +873,25 @@ QueueFocusEvent(
     event.xfocus.detail = NotifyNonlinear;
     TkWlQueueEvent(&event);
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * KeyboardEnter, KeyboardLeave --
+ *
+ *	The events of the wl_keyboard when the keyboard enters a surface or
+ *	leaves it.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Updates the surface which has the keyboard and the window which has
+ *	the focus, and queues the focus events. Entering an iconified window
+ *	deiconifies it; leaving stops the repeat of keys.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static void
 KeyboardEnter(
@@ -686,8 +949,22 @@ KeyboardLeave(
 }
 
 /*
- * Generate a key event. The text of a KeyPress is stored in the event, as
- * TkpGetString would compute it with an input method.
+ *----------------------------------------------------------------------
+ *
+ * QueueKeyEvent --
+ *
+ *	Generate a key event for a key of the keyboard (an evdev code), for
+ *	the window which has the focus. The text of a KeyPress, with compose
+ *	sequences, is stored in the event, as TkpGetString would compute it
+ *	with an input method.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	An event is queued. The state of the compose sequence changes.
+ *
+ *----------------------------------------------------------------------
  */
 
 static void
@@ -770,6 +1047,23 @@ QueueKeyEvent(
     TkWlQueueEvent(&event.x);
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * KeyboardKey --
+ *
+ *	The key event of the wl_keyboard.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Queues a KeyPress or KeyRelease event, and starts or stops the repeat
+ *	of the key.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static void
 KeyboardKey(
     TCL_UNUSED(void *),
@@ -799,8 +1093,21 @@ KeyboardKey(
 }
 
 /*
- * Key repeat is done by the client in Wayland. As on X11 with detectable
- * auto repeat, only KeyPress events are repeated.
+ *----------------------------------------------------------------------
+ *
+ * RepeatProc --
+ *
+ *	Timer procedure repeating a key. Key repeat is done by the client in
+ *	Wayland. As on X11 with detectable auto repeat, only KeyPress events
+ *	are repeated.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Queues a KeyPress event and schedules the next repeat.
+ *
+ *----------------------------------------------------------------------
  */
 
 static void
@@ -811,6 +1118,23 @@ RepeatProc(
 	    1000 / tkWlDisplay->repeatRate, RepeatProc, NULL);
     QueueKeyEvent(KeyPress, tkWlDisplay->repeatKey);
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * KeyboardModifiers, KeyboardRepeatInfo --
+ *
+ *	The events of the wl_keyboard giving the state of the modifiers, and
+ *	the rate and the delay of the repeat of keys.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The state of the keyboard, or the parameters of the repeat, change.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static void
 KeyboardModifiers(
@@ -842,18 +1166,36 @@ KeyboardRepeatInfo(
 }
 
 static const struct wl_keyboard_listener keyboardListener = {
-    .keymap = KeyboardKeymap,
-    .enter = KeyboardEnter,
-    .leave = KeyboardLeave,
-    .key = KeyboardKey,
-    .modifiers = KeyboardModifiers,
-    .repeat_info = KeyboardRepeatInfo
+    KeyboardKeymap,
+    KeyboardEnter,
+    KeyboardLeave,
+    KeyboardKey,
+    KeyboardModifiers,
+    KeyboardRepeatInfo
 };
 
 /*
  *----------------------------------------------------------------------
  *
  * Seat and registry --
+ *
+ *----------------------------------------------------------------------
+ */
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * SeatCapabilities, SeatName --
+ *
+ *	The events of the wl_seat: its capabilities, the pointer and the
+ *	keyboard it has, and its name, which is not used.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	SeatCapabilities gets or releases the pointer and the keyboard of the
+ *	seat.
  *
  *----------------------------------------------------------------------
  */
@@ -891,9 +1233,26 @@ SeatName(
 }
 
 static const struct wl_seat_listener seatListener = {
-    .capabilities = SeatCapabilities,
-    .name = SeatName
+    SeatCapabilities,
+    SeatName
 };
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * WmBasePing --
+ *
+ *	The ping event of the xdg_wm_base, by which the compositor checks that
+ *	the application responds.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	A pong is sent.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static void
 WmBasePing(
@@ -905,7 +1264,7 @@ WmBasePing(
 }
 
 static const struct xdg_wm_base_listener wmBaseListener = {
-    .ping = WmBasePing
+    WmBasePing
 };
 
 /*
@@ -931,6 +1290,24 @@ static const struct xdg_wm_base_listener wmBaseListener = {
 #   define COMPOSITOR_VERSION 5
 #endif
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * RegistryGlobal --
+ *
+ *	The global event of the wl_registry: bind the interfaces Tk uses, in
+ *	the versions the headers support.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The globals are bound; outputs are added to the list of outputs.
+ *	Compositors whose globals start with "weston_" are recorded as Weston.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static void
 RegistryGlobal(
     TCL_UNUSED(void *),
@@ -950,7 +1327,8 @@ RegistryGlobal(
     }
     if (!strcmp(interface, wl_compositor_interface.name)) {
 	tkWlDisplay->compositor = (struct wl_compositor *)wl_registry_bind(
-		registry, name, &wl_compositor_interface, MIN(version, COMPOSITOR_VERSION));
+		registry, name, &wl_compositor_interface,
+		MIN(version, COMPOSITOR_VERSION));
     } else if (!strcmp(interface, wl_shm_interface.name)) {
 	tkWlDisplay->shm = (struct wl_shm *)wl_registry_bind(registry, name,
 		&wl_shm_interface, 1);
@@ -998,6 +1376,23 @@ RegistryGlobal(
 #undef MIN
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * RegistryGlobalRemove --
+ *
+ *	The global_remove event of the wl_registry. Only outputs are removed
+ *	at run time.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	A removed output is released, and the size of the screen updated.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static void
 RegistryGlobalRemove(
     TCL_UNUSED(void *),
@@ -1021,9 +1416,25 @@ RegistryGlobalRemove(
 }
 
 static const struct wl_registry_listener registryListener = {
-    .global = RegistryGlobal,
-    .global_remove = RegistryGlobalRemove
+    RegistryGlobal,
+    RegistryGlobalRemove
 };
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * DecorError --
+ *
+ *	The error callback of libdecor.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The message is printed on stderr.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static void
 DecorError(
@@ -1047,6 +1458,14 @@ static struct libdecor_interface decorInterface = {
  *	Connect to the compositor. There can only be one connection per
  *	process.
  *
+ * Results:
+ *	The new display, or NULL if the connection fails, or if the process
+ *	already has one which belongs to a display.
+ *
+ * Side effects:
+ *	Connects to the compositor, binds its globals, and creates the
+ *	emulated X display, libdecor, the selections and the text input.
+ *
  *----------------------------------------------------------------------
  */
 
@@ -1067,7 +1486,8 @@ TkpOpenDisplay(
 	if (tkWlDisplay->display == NULL) {
 	    return NULL;
 	}
-	for (dispPtr = TkGetDisplayList(); dispPtr; dispPtr = dispPtr->nextPtr) {
+	for (dispPtr = TkGetDisplayList(); dispPtr;
+		dispPtr = dispPtr->nextPtr) {
 	    if (dispPtr->display == tkWlDisplay->display) {
 		return NULL;
 	    }
@@ -1168,6 +1588,24 @@ TkpOpenDisplay(
     return dispPtr;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkpCloseDisplay --
+ *
+ *	Close a display. The connection to the compositor stays open, since
+ *	there is only one per process.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Cleans up the send and window manager data of the display, stops
+ *	reading the connection, and flushes it.
+ *
+ *----------------------------------------------------------------------
+ */
+
 void
 TkpCloseDisplay(
     TkDisplay *dispPtr)
@@ -1180,6 +1618,23 @@ TkpCloseDisplay(
 	wl_display_flush(tkWlDisplay->wlDisplay);
     }
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkClipCleanup --
+ *
+ *	Clean up the clipboard of a display; the selections of the Wayland
+ *	port have nothing per display.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
 
 void
 TkClipCleanup(
@@ -1198,6 +1653,23 @@ TkClipCleanup(
  *----------------------------------------------------------------------
  */
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkCreateXEventSource --
+ *
+ *	Create the event source of Tcl which reads the events of the
+ *	compositor, once per thread.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The event source and an exit handler removing it are created.
+ *
+ *----------------------------------------------------------------------
+ */
+
 void
 TkCreateXEventSource(void)
 {
@@ -1211,6 +1683,22 @@ TkCreateXEventSource(void)
     }
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * DisplayExitHandler --
+ *
+ *	Remove the event source at exit.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The event source is deleted.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static void
 DisplayExitHandler(
     TCL_UNUSED(void *))
@@ -1221,6 +1709,27 @@ DisplayExitHandler(
     Tcl_DeleteEventSource(DisplaySetupProc, DisplayCheckProc, NULL);
     tsdPtr->initialized = false;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * DisplaySetupProc, DisplayCheckProc --
+ *
+ *	The procedures of the event source. Before Tcl waits for events, the
+ *	events already read are dispatched, and the requests are flushed; the
+ *	events of the connection are read by DisplayFileProc when it is
+ *	readable.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	DisplaySetupProc dispatches the pending events, which queues X events,
+ *	updates the text input and flushes the requests. If events were
+ *	dispatched, Tcl does not block.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static void
 DisplaySetupProc(
@@ -1247,8 +1756,20 @@ DisplayCheckProc(
 }
 
 /*
- * Read and dispatch the events of the connection, through libdecor, since
- * its plugins may have their own event sources.
+ *----------------------------------------------------------------------
+ *
+ * Dispatch --
+ *
+ *	Read and dispatch the events of the connection, through libdecor,
+ *	since its plugins may have their own event sources.
+ *
+ * Results:
+ *	The number of events dispatched, or -1 on error.
+ *
+ * Side effects:
+ *	The listeners of the events are called.
+ *
+ *----------------------------------------------------------------------
  */
 
 static int
@@ -1260,6 +1781,22 @@ Dispatch(
     }
     return wl_display_dispatch(tkWlDisplay->wlDisplay);
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * DisplayFileProc --
+ *
+ *	File handler of the connection, called when it is readable.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Dispatches the events. Panics if the compositor closed the connection.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static void
 DisplayFileProc(
@@ -1276,6 +1813,25 @@ DisplayFileProc(
 		strerror(errno));
     }
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkUnixDoOneXEvent --
+ *
+ *	Process a window event, waiting for one until a time at most (or
+ *	forever if timePtr is NULL); used by the code of Tk which waits for
+ *	particular events.
+ *
+ * Results:
+ *	True if an event was processed or the time is not yet over, false if
+ *	the time is over or there is no connection.
+ *
+ * Side effects:
+ *	Events are read, dispatched and processed.
+ *
+ *----------------------------------------------------------------------
+ */
 
 bool
 TkUnixDoOneXEvent(
@@ -1325,6 +1881,23 @@ TkUnixDoOneXEvent(
     return true;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWlCurrentTime --
+ *
+ *	The time of the last input event, which serves as the current server
+ *	time.
+ *
+ * Results:
+ *	The time, or CurrentTime if there is no connection.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
 Time
 TkWlCurrentTime(void)
 {
@@ -1335,6 +1908,25 @@ TkWlCurrentTime(void)
  *----------------------------------------------------------------------
  *
  * Keysyms --
+ *
+ *----------------------------------------------------------------------
+ */
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkpInitKeymapInfo --
+ *
+ *	Initialize the information about the modifiers of a display: the
+ *	keycodes of the modifier keys, and which X modifiers are Meta, Alt and
+ *	Mode_switch, as XKB assigns them.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The modifier information of the display is (re)computed, and is no
+ *	longer stale.
  *
  *----------------------------------------------------------------------
  */
@@ -1381,8 +1973,21 @@ TkpInitKeymapInfo(
 }
 
 /*
- * The keysym of a key with a modifier state, for events which were not
- * generated by the keyboard.
+ *----------------------------------------------------------------------
+ *
+ * KeycodeToKeysym --
+ *
+ *	The keysym of a key with a modifier state, for events which were not
+ *	generated by the keyboard: Shift and Lock select the second level,
+ *	Mod5 the third.
+ *
+ * Results:
+ *	The keysym, or NoSymbol.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
  */
 
 static KeySym
@@ -1420,6 +2025,23 @@ KeycodeToKeysym(
     return (n > 0) ? syms[0] : NoSymbol;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkpGetKeySym --
+ *
+ *	The keysym of a key event: the one stored in the event, or else the
+ *	one of its keycode and state.
+ *
+ * Results:
+ *	The keysym, or NoSymbol.
+ *
+ * Side effects:
+ *	The modifier information of the display is updated if it is stale.
+ *
+ *----------------------------------------------------------------------
+ */
+
 KeySym
 TkpGetKeySym(
     TkDisplay *dispPtr,
@@ -1435,6 +2057,23 @@ TkpGetKeySym(
     }
     return KeycodeToKeysym(eventPtr->xkey.keycode, eventPtr->xkey.state);
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkpGetString --
+ *
+ *	The text of a key event: the one stored in the event, or else the text
+ *	of its keysym, made a control character with Control.
+ *
+ * Results:
+ *	The text, in the DString.
+ *
+ * Side effects:
+ *	The text is computed and stored in the event if it had none.
+ *
+ *----------------------------------------------------------------------
+ */
 
 const char *
 TkpGetString(
@@ -1478,6 +2117,23 @@ TkpGetString(
     return Tcl_DStringValue(dsPtr);
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkpSetKeycodeAndState --
+ *
+ *	Set the keycode, and the modifiers needed, of a key event generated
+ *	with [event generate] for a keysym.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The keycode, state and keysym of the event are set.
+ *
+ *----------------------------------------------------------------------
+ */
+
 void
 TkpSetKeycodeAndState(
     Tk_Window tkwin,
@@ -1511,6 +2167,25 @@ TkpSetKeycodeAndState(
  *
  *	A Wayland client cannot take the keyboard focus, so the focus is only
  *	moved between the windows of the surface which has it.
+ *
+ *----------------------------------------------------------------------
+ */
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XSetInputFocus --
+ *
+ *	Give the focus to a window. A Wayland client cannot take the keyboard,
+ *	so the focus is moved between the windows of the application when it
+ *	has the keyboard, as an X server would, and otherwise the compositor
+ *	is asked to activate the toplevel.
+ *
+ * Results:
+ *	Success.
+ *
+ * Side effects:
+ *	Focus events are queued; the toplevel may be activated.
  *
  *----------------------------------------------------------------------
  */
@@ -1556,6 +2231,22 @@ XSetInputFocus(
     return Success;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * XGetInputFocus --
+ *
+ *	The window which has the focus.
+ *
+ * Results:
+ *	Success; the window, or None, is stored in *focusPtr.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
 int
 XGetInputFocus(
     Display *display,
@@ -1567,6 +2258,23 @@ XGetInputFocus(
     *revertPtr = RevertToParent;
     return Success;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XGrabKeyboard, XUngrabKeyboard --
+ *
+ *	Grabbing the keyboard is not possible in Wayland; the grabs of Tk work
+ *	on the windows of the application.
+ *
+ * Results:
+ *	GrabSuccess, or Success.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
 
 int
 XGrabKeyboard(
@@ -1600,6 +2308,23 @@ XUngrabKeyboard(
 
 static TkWindow *captureWinPtr = NULL;
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkpSetCapture, TkpGetCapture --
+ *
+ *	Set and get the window which captures the pointer events (for the
+ *	grabs of tkPointer.c).
+ *
+ * Results:
+ *	TkpGetCapture returns the window, or NULL.
+ *
+ * Side effects:
+ *	TkpSetCapture changes the window with the capture.
+ *
+ *----------------------------------------------------------------------
+ */
+
 void
 TkpSetCapture(
     TkWindow *winPtr)
@@ -1612,6 +2337,24 @@ TkpGetCapture(void)
 {
     return (Tk_Window)captureWinPtr;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XQueryPointer --
+ *
+ *	The position of the pointer, in root coordinates and in a window, and
+ *	the state of the modifiers and buttons.
+ *
+ * Results:
+ *	True if the pointer is on a surface of the application, else False
+ *	with the position of the root.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
 
 Bool
 XQueryPointer(
@@ -1644,7 +2387,19 @@ XQueryPointer(
 }
 
 /*
- * Wayland clients cannot move the pointer.
+ *----------------------------------------------------------------------
+ *
+ * XWarpPointer, TkpWarpPointer --
+ *
+ *	Move the pointer, which Wayland clients cannot do.
+ *
+ * Results:
+ *	Success, or nothing.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
  */
 
 int
@@ -1674,7 +2429,15 @@ TkpWarpPointer(
  *
  * XSendEvent --
  *
- *	Events can only be sent to the windows of this process.
+ *	Send an event to a window. Events can only be sent to the windows of
+ *	this process; client messages to the root window are requests to the
+ *	window manager, which tkWaylandWm.c handles.
+ *
+ * Results:
+ *	1 if the event was sent, 0 if the window does not exist.
+ *
+ * Side effects:
+ *	The event is queued, or handled by the window manager.
  *
  *----------------------------------------------------------------------
  */

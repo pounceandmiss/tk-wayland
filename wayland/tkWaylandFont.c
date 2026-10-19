@@ -54,6 +54,22 @@ TCL_DECLARE_MUTEX(fontMutex)
 
 static void		FinishedWithFont(WlFont *fontPtr);
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkpFontPkgInit --
+ *
+ *	Initialize the font package for an application.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Fontconfig is initialized.
+ *
+ *----------------------------------------------------------------------
+ */
+
 void
 TkpFontPkgInit(
     TCL_UNUSED(TkMainInfo *))
@@ -66,8 +82,14 @@ TkpFontPkgInit(
  *
  * GetFace --
  *
- *	Return the index of the first face of a font which has a character,
- *	or 0 if none has it, and make sure its scaled font exists.
+ *	Find the first face of a font which has a character, or the first
+ *	face if none has it (or the character is 0).
+ *
+ * Results:
+ *	The face.
+ *
+ * Side effects:
+ *	The scaled font of the face is created if it does not exist yet.
  *
  *----------------------------------------------------------------------
  */
@@ -145,7 +167,20 @@ GetFace(
 }
 
 /*
- * Return the glyph of a character in a face, and its advance.
+ *----------------------------------------------------------------------
+ *
+ * GetGlyph --
+ *
+ *	Find the glyph of a character in a face, and its advance.
+ *
+ * Results:
+ *	The GlyphInfo of the character, whose index is 0 if the face has no
+ *	glyph for it.
+ *
+ * Side effects:
+ *	The GlyphInfo is cached in the face.
+ *
+ *----------------------------------------------------------------------
  */
 
 static GlyphInfo *
@@ -189,10 +224,15 @@ GetGlyph(
 /*
  *----------------------------------------------------------------------
  *
- * InitFont --
+ * GetTkFontAttributes --
  *
- *	Fill in a font from a fontconfig pattern, which it takes ownership
- *	of.
+ *	Fill in the Tk attributes of a font from a fontconfig pattern.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The attributes are stored in *faPtr.
  *
  *----------------------------------------------------------------------
  */
@@ -232,6 +272,25 @@ GetTkFontAttributes(
     faPtr->underline = 0;
     faPtr->overstrike = 0;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * InitFont --
+ *
+ *	Fill in a font from a fontconfig pattern, which it takes ownership of
+ *	if it succeeds.
+ *
+ * Results:
+ *	The font, allocated if fontPtr is NULL, or NULL if no face matches
+ *	(fontPtr is freed then).
+ *
+ * Side effects:
+ *	The faces of the font are sorted by fontconfig, and the first one is
+ *	loaded to get the metrics.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static WlFont *
 InitFont(
@@ -326,6 +385,23 @@ InitFont(
     return fontPtr;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * FinishedWithFont --
+ *
+ *	Free what a font holds, but not the font itself.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The faces, their glyph caches, the pattern and the font set of the
+ *	font are freed.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static void
 FinishedWithFont(
     WlFont *fontPtr)
@@ -372,6 +448,12 @@ FinishedWithFont(
  *	Map a platform-specific font name to a font: XLFD names, which Tk
  *	expects on X11, and fontconfig names.
  *
+ * Results:
+ *	The font, or NULL if the name is not one of a font.
+ *
+ * Side effects:
+ *	The font is allocated.
+ *
  *----------------------------------------------------------------------
  */
 
@@ -398,6 +480,25 @@ TkpGetNativeFont(
     }
     return &fontPtr->font;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkpGetFontFromAttributes --
+ *
+ *	Find the font which best matches a set of attributes, reusing
+ *	tkFontPtr
+ *	if it is not NULL.
+ *
+ * Results:
+ *	The font, or NULL if no font matches.
+ *
+ * Side effects:
+ *	The font is allocated, or the previous contents of tkFontPtr are freed
+ *	and replaced.
+ *
+ *----------------------------------------------------------------------
+ */
 
 TkFont *
 TkpGetFontFromAttributes(
@@ -440,12 +541,44 @@ TkpGetFontFromAttributes(
     return &fontPtr->font;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkpDeleteFont --
+ *
+ *	Called by the generic font code when a font is no longer used.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	What the font holds is freed; the generic code frees the font.
+ *
+ *----------------------------------------------------------------------
+ */
+
 void
 TkpDeleteFont(
     TkFont *tkFontPtr)
 {
     FinishedWithFont((WlFont *)tkFontPtr);
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkpGetFontFamilies --
+ *
+ *	Get the names of the font families known to fontconfig.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The list of names is left in the result of the interpreter.
+ *
+ *----------------------------------------------------------------------
+ */
 
 void
 TkpGetFontFamilies(
@@ -478,6 +611,23 @@ TkpGetFontFamilies(
     Tcl_SetObjResult(interp, resultPtr);
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkpGetSubFonts --
+ *
+ *	Get the faces of a font, for the tests: a list of their family,
+ *	foundry and encoding.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The list is left in the result of the interpreter.
+ *
+ *----------------------------------------------------------------------
+ */
+
 void
 TkpGetSubFonts(
     Tcl_Interp *interp,
@@ -505,6 +655,22 @@ TkpGetSubFonts(
     Tcl_SetObjResult(interp, resultPtr);
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkpGetFontAttrsForChar --
+ *
+ *	Get the attributes of the face of a font which draws a character.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The attributes are stored in *faPtr.
+ *
+ *----------------------------------------------------------------------
+ */
+
 void
 TkpGetFontAttrsForChar(
     Tk_Window tkwin,
@@ -530,6 +696,13 @@ TkpGetFontAttrsForChar(
  *
  *	Determine the number of characters from the string that will fit in
  *	the given horizontal span.
+ *
+ * Results:
+ *	The number of bytes of the characters which fit; the width they take
+ *	is stored in *lengthPtr.
+ *
+ * Side effects:
+ *	The glyphs of the characters are cached in the font.
  *
  *----------------------------------------------------------------------
  */
@@ -588,6 +761,23 @@ Tk_MeasureChars(
     return curByte;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * Tk_MeasureCharsInContext --
+ *
+ *	Measure a range of a string, as Tk_MeasureChars. The context is not
+ *	used: characters are measured one at a time.
+ *
+ * Results:
+ *	See Tk_MeasureChars.
+ *
+ * Side effects:
+ *	See Tk_MeasureChars.
+ *
+ *----------------------------------------------------------------------
+ */
+
 int
 Tk_MeasureCharsInContext(
     Tk_Font tkfont,
@@ -603,19 +793,23 @@ Tk_MeasureCharsInContext(
 	    maxLength, flags, lengthPtr);
 }
 
+#define NUM_GLYPHS 256
+
 /*
  *----------------------------------------------------------------------
  *
- * DrawString --
+ * FlushGlyphs --
  *
- *	Draw a string with its origin at x,y, rotated by an angle in degrees
- *	(counterclockwise), and return the advance. Runs of characters of the
- *	same face are drawn together.
+ *	Draw the glyphs gathered by DrawString, which are of one face.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The glyphs are drawn, and their number set to 0.
  *
  *----------------------------------------------------------------------
  */
-
-#define NUM_GLYPHS 256
 
 static void
 FlushGlyphs(
@@ -630,6 +824,24 @@ FlushGlyphs(
 	*nPtr = 0;
     }
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * DrawString --
+ *
+ *	Draw a string with its origin at x,y, rotated by an angle in degrees
+ *	(counterclockwise). Runs of characters of the same face are drawn
+ *	together.
+ *
+ * Results:
+ *	The advance of the string, in pixels.
+ *
+ * Side effects:
+ *	The string is drawn in the drawable, unless it cannot be drawn on.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static int
 DrawString(
@@ -701,6 +913,22 @@ DrawString(
     return advance;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * Tk_DrawChars --
+ *
+ *	Draw a string of characters, with its underline and overstrike.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The characters are drawn in the drawable.
+ *
+ *----------------------------------------------------------------------
+ */
+
 void
 Tk_DrawChars(
     Display *display,
@@ -727,6 +955,23 @@ Tk_DrawChars(
 		(unsigned)fontPtr->font.underlineHeight);
     }
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkDrawAngledChars --
+ *
+ *	Draw a string of characters rotated by an angle in degrees, with its
+ *	underline and overstrike.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The characters are drawn in the drawable.
+ *
+ *----------------------------------------------------------------------
+ */
 
 void
 TkDrawAngledChars(
@@ -777,6 +1022,23 @@ TkDrawAngledChars(
     }
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * Tk_DrawCharsInContext --
+ *
+ *	Draw a range of a string of characters, at the position it has in the
+ *	whole string.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The characters are drawn in the drawable.
+ *
+ *----------------------------------------------------------------------
+ */
+
 void
 Tk_DrawCharsInContext(
     Display *display,
@@ -796,6 +1058,23 @@ Tk_DrawCharsInContext(
 	    rangeLength, x + widthUntilStart, y);
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkpDrawAngledCharsInContext --
+ *
+ *	Draw a range of a string of characters rotated by an angle, at the
+ *	position it has in the whole string.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The characters are drawn in the drawable.
+ *
+ *----------------------------------------------------------------------
+ */
+
 void
 TkpDrawAngledCharsInContext(
     Display *display,
@@ -810,7 +1089,8 @@ TkpDrawAngledCharsInContext(
     double angle)
 {
     int widthUntilStart;
-    double sinA = sin(angle * M_PI / 180.0), cosA = cos(angle * M_PI / 180.0);
+    double sinA = sin(angle * M_PI / 180.0);
+    double cosA = cos(angle * M_PI / 180.0);
 
     Tk_MeasureChars(tkfont, source, rangeStart, -1, 0, &widthUntilStart);
     TkDrawAngledChars(display, drawable, gc, tkfont, source + rangeStart,

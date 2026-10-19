@@ -53,6 +53,23 @@ static struct {
 	_NET_WM_ICON;
 } atoms;
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * InitAtoms --
+ *
+ *	Intern the atoms of the properties and messages the window manager
+ *	handles, the first time it needs them.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Fills the atoms structure.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static void
 InitAtoms(
     Display *display)
@@ -87,6 +104,22 @@ InitAtoms(
  *----------------------------------------------------------------------
  */
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * XAllocSizeHints --
+ *
+ *	Allocate an XSizeHints structure, as Xlib does.
+ *
+ * Results:
+ *	The structure, cleared, which the caller frees with XFree.
+ *
+ * Side effects:
+ *	Allocates memory.
+ *
+ *----------------------------------------------------------------------
+ */
+
 XSizeHints *
 XAllocSizeHints(void)
 {
@@ -96,6 +129,22 @@ XAllocSizeHints(void)
     return hints;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * XAllocClassHint --
+ *
+ *	Allocate an XClassHint structure, as Xlib does.
+ *
+ * Results:
+ *	The structure, cleared, which the caller frees with XFree.
+ *
+ * Side effects:
+ *	Allocates memory.
+ *
+ *----------------------------------------------------------------------
+ */
+
 XClassHint *
 XAllocClassHint(void)
 {
@@ -104,6 +153,23 @@ XAllocClassHint(void)
     memset(hints, 0, sizeof(XClassHint));
     return hints;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XStoreName --
+ *
+ *	Set the name of a window: its WM_NAME property.
+ *
+ * Results:
+ *	The result of XChangeProperty.
+ *
+ * Side effects:
+ *	Changes the property, which the window manager applies as the title of
+ *	the toplevel.
+ *
+ *----------------------------------------------------------------------
+ */
 
 int
 XStoreName(
@@ -125,6 +191,24 @@ enum {
     SH_MIN_ASPECT_X, SH_MIN_ASPECT_Y, SH_MAX_ASPECT_X, SH_MAX_ASPECT_Y,
     SH_BASE_WIDTH, SH_BASE_HEIGHT, SH_WIN_GRAVITY, SH_NUM
 };
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XSetWMNormalHints --
+ *
+ *	Set the size hints of a window: its WM_NORMAL_HINTS property, in the
+ *	layout of the protocol.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Changes the property, which the window manager applies as the minimum
+ *	and maximum sizes of the toplevel.
+ *
+ *----------------------------------------------------------------------
+ */
 
 void
 XSetWMNormalHints(
@@ -156,6 +240,23 @@ XSetWMNormalHints(
 	    PropModeReplace, (unsigned char *)data, SH_NUM);
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * XSetWMHints --
+ *
+ *	Set the WM_HINTS property of a window.
+ *
+ * Results:
+ *	The result of XChangeProperty.
+ *
+ * Side effects:
+ *	Changes the property, whose initial state the window manager uses when
+ *	the window is mapped.
+ *
+ *----------------------------------------------------------------------
+ */
+
 int
 XSetWMHints(
     Display *display,
@@ -176,6 +277,24 @@ XSetWMHints(
     return XChangeProperty(display, w, XA_WM_HINTS, XA_WM_HINTS, 32,
 	    PropModeReplace, (unsigned char *)data, 9);
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XSetClassHint --
+ *
+ *	Set the name and class of a window: its WM_CLASS property, where they
+ *	are separated by a null byte.
+ *
+ * Results:
+ *	The result of XChangeProperty.
+ *
+ * Side effects:
+ *	Changes the property, which the window manager applies as the app_id
+ *	of the toplevel.
+ *
+ *----------------------------------------------------------------------
+ */
 
 int
 XSetClassHint(
@@ -198,6 +317,23 @@ XSetClassHint(
     return result;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * XSetTransientForHint --
+ *
+ *	Set the WM_TRANSIENT_FOR property of a window.
+ *
+ * Results:
+ *	The result of XChangeProperty.
+ *
+ * Side effects:
+ *	Changes the property, which the window manager applies as the parent
+ *	of the toplevel.
+ *
+ *----------------------------------------------------------------------
+ */
+
 int
 XSetTransientForHint(
     Display *display,
@@ -210,6 +346,23 @@ XSetTransientForHint(
 	    PropModeReplace, (unsigned char *)&data, 1);
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * XSetWMColormapWindows --
+ *
+ *	Set the colormap windows of a toplevel: there is only one colormap, so
+ *	there is nothing to do.
+ *
+ * Results:
+ *	1 (success).
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
 Status
 XSetWMColormapWindows(
     TCL_UNUSED(Display *),
@@ -219,6 +372,24 @@ XSetWMColormapWindows(
 {
     return 1;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XReconfigureWMWindow --
+ *
+ *	Reconfigure a toplevel, which X window managers are asked to do.
+ *	Raising a toplevel above the others ("raise") asks the compositor to
+ *	activate it.
+ *
+ * Results:
+ *	True if the window was reconfigured.
+ *
+ * Side effects:
+ *	Configures the window, and may request its activation.
+ *
+ *----------------------------------------------------------------------
+ */
 
 Status
 XReconfigureWMWindow(
@@ -243,6 +414,23 @@ XReconfigureWMWindow(
     return XConfigureWindow(display, w, mask, changes) == Success;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * XIconifyWindow --
+ *
+ *	Ask the window manager to iconify a toplevel, with a WM_CHANGE_STATE
+ *	client message to the root window, as Xlib does.
+ *
+ * Results:
+ *	The result of XSendEvent.
+ *
+ * Side effects:
+ *	The window manager minimizes the toplevel (see TkWlWmClientMessage).
+ *
+ *----------------------------------------------------------------------
+ */
+
 Status
 XIconifyWindow(
     Display *display,
@@ -262,6 +450,24 @@ XIconifyWindow(
 	    SubstructureRedirectMask | SubstructureNotifyMask, &event);
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * ResizeSyncDone --
+ *
+ *	Called when the compositor answers the sync request sent after the
+ *	commit of a size the application gave a window: from then on, the
+ *	configures of the compositor take that size into account.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Frees the callback, and clears the resizeSync field of the surface.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static void
 ResizeSyncDone(
     void *data,
@@ -275,13 +481,31 @@ ResizeSyncDone(
 }
 
 static const struct wl_callback_listener resizeSyncListener = {
-    .done = ResizeSyncDone
+    ResizeSyncDone
 };
 
 /*
  *----------------------------------------------------------------------
  *
  * Reading the hints --
+ *
+ *----------------------------------------------------------------------
+ */
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * GetLongs --
+ *
+ *	Get the data of a property of format 32 which has at least a number of
+ *	items.
+ *
+ * Results:
+ *	The longs of the property, or NULL if it does not exist or is too
+ *	short.
+ *
+ * Side effects:
+ *	None.
  *
  *----------------------------------------------------------------------
  */
@@ -308,6 +532,24 @@ GetLongs(
 
 #define MAX_STRING 1024
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * TruncatedString --
+ *
+ *	Copy a string, truncated to MAX_STRING bytes on a character boundary:
+ *	Wayland messages are limited to 4096 bytes, and a longer string closes
+ *	the connection.
+ *
+ * Results:
+ *	The copy, which the caller frees with Tcl_Free.
+ *
+ * Side effects:
+ *	Allocates memory.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static char *
 TruncatedString(
     const char *string,
@@ -328,6 +570,23 @@ TruncatedString(
     return result;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * ApplyTitle --
+ *
+ *	Set the title of the frame of a toplevel from its _NET_WM_NAME
+ *	property, or else its WM_NAME property.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The title of the frame changes.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static void
 ApplyTitle(
     TkWlSurface *surfPtr)
@@ -346,6 +605,24 @@ ApplyTitle(
 	Tcl_Free(title);
     }
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * ApplyClass --
+ *
+ *	Set the app_id of the frame of a toplevel: the one set with
+ *	::tk::wayland::appid, or else the class in its WM_CLASS property,
+ *	which is the name of the application.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The app_id of the frame changes.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static void
 ApplyClass(
@@ -376,6 +653,24 @@ ApplyClass(
     }
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * ApplySizeHints --
+ *
+ *	Set the minimum and maximum sizes of the frame of a toplevel from its
+ *	WM_NORMAL_HINTS property. A toplevel of fixed size cannot be resized
+ *	or made fullscreen by the user.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Changes the size limits and the capabilities of the frame.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static void
 ApplySizeHints(
     TkWlSurface *surfPtr)
@@ -404,6 +699,23 @@ ApplySizeHints(
     }
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * ApplyTransient --
+ *
+ *	Set the parent of the frame of a toplevel from its WM_TRANSIENT_FOR
+ *	property.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The parent of the frame changes.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static void
 ApplyTransient(
     TkWlSurface *surfPtr)
@@ -417,10 +729,22 @@ ApplyTransient(
 }
 
 /*
- * Set the icon of a toplevel from the images in _NET_WM_ICON ([wm
- * iconphoto]): each image is an array of longs, the width, the height and
- * the pixels, 0xAARRGGBB. Icons must be square, so images are centered in
- * squares, and their pixels premultiplied, as Wayland expects.
+ *----------------------------------------------------------------------
+ *
+ * IconBuffer --
+ *
+ *	Make the buffer of an icon from an image of _NET_WM_ICON, whose pixels
+ *	are 0xAARRGGBB. Icons must be square, so the image is centered in a
+ *	square, and its pixels are premultiplied, as Wayland expects.
+ *
+ * Results:
+ *	The buffer, or NULL if shared memory could not be made. *dataPtr and
+ *	*sizePtr are set to the memory of the buffer, which the caller unmaps.
+ *
+ * Side effects:
+ *	Creates a buffer in shared memory.
+ *
+ *----------------------------------------------------------------------
  */
 
 static struct wl_buffer *
@@ -472,6 +796,24 @@ IconBuffer(
     *sizePtr = size;
     return buffer;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * ApplyIcon --
+ *
+ *	Set the icon of a toplevel from the images in its _NET_WM_ICON
+ *	property ([wm iconphoto]): each image is an array of longs, the width,
+ *	the height and the pixels. Only the first image of each size is used.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Sets the icon of the toplevel, or removes it if the property is gone.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static void
 ApplyIcon(
@@ -544,7 +886,20 @@ ApplyIcon(
 }
 
 /*
- * Apply the states in _NET_WM_STATE.
+ *----------------------------------------------------------------------
+ *
+ * ApplyNetWmState --
+ *
+ *	Apply the states in the _NET_WM_STATE property of a toplevel when it
+ *	is mapped: maximized or fullscreen.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The frame may be maximized or made fullscreen.
+ *
+ *----------------------------------------------------------------------
  */
 
 static void
@@ -576,8 +931,21 @@ ApplyNetWmState(
 }
 
 /*
- * Set _NET_WM_STATE to the state of the frame, as a window manager does,
- * which tells tkUnixWm.c with a PropertyNotify event.
+ *----------------------------------------------------------------------
+ *
+ * SetNetWmState --
+ *
+ *	Set the _NET_WM_STATE property of a toplevel to the state of its
+ *	frame, as a window manager does, which tells tkUnixWm.c with a
+ *	PropertyNotify event.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Changes the property, if the state changed.
+ *
+ *----------------------------------------------------------------------
  */
 
 static void
@@ -606,6 +974,24 @@ SetNetWmState(
 	    XA_ATOM, 32, PropModeReplace, (unsigned char *)states, n);
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * MinimizeSyncDone --
+ *
+ *	Called when the compositor answers the sync request sent after a
+ *	toplevel was minimized: from then on, the keyboard entering its
+ *	surface means that the user deiconified it.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Frees the callback, and clears the minimizeSync field of the surface.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static void
 MinimizeSyncDone(
     void *data,
@@ -619,12 +1005,26 @@ MinimizeSyncDone(
 }
 
 static const struct wl_callback_listener minimizeSyncListener = {
-    .done = MinimizeSyncDone
+    MinimizeSyncDone
 };
 
 /*
- * Minimize a toplevel. Compositors (Weston) do not expect toplevels to be
- * minimized before they are shown, so this waits for the first buffer.
+ *----------------------------------------------------------------------
+ *
+ * Minimize --
+ *
+ *	Minimize a toplevel. Compositors (Weston) do not expect toplevels to
+ *	be minimized before they are shown, so this waits for the first
+ *	buffer.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Asks the compositor to minimize the toplevel and unmaps its X window,
+ *	or else marks the minimization pending until the first commit.
+ *
+ *----------------------------------------------------------------------
  */
 
 static void
@@ -652,6 +1052,25 @@ Minimize(
 	    surfPtr);
     XUnmapWindow(surfPtr->winPtr->display, surfPtr->winPtr->id);
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWlWmSurfaceCommitted --
+ *
+ *	Called when a buffer of a toplevel was committed: do what had to wait
+ *	for it (minimizing), and send a sync request if the buffer has a size
+ *	the application gave the window.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	May minimize the toplevel, and may replace the resizeSync callback of
+ *	the surface.
+ *
+ *----------------------------------------------------------------------
+ */
 
 void
 TkWlWmSurfaceCommitted(
@@ -685,6 +1104,13 @@ TkWlWmSurfaceCommitted(
  *
  *	Called when a child of the root window is mapped: give it the role of
  *	a decorated toplevel, unless it is override-redirect.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Schedules the creation of the toplevel at idle time, makes a popup, or
+ *	activates a toplevel which was iconified.
  *
  *----------------------------------------------------------------------
  */
@@ -724,6 +1150,23 @@ TkWlWmMapSurface(
 	Tcl_DoWhenIdle(MapToplevel, surfPtr);
     }
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * MapToplevel --
+ *
+ *	Give a surface the role of a toplevel decorated by libdecor, at idle
+ *	time, and apply the hints in the properties of its window.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Creates and maps the frame; may activate or minimize the toplevel.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static void
 MapToplevel(
@@ -768,12 +1211,45 @@ MapToplevel(
     wl_display_flush(tkWlDisplay->wlDisplay);
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWlWmUnmapSurface --
+ *
+ *	Called when a child of the root window is unmapped: destroy the role
+ *	of its surface.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The roles of the surface and of its popups are destroyed.
+ *
+ *----------------------------------------------------------------------
+ */
+
 void
 TkWlWmUnmapSurface(
     TkWlSurface *surfPtr)
 {
     DestroyRole(surfPtr);
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWlSurfaceSetFrame --
+ *
+ *	Set the libdecor frame of a surface, releasing the one it had.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The previous frame is released; the surface is no longer iconic.
+ *
+ *----------------------------------------------------------------------
+ */
 
 void
 TkWlSurfaceSetFrame(
@@ -791,17 +1267,18 @@ TkWlSurfaceSetFrame(
 /*
  *----------------------------------------------------------------------
  *
- * TkWlWmSurfaceResized --
+ * ClampSize --
  *
- *	Called when Tk resizes a child of the root window: the new size of
- *	the content has to be given to libdecor.
+ *	Raise a size to the minimum size of the decorations (the header bar of
+ *	the GTK plugin of libdecor), which the window cannot be smaller than.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	*widthPtr and *heightPtr may be increased.
  *
  *----------------------------------------------------------------------
- */
-
-/*
- * Decorations can have a minimum size (the header bar of the GTK plugin of
- * libdecor), which the window cannot be smaller than.
  */
 
 static void
@@ -822,8 +1299,20 @@ ClampSize(
 }
 
 /*
- * Resize the window as the window manager, which tells Tk with a
- * ConfigureNotify event.
+ *----------------------------------------------------------------------
+ *
+ * ResizeWindow --
+ *
+ *	Resize the X window of a toplevel as the window manager, which tells
+ *	Tk with a ConfigureNotify event.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Resizes the window, if its size differs.
+ *
+ *----------------------------------------------------------------------
  */
 
 static void
@@ -840,6 +1329,24 @@ ResizeWindow(
 	surfPtr->inConfigure = false;
     }
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWlWmSurfaceResized --
+ *
+ *	Called when Tk resizes a child of the root window: the new size of the
+ *	content has to be given to libdecor.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Commits the new size of the frame, and marks the surface as resized
+ *	until the compositor has seen it.
+ *
+ *----------------------------------------------------------------------
+ */
 
 void
 TkWlWmSurfaceResized(
@@ -865,7 +1372,15 @@ TkWlWmSurfaceResized(
  *
  * TkWlWmPropertyChanged --
  *
- *	Called when a property of a child of the root window changes.
+ *	Called when a property of a child of the root window changes: apply it
+ *	to its toplevel.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Changes the opacity, title, app_id, size limits, parent or icon of the
+ *	toplevel.
  *
  *----------------------------------------------------------------------
  */
@@ -905,10 +1420,15 @@ TkWlWmPropertyChanged(
  * TkWlWmClientMessage --
  *
  *	Handle a client message sent to the root window, which is for the
- *	window manager.
+ *	window manager: WM_CHANGE_STATE (iconify), _NET_ACTIVE_WINDOW and
+ *	_NET_WM_STATE.
  *
  * Results:
  *	True if the message was for the window manager.
+ *
+ * Side effects:
+ *	May minimize or activate a toplevel, or change whether it is maximized
+ *	or fullscreen.
  *
  *----------------------------------------------------------------------
  */
@@ -985,11 +1505,16 @@ TkWlWmClientMessage(
 /*
  *----------------------------------------------------------------------
  *
- * TkWlWmActivate --
+ * TokenDone --
  *
- *	Ask the compositor to activate (raise and focus) a toplevel, with an
- *	activation token for the input the application last received. The
- *	compositor decides whether it does.
+ *	Called when the compositor made an activation token: activate the
+ *	toplevel with it, if it is still shown.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Requests the activation, and destroys the token.
  *
  *----------------------------------------------------------------------
  */
@@ -1012,8 +1537,26 @@ TokenDone(
 }
 
 static const struct xdg_activation_token_v1_listener tokenListener = {
-    .done = TokenDone
+    TokenDone
 };
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWlWmActivate --
+ *
+ *	Ask the compositor to activate (raise and focus) a toplevel, with an
+ *	activation token for the input the application last received. The
+ *	compositor decides whether it does.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Requests an activation token, which TokenDone uses.
+ *
+ *----------------------------------------------------------------------
+ */
 
 void
 TkWlWmActivate(
@@ -1056,6 +1599,23 @@ TkWlWmActivate(
  *----------------------------------------------------------------------
  */
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * XdgSurfaceConfigure --
+ *
+ *	Called when the compositor configures the xdg_surface of a popup or of
+ *	an undecorated toplevel.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Acknowledges the configure, and lets the surface be drawn.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static void
 XdgSurfaceConfigure(
     void *data,
@@ -1067,8 +1627,25 @@ XdgSurfaceConfigure(
 }
 
 static const struct xdg_surface_listener xdgSurfaceListener = {
-    .configure = XdgSurfaceConfigure
+    XdgSurfaceConfigure
 };
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * PopupConfigure --
+ *
+ *	Called when the compositor positions a popup: the window keeps the
+ *	position Tk computed.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static void
 PopupConfigure(
@@ -1082,9 +1659,22 @@ PopupConfigure(
 }
 
 /*
- * The compositor dismissed a popup, because the user clicked outside of
- * it. Tell Tk as the X server would: the click goes to the window which
- * has the grab.
+ *----------------------------------------------------------------------
+ *
+ * PopupDone --
+ *
+ *	Called when the compositor dismissed a popup, because the user clicked
+ *	outside of it. Tell Tk as the X server would: the click goes to the
+ *	window which has the grab.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Generates a press and a release of button 1 outside of the windows of
+ *	the application.
+ *
+ *----------------------------------------------------------------------
  */
 
 static void
@@ -1103,13 +1693,29 @@ PopupDone(
 }
 
 static const struct xdg_popup_listener popupListener = {
-    .configure = PopupConfigure,
-    .popup_done = PopupDone
+    PopupConfigure,
+    PopupDone,
+#ifdef XDG_POPUP_REPOSITIONED_SINCE_VERSION
+    NULL
+#endif
 };
 
 /*
- * Undecorated toplevels, for override-redirect windows which have no
- * surface to be a popup of.
+ *----------------------------------------------------------------------
+ *
+ * ToplevelConfigure --
+ *
+ *	Called when the compositor configures an undecorated toplevel, made
+ *	for an override-redirect window which has no surface to be a popup of:
+ *	the window keeps its size.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
  */
 
 static void
@@ -1122,6 +1728,23 @@ ToplevelConfigure(
 {
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * ToplevelClose --
+ *
+ *	Called when the user closes an undecorated toplevel: as for a
+ *	decorated one, it is sent WM_DELETE_WINDOW.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Queues a WM_DELETE_WINDOW client message.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static void
 ToplevelClose(
     void *data,
@@ -1131,9 +1754,32 @@ ToplevelClose(
 }
 
 static const struct xdg_toplevel_listener toplevelListener = {
-    .configure = ToplevelConfigure,
-    .close = ToplevelClose
+    ToplevelConfigure,
+    ToplevelClose,
+#ifdef XDG_TOPLEVEL_CONFIGURE_BOUNDS_SINCE_VERSION
+    NULL,
+#endif
+#ifdef XDG_TOPLEVEL_WM_CAPABILITIES_SINCE_VERSION
+    NULL
+#endif
 };
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * RoleXdgSurface --
+ *
+ *	Get the xdg_surface of the role of a surface: that of its frame, or
+ *	its own.
+ *
+ * Results:
+ *	The xdg_surface, or NULL if the surface has no role.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static struct xdg_surface *
 RoleXdgSurface(
@@ -1146,9 +1792,21 @@ RoleXdgSurface(
 }
 
 /*
- * Whether a surface can be the parent of a popup: it must have a role, have
- * been shown (Weston 15 crashes positioning popups of surfaces it has not
- * shown yet), and not be the popup or one of its descendants.
+ *----------------------------------------------------------------------
+ *
+ * CanBeParent --
+ *
+ *	Whether a surface can be the parent of a popup: it must have a role,
+ *	have been shown (Weston 15 crashes positioning popups of surfaces it
+ *	has not shown yet), and not be the popup or one of its descendants.
+ *
+ * Results:
+ *	True if the surface can be the parent of the popup.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
  */
 
 static bool
@@ -1169,6 +1827,23 @@ CanBeParent(
     }
     return true;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * FindPopupParent --
+ *
+ *	Find the surface a popup is attached to: the one which received the
+ *	input that posted it, or else any surface which is shown.
+ *
+ * Results:
+ *	The parent, or NULL if there is none.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static TkWlSurface *
 FindPopupParent(
@@ -1191,8 +1866,20 @@ FindPopupParent(
 }
 
 /*
- * Whether a popup grabs the input: the Tk window in it is a menu or a
- * combobox dropdown.
+ *----------------------------------------------------------------------
+ *
+ * PopupGrabs --
+ *
+ *	Whether a popup grabs the input: the Tk window in it is a menu or a
+ *	combobox dropdown.
+ *
+ * Results:
+ *	True if the popup grabs the input.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
  */
 
 static bool
@@ -1213,6 +1900,25 @@ PopupGrabs(
     }
     return false;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * MapPopup --
+ *
+ *	Give an override-redirect window the role of a popup at the position
+ *	Tk computed relative to its parent, or of an undecorated toplevel if
+ *	it has none. Menus and combobox dropdowns grab the input.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Creates the xdg_surface and the popup or toplevel, and commits the
+ *	surface.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static void
 MapPopup(
@@ -1290,7 +1996,21 @@ MapPopup(
 }
 
 /*
- * Destroy the role of a surface, after those of the popups attached to it.
+ *----------------------------------------------------------------------
+ *
+ * DestroyRole --
+ *
+ *	Destroy the role of a surface, after those of the popups attached to
+ *	it.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Destroys the popups, toplevels and frames; the surfaces of the popups
+ *	lose their buffers.
+ *
+ *----------------------------------------------------------------------
  */
 
 static void
@@ -1340,6 +2060,24 @@ DestroyRole(
  *----------------------------------------------------------------------
  *
  * The callbacks of the frames --
+ *
+ *----------------------------------------------------------------------
+ */
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * FrameConfigure --
+ *
+ *	Called when the compositor configures the frame of a toplevel: give
+ *	the window the size and the state the compositor asks for.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Commits the new state of the frame, sets _NET_WM_STATE, resizes the
+ *	window, and lets the surface be drawn.
  *
  *----------------------------------------------------------------------
  */
@@ -1454,6 +2192,23 @@ FrameConfigure(
     TkWlSurfaceConfigured(surfPtr);
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * FrameClose --
+ *
+ *	Called when the user closes a toplevel: send it WM_DELETE_WINDOW, as
+ *	an X window manager does.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Queues a WM_DELETE_WINDOW client message.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static void
 FrameClose(
     TCL_UNUSED(struct libdecor_frame *),
@@ -1474,6 +2229,23 @@ FrameClose(
     TkWlQueueEvent(&event);
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * FrameCommit --
+ *
+ *	Called when libdecor changed the decorations, which need a commit of
+ *	the surface.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Commits the surface, if it has a buffer.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static void
 FrameCommit(
     TCL_UNUSED(struct libdecor_frame *),
@@ -1485,6 +2257,23 @@ FrameCommit(
 	wl_surface_commit(surfPtr->surface);
     }
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * FrameDismissPopup --
+ *
+ *	Called when libdecor dismisses the popups of a seat: Tk has none of
+ *	its own there.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static void
 FrameDismissPopup(

@@ -45,7 +45,17 @@ static Window composeWindow = None;
 /*
  *----------------------------------------------------------------------
  *
- * Events of the input method --
+ * TextInputEnter, TextInputLeave --
+ *
+ *	The keyboard focus of the seat enters or leaves a surface: text input
+ *	is enabled again by TkWlTextInputUpdate if the focus of Tk is in a
+ *	widget with an insertion cursor.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The surface is recorded. Leaving it disables text input.
  *
  *----------------------------------------------------------------------
  */
@@ -77,6 +87,24 @@ TextInputLeave(
     }
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * SetPending --
+ *
+ *	Replace a string received from the input method, kept until its
+ *	"done" event.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The previous string is freed, and *ptrPtr is set to a copy of text,
+ *	or NULL if it is empty.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static void
 SetPending(
     char **ptrPtr,
@@ -91,6 +119,23 @@ SetPending(
 	strcpy(*ptrPtr, text);
     }
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TextInputPreeditString, TextInputCommitString --
+ *
+ *	The input method sends the text being composed, or the text to
+ *	insert.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The text is kept until the "done" event.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static void
 TextInputPreeditString(
@@ -112,6 +157,22 @@ TextInputCommitString(
     SetPending(&pendingCommit, text);
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * TextInputDeleteSurroundingText --
+ *
+ *	The input method asks to delete text around the insertion cursor.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static void
 TextInputDeleteSurroundingText(
     TCL_UNUSED(void *),
@@ -126,7 +187,20 @@ TextInputDeleteSurroundingText(
 }
 
 /*
- * Insert text in the focus window, with a KeyPress event which carries it.
+ *----------------------------------------------------------------------
+ *
+ * QueueText --
+ *
+ *	Insert text in the focus window, with a KeyPress event which carries
+ *	it.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	A KeyPress event is queued.
+ *
+ *----------------------------------------------------------------------
  */
 
 static void
@@ -156,6 +230,24 @@ QueueText(
     event.k.charValueLen = len;
     TkWlQueueEvent(&event.x);
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TextInputDone --
+ *
+ *	The input method has sent all of a change: the committed text is
+ *	inserted, and the text being composed shown.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	KeyPress events and the IME marked text virtual events are queued
+ *	for the focus window, and the pending strings are freed.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static void
 TextInputDone(
@@ -192,25 +284,37 @@ TextInputDone(
 }
 
 /*
- * Version 2 of the protocol added events, which are not used; designated
- * initializers keep this independent of the version of the header.
+ * Version 2 of the protocol added events, which are not used, since version
+ * 1 is bound: they are in the listener only with headers which have them.
  */
 
 static const struct zwp_text_input_v3_listener textInputListener = {
-    .enter = TextInputEnter,
-    .leave = TextInputLeave,
-    .preedit_string = TextInputPreeditString,
-    .commit_string = TextInputCommitString,
-    .delete_surrounding_text = TextInputDeleteSurroundingText,
-    .done = TextInputDone
+    TextInputEnter,
+    TextInputLeave,
+    TextInputPreeditString,
+    TextInputCommitString,
+    TextInputDeleteSurroundingText,
+    TextInputDone,
+#ifdef ZWP_TEXT_INPUT_V3_ACTION_SINCE_VERSION
+    NULL,			/* action */
+    NULL,			/* language */
+    NULL			/* preedit_hint */
+#endif
 };
 
 /*
  *----------------------------------------------------------------------
  *
- * TkWlTextInputBind, TkWlTextInputInit --
+ * TkWlTextInputBind --
  *
- *	Bind the manager, and create the text input of the seat.
+ *	Bind the text input manager, if the global announced by the registry
+ *	is it.
+ *
+ * Results:
+ *	True if the global was the text input manager, false otherwise.
+ *
+ * Side effects:
+ *	The manager is bound.
  *
  *----------------------------------------------------------------------
  */
@@ -230,6 +334,23 @@ TkWlTextInputBind(
     return false;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWlTextInputInit --
+ *
+ *	Create the text input of the seat, once the seat and the manager are
+ *	known.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The text input is created, with its listener.
+ *
+ *----------------------------------------------------------------------
+ */
+
 void
 TkWlTextInputInit(void)
 {
@@ -247,6 +368,14 @@ TkWlTextInputInit(void)
  *
  *	Enable or disable text input, and send the position of the insertion
  *	cursor. Called before Tcl waits for events.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Requests are sent to the compositor when the state of text input or
+ *	the position of the insertion cursor changed; text being composed in
+ *	a window which lost the focus is abandoned.
  *
  *----------------------------------------------------------------------
  */
@@ -299,7 +428,8 @@ TkWlTextInputUpdate(void)
 	TkWlWindowOrigin(wlWinPtr, &x, &y);
 	x += dispPtr->caret.x;
 	y += dispPtr->caret.y;
-	if (x != caretX || y != caretY || dispPtr->caret.height != caretHeight) {
+	if (x != caretX || y != caretY
+		|| dispPtr->caret.height != caretHeight) {
 	    zwp_text_input_v3_set_cursor_rectangle(textInput, x, y, 1,
 		    dispPtr->caret.height);
 	    caretX = x;

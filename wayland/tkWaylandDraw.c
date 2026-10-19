@@ -24,8 +24,21 @@
  */
 
 /*
- * The size in pixels of a pixmap: only whole pixels, which can be drawn
- * entirely, so that copies never use pixels which nothing was drawn into.
+ *----------------------------------------------------------------------
+ *
+ * PixmapSize --
+ *
+ *	Compute the size in pixels of the image of a pixmap: only whole
+ *	pixels, which can be drawn entirely, so that copies never use pixels
+ *	which nothing was drawn into.
+ *
+ * Results:
+ *	The number of pixels, at least 1.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
  */
 
 static int
@@ -37,6 +50,24 @@ PixmapSize(
 
     return (size > 0) ? size : 1;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XCreatePixmap --
+ *
+ *	Create a pixmap, as a Cairo image of depth 1 (A8), 24 or 32. Pixmaps
+ *	of color have the scale of the surface of the window they are made
+ *	for.
+ *
+ * Results:
+ *	The XID of the pixmap.
+ *
+ * Side effects:
+ *	Allocates the pixmap and its image.
+ *
+ *----------------------------------------------------------------------
+ */
 
 Pixmap
 XCreatePixmap(
@@ -79,6 +110,22 @@ XCreatePixmap(
     return pixPtr->id;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * XFreePixmap --
+ *
+ *	Free a pixmap.
+ *
+ * Results:
+ *	Success, or BadPixmap if the pixmap does not exist.
+ *
+ * Side effects:
+ *	The pixmap and its image are freed, and its XID is released.
+ *
+ *----------------------------------------------------------------------
+ */
+
 int
 XFreePixmap(
     Display *display,
@@ -96,6 +143,22 @@ XFreePixmap(
     return Success;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWlPixmapSurface --
+ *
+ *	Get the Cairo image of a pixmap.
+ *
+ * Results:
+ *	The image, or NULL if the XID is not that of a pixmap.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
 cairo_surface_t *
 TkWlPixmapSurface(
     Pixmap pixmap)
@@ -108,15 +171,16 @@ TkWlPixmapSurface(
 /*
  *----------------------------------------------------------------------
  *
- * TkWlBeginDraw --
+ * SetSourcePixel --
  *
- *	Prepare a Cairo context to draw in a drawable: the user space is that
- *	of the drawable, and the context is clipped to the visible region of
- *	the window and to the clip region of the GC. If the GC has a clip
- *	mask, drawing is done in a group which is masked by TkWlEndDraw.
+ *	Set the source of a Cairo context to the color of a pixel: for depth 1
+ *	the alpha of the A8 images of bitmaps, otherwise 0xRRGGBB.
  *
  * Results:
- *	False if nothing can be drawn.
+ *	None.
+ *
+ * Side effects:
+ *	The source of the context is changed.
  *
  *----------------------------------------------------------------------
  */
@@ -134,6 +198,28 @@ SetSourcePixel(
 		((pixel >> 8) & 0xFF) / 255.0, (pixel & 0xFF) / 255.0);
     }
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWlBeginDraw --
+ *
+ *	Prepare a Cairo context to draw in a drawable: the user space is that
+ *	of the drawable, and the context is clipped to the visible region of
+ *	the window and to the clip region of the GC. If the GC has a clip
+ *	mask, drawing is done in a group which is masked by TkWlEndDraw.
+ *
+ * Results:
+ *	True if drawing can be done, false if nothing can be drawn (the
+ *	drawable does not exist or is not visible, or the clip is empty).
+ *
+ * Side effects:
+ *	Pending exposures of the surface of a window are processed. When the
+ *	result is true, *ctxPtr holds a new Cairo context and a clip region,
+ *	which TkWlEndDraw frees.
+ *
+ *----------------------------------------------------------------------
+ */
 
 bool
 TkWlBeginDraw(
@@ -242,8 +328,15 @@ TkWlBeginDraw(
  *
  * TkWlSetSource --
  *
- *	Set the source of a drawing context from a pixel and the fill style
- *	of a GC.
+ *	Set the source of a drawing context from a pixel and the fill style of
+ *	a GC.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The source of the Cairo context is changed, and the stipple of the
+ *	drawing context is set from the GC.
  *
  *----------------------------------------------------------------------
  */
@@ -285,9 +378,16 @@ TkWlSetSource(
 /*
  *----------------------------------------------------------------------
  *
- * TkWlFill, TkWlStroke --
+ * StippleMask --
  *
- *	Fill or stroke the current path, applying the stipple of the GC.
+ *	Paint the source of a drawing context through the stipple of the GC,
+ *	over the background of the GC for FillOpaqueStippled.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Draws in the target of the context.
  *
  *----------------------------------------------------------------------
  */
@@ -318,6 +418,23 @@ StippleMask(
     cairo_pattern_destroy(pattern);
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWlFill --
+ *
+ *	Fill the current path of a drawing context, applying the stipple of
+ *	the GC.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Draws in the target of the context; the path is consumed.
+ *
+ *----------------------------------------------------------------------
+ */
+
 void
 TkWlFill(
     TkWlDrawContext *ctxPtr,
@@ -334,6 +451,24 @@ TkWlFill(
     StippleMask(ctxPtr, gc);
     cairo_restore(cr);
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWlStroke --
+ *
+ *	Stroke the current path of a drawing context, applying the stipple of
+ *	the GC: a stippled stroke is turned into a mask, through which the
+ *	stipple is painted.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Draws in the target of the context; the path is consumed.
+ *
+ *----------------------------------------------------------------------
+ */
 
 void
 TkWlStroke(
@@ -394,6 +529,14 @@ TkWlStroke(
  *	which is the given rectangle (in the coordinates of the drawable)
  *	clipped to the visible region.
  *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The Cairo context and the clip region of the drawing context are
+ *	freed, and the damage is added to the surface, which will be
+ *	presented.
+ *
  *----------------------------------------------------------------------
  */
 
@@ -428,6 +571,26 @@ TkWlEndDraw(
  *
  *	X11 draws lines through the centers of pixels; lines of width 0 or 1
  *	include their end points unless the cap style is CapNotLast.
+ *
+ *----------------------------------------------------------------------
+ */
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * SetLineAttributes --
+ *
+ *	Set the line width, cap and join styles and dashes of a Cairo context
+ *	from a GC. X11 draws lines through the centers of pixels; lines of
+ *	width 0 or 1 include their end points unless the cap style is
+ *	CapNotLast.
+ *
+ * Results:
+ *	The offset to add to coordinates so that lines of odd width go through
+ *	the centers of pixels: 0.5 or 0.
+ *
+ * Side effects:
+ *	The line attributes of the context are changed.
  *
  *----------------------------------------------------------------------
  */
@@ -470,6 +633,23 @@ SetLineAttributes(
     return ((width <= 1) || (width & 1)) ? 0.5 : 0.0;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * LineBounds --
+ *
+ *	Compute the bounding box of a polyline, including the width of its
+ *	lines.
+ *
+ * Results:
+ *	1 if there are points, 0 otherwise.
+ *
+ * Side effects:
+ *	Fills *boxPtr.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static int
 LineBounds(
     XPoint *points,
@@ -496,6 +676,24 @@ LineBounds(
     boxPtr->height = (unsigned short)(y2 - y1 + 2 * pad + 1);
     return 1;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XDrawLines --
+ *
+ *	Draw connected lines through points, given in absolute coordinates or
+ *	(CoordModePrevious) relative to the previous point.
+ *
+ * Results:
+ *	Success.
+ *
+ * Side effects:
+ *	Draws in the drawable, and adds what was drawn in a window to the
+ *	damage of its surface.
+ *
+ *----------------------------------------------------------------------
+ */
 
 int
 XDrawLines(
@@ -543,6 +741,23 @@ XDrawLines(
     return Success;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * XDrawSegments --
+ *
+ *	Draw unconnected line segments.
+ *
+ * Results:
+ *	Success.
+ *
+ * Side effects:
+ *	Draws in the drawable, and adds what was drawn in a window to the
+ *	damage of its surface.
+ *
+ *----------------------------------------------------------------------
+ */
+
 int
 XDrawSegments(
     Display *display,
@@ -564,6 +779,24 @@ XDrawSegments(
     }
     return Success;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XDrawRectangle --
+ *
+ *	Draw the outline of a rectangle, which covers width + 1 by height + 1
+ *	pixels, as in X11.
+ *
+ * Results:
+ *	Success.
+ *
+ * Side effects:
+ *	Draws in the drawable, and adds what was drawn in a window to the
+ *	damage of its surface.
+ *
+ *----------------------------------------------------------------------
+ */
 
 int
 XDrawRectangle(
@@ -595,6 +828,23 @@ XDrawRectangle(
     return Success;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * XDrawRectangles --
+ *
+ *	Draw the outlines of rectangles.
+ *
+ * Results:
+ *	Success.
+ *
+ * Side effects:
+ *	Draws in the drawable, and adds what was drawn in a window to the
+ *	damage of its surface.
+ *
+ *----------------------------------------------------------------------
+ */
+
 int
 XDrawRectangles(
     Display *display,
@@ -611,6 +861,23 @@ XDrawRectangles(
     }
     return Success;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XFillRectangles --
+ *
+ *	Fill rectangles.
+ *
+ * Results:
+ *	Success.
+ *
+ * Side effects:
+ *	Draws in the drawable, and adds what was drawn in a window to the
+ *	damage of its surface.
+ *
+ *----------------------------------------------------------------------
+ */
 
 int
 XFillRectangles(
@@ -632,10 +899,18 @@ XFillRectangles(
     for (i = 0; i < nrects; i++) {
 	cairo_rectangle(ctx.cr, rects[i].x, rects[i].y, rects[i].width,
 		rects[i].height);
-	if (rects[i].x < x1) x1 = rects[i].x;
-	if (rects[i].y < y1) y1 = rects[i].y;
-	if (rects[i].x + rects[i].width > x2) x2 = rects[i].x + rects[i].width;
-	if (rects[i].y + rects[i].height > y2) y2 = rects[i].y + rects[i].height;
+	if (rects[i].x < x1) {
+	    x1 = rects[i].x;
+	}
+	if (rects[i].y < y1) {
+	    y1 = rects[i].y;
+	}
+	if (rects[i].x + rects[i].width > x2) {
+	    x2 = rects[i].x + rects[i].width;
+	}
+	if (rects[i].y + rects[i].height > y2) {
+	    y2 = rects[i].y + rects[i].height;
+	}
     }
     TkWlFill(&ctx, gc);
     TkWlEndDraw(&ctx, x1, y1, x2 - x1, y2 - y1);
@@ -648,6 +923,24 @@ XFillRectangles(
  * Arcs --
  *
  *	Angles are in 64ths of a degree, counterclockwise from three o'clock.
+ *
+ *----------------------------------------------------------------------
+ */
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * ArcPath --
+ *
+ *	Add an elliptical arc to the path of a Cairo context. Angles are in
+ *	64ths of a degree, counterclockwise from three o'clock.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The path of the context is extended; nothing is added if the ellipse
+ *	is empty.
  *
  *----------------------------------------------------------------------
  */
@@ -676,6 +969,23 @@ ArcPath(
     cairo_restore(cr);
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * XDrawArc --
+ *
+ *	Draw an elliptical arc.
+ *
+ * Results:
+ *	Success.
+ *
+ * Side effects:
+ *	Draws in the drawable, and adds what was drawn in a window to the
+ *	damage of its surface.
+ *
+ *----------------------------------------------------------------------
+ */
+
 int
 XDrawArc(
     Display *display,
@@ -702,6 +1012,23 @@ XDrawArc(
     return Success;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * XDrawArcs --
+ *
+ *	Draw elliptical arcs.
+ *
+ * Results:
+ *	Success.
+ *
+ * Side effects:
+ *	Draws in the drawable, and adds what was drawn in a window to the
+ *	damage of its surface.
+ *
+ *----------------------------------------------------------------------
+ */
+
 int
 XDrawArcs(
     Display *display,
@@ -719,6 +1046,24 @@ XDrawArcs(
     return Success;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * XFillArc --
+ *
+ *	Fill an elliptical arc, as a pie slice or a chord according to the arc
+ *	mode of the GC.
+ *
+ * Results:
+ *	Success.
+ *
+ * Side effects:
+ *	Draws in the drawable, and adds what was drawn in a window to the
+ *	damage of its surface.
+ *
+ *----------------------------------------------------------------------
+ */
+
 int
 XFillArc(
     Display *display,
@@ -735,7 +1080,8 @@ XFillArc(
 	return Success;
     }
     cairo_new_path(ctx.cr);
-    if (gc->arc_mode == ArcPieSlice && (angle2 < 360 * 64 && angle2 > -360 * 64)) {
+    if (gc->arc_mode == ArcPieSlice
+	    && (angle2 < 360 * 64 && angle2 > -360 * 64)) {
 	cairo_move_to(ctx.cr, x + width / 2.0, y + height / 2.0);
     }
     ArcPath(ctx.cr, x, y, width, height, angle1, angle2);
@@ -744,6 +1090,23 @@ XFillArc(
     TkWlEndDraw(&ctx, x, y, (int)width + 1, (int)height + 1);
     return Success;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XFillArcs --
+ *
+ *	Fill elliptical arcs.
+ *
+ * Results:
+ *	Success.
+ *
+ * Side effects:
+ *	Draws in the drawable, and adds what was drawn in a window to the
+ *	damage of its surface.
+ *
+ *----------------------------------------------------------------------
+ */
 
 int
 XFillArcs(
@@ -761,6 +1124,23 @@ XFillArcs(
     }
     return Success;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XFillPolygon --
+ *
+ *	Fill a polygon, with the fill rule of the GC.
+ *
+ * Results:
+ *	Success.
+ *
+ * Side effects:
+ *	Draws in the drawable, and adds what was drawn in a window to the
+ *	damage of its surface.
+ *
+ *----------------------------------------------------------------------
+ */
 
 int
 XFillPolygon(
@@ -817,6 +1197,13 @@ XFillPolygon(
  *	background, as the X server does when the region is exposed or
  *	cleared.
  *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Draws in the backing image of the surface, and adds the region to its
+ *	damage.
+ *
  *----------------------------------------------------------------------
  */
 
@@ -872,11 +1259,19 @@ TkWlPaintBackground(
 /*
  *----------------------------------------------------------------------
  *
- * XCopyArea --
+ * SourceSurface --
  *
- *	Copy an area between drawables. If the source is a window and parts
- *	of the area are not visible, GraphicsExpose events are generated for
- *	them, otherwise a NoExpose event, if the GC asks for them.
+ *	Find the Cairo image which holds the pixels of a drawable, to copy
+ *	from it.
+ *
+ * Results:
+ *	The image of the pixmap or the backing image of the surface of the
+ *	window, or NULL. *xPtr and *yPtr are set to the position of the
+ *	drawable in the image, and *winPtrPtr to the window, or NULL for a
+ *	pixmap.
+ *
+ * Side effects:
+ *	Pending exposures of the surface of a window are processed.
  *
  *----------------------------------------------------------------------
  */
@@ -908,6 +1303,25 @@ SourceSurface(
 	return topPtr->surface->backing;
     }
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * QueueGraphicsExposures --
+ *
+ *	Queue the events which tell the application what a copy from a
+ *	drawable could not do: GraphicsExpose events for the parts of the
+ *	destination whose source was not visible (the whole destination if
+ *	allLost is true), or else a NoExpose event.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Events are queued.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static void
 QueueGraphicsExposures(
@@ -965,6 +1379,27 @@ QueueGraphicsExposures(
     }
     pixman_region32_fini(&lost);
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XCopyArea --
+ *
+ *	Copy an area between drawables. If the source is a window and parts of
+ *	the area are not visible, GraphicsExpose events are generated for
+ *	them, otherwise a NoExpose event, if the GC asks for them. Scrolling
+ *	at a fractional scale is reported as an exposure of the destination
+ *	instead.
+ *
+ * Results:
+ *	Success.
+ *
+ * Side effects:
+ *	Draws in the destination, and may queue GraphicsExpose or NoExpose
+ *	events.
+ *
+ *----------------------------------------------------------------------
+ */
 
 int
 XCopyArea(
@@ -1059,10 +1494,16 @@ XCopyArea(
 /*
  *----------------------------------------------------------------------
  *
- * XCopyPlane --
+ * PlaneMask --
  *
- *	Copy a bitmap: the pixels where the plane is set are drawn with the
- *	foreground of the GC, the others with its background.
+ *	Make an A8 mask of the pixels of an image in which a plane is set.
+ *
+ * Results:
+ *	The mask (a new reference to the image itself if it is already A8),
+ *	which the caller destroys.
+ *
+ * Side effects:
+ *	May allocate an image.
  *
  *----------------------------------------------------------------------
  */
@@ -1097,6 +1538,24 @@ PlaneMask(
     cairo_surface_mark_dirty(mask);
     return mask;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XCopyPlane --
+ *
+ *	Copy a bitmap: the pixels where the plane is set are drawn with the
+ *	foreground of the GC, the others with its background.
+ *
+ * Results:
+ *	Success.
+ *
+ * Side effects:
+ *	Draws in the destination, and may queue GraphicsExpose or NoExpose
+ *	events.
+ *
+ *----------------------------------------------------------------------
+ */
 
 int
 XCopyPlane(
@@ -1162,6 +1621,22 @@ XCopyPlane(
  *----------------------------------------------------------------------
  */
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * ImageGetPixel --
+ *
+ *	Get a pixel of an image (the get_pixel function of XImages).
+ *
+ * Results:
+ *	The value of the pixel.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static unsigned long
 ImageGetPixel(
     XImage *image,
@@ -1193,6 +1668,22 @@ ImageGetPixel(
     }
     return 0;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * ImagePutPixel --
+ *
+ *	Set a pixel of an image (the put_pixel function of XImages).
+ *
+ * Results:
+ *	0.
+ *
+ * Side effects:
+ *	The pixel in the data of the image is changed.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static int
 ImagePutPixel(
@@ -1230,6 +1721,22 @@ ImagePutPixel(
     return 0;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * DestroyImage --
+ *
+ *	Free an image and its data (the destroy_image function of XImages).
+ *
+ * Results:
+ *	0.
+ *
+ * Side effects:
+ *	The image and its data are freed.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static int
 DestroyImage(
     XImage *image)
@@ -1242,6 +1749,22 @@ DestroyImage(
     }
     return 0;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * SubImage --
+ *
+ *	Copy a part of an image (the sub_image function of XImages).
+ *
+ * Results:
+ *	The new image.
+ *
+ * Side effects:
+ *	Allocates the image and its data.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static XImage *
 SubImage(
@@ -1264,6 +1787,23 @@ SubImage(
     return sub;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * AddPixel --
+ *
+ *	Add a value to every pixel of an image (the add_pixel function of
+ *	XImages).
+ *
+ * Results:
+ *	0.
+ *
+ * Side effects:
+ *	The pixels of the image are changed.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static int
 AddPixel(
     XImage *image,
@@ -1279,6 +1819,22 @@ AddPixel(
     return 0;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * _XInitImageFuncPtrs --
+ *
+ *	Set the functions of an image to those of this file.
+ *
+ * Results:
+ *	0.
+ *
+ * Side effects:
+ *	The function pointers of the image are set.
+ *
+ *----------------------------------------------------------------------
+ */
+
 int
 _XInitImageFuncPtrs(
     XImage *image)
@@ -1291,6 +1847,24 @@ _XInitImageFuncPtrs(
     image->f.add_pixel = AddPixel;
     return 0;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XCreateImage --
+ *
+ *	Create the structure of an image of the formats described above:
+ *	ZPixmap images of depth more than 1 have 8 or 32 bits per pixel, the
+ *	others 1 bit.
+ *
+ * Results:
+ *	The new image, which XDestroyImage frees with its data.
+ *
+ * Side effects:
+ *	Allocates the structure.
+ *
+ *----------------------------------------------------------------------
+ */
 
 XImage *
 XCreateImage(
@@ -1337,8 +1911,20 @@ XCreateImage(
 }
 
 /*
- * Convert an image to a Cairo surface: ARGB32 for RGBA images, A8 for
- * images of depth 1, RGB24 otherwise.
+ *----------------------------------------------------------------------
+ *
+ * ImageToSurface --
+ *
+ *	Convert a part of an image to a Cairo image: ARGB32 for RGBA images,
+ *	A8 for images of depth 1, RGB24 otherwise.
+ *
+ * Results:
+ *	The new Cairo image, which the caller destroys.
+ *
+ * Side effects:
+ *	Allocates the Cairo image.
+ *
+ *----------------------------------------------------------------------
  */
 
 static cairo_surface_t *
@@ -1393,6 +1979,24 @@ ImageToSurface(
     return surface;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * XPutImage --
+ *
+ *	Draw an image in a drawable. A bitmap is drawn with the foreground and
+ *	background of the GC.
+ *
+ * Results:
+ *	Success.
+ *
+ * Side effects:
+ *	Draws in the drawable, and adds what was drawn in a window to the
+ *	damage of its surface.
+ *
+ *----------------------------------------------------------------------
+ */
+
 int
 XPutImage(
     Display *display,
@@ -1433,6 +2037,24 @@ XPutImage(
     return Success;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkpPutRGBAImage --
+ *
+ *	Draw an image whose pixels are R, G, B and A bytes, composited with
+ *	its alpha channel over the drawable.
+ *
+ * Results:
+ *	Success.
+ *
+ * Side effects:
+ *	Draws in the drawable, and adds what was drawn in a window to the
+ *	damage of its surface.
+ *
+ *----------------------------------------------------------------------
+ */
+
 int
 TkpPutRGBAImage(
     Display *display,
@@ -1460,6 +2082,26 @@ TkpPutRGBAImage(
     TkWlEndDraw(&ctx, dstX, dstY, (int)width, (int)height);
     return Success;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XGetImage --
+ *
+ *	Read the pixels of an area of a drawable, at the scale of the user
+ *	space of the drawable.
+ *
+ * Results:
+ *	A new image: XYPixmap of depth 1 for bitmaps or when asked, otherwise
+ *	ZPixmap of depth 24; NULL if the drawable does not exist or the area
+ *	is empty.
+ *
+ * Side effects:
+ *	Pending exposures of the surface of a window are processed; allocates
+ *	the image.
+ *
+ *----------------------------------------------------------------------
+ */
 
 XImage *
 XGetImage(

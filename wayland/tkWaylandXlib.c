@@ -114,6 +114,13 @@ TkWlOpenXDisplay(
  *
  *	Update the size of the screen when the outputs change.
  *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The size of the screen and of the root window change. The size in
+ *	millimeters is that of 96 dpi.
+ *
  *----------------------------------------------------------------------
  */
 
@@ -142,6 +149,23 @@ TkWlSetScreenSize(
     rootPtr->width = width;
     rootPtr->height = height;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWlNextRequest --
+ *
+ *	Count a request, as Xlib does, for the serial numbers of the events
+ *	and for Tk's error handlers.
+ *
+ * Results:
+ *	The serial number of the request.
+ *
+ * Side effects:
+ *	The request counter of the display is incremented.
+ *
+ *----------------------------------------------------------------------
+ */
 
 unsigned long
 TkWlNextRequest(
@@ -188,6 +212,23 @@ static Atom nextAtom = NUM_PREDEFINED_ATOMS;
 static int atomsInitialized = 0;
 TCL_DECLARE_MUTEX(atomMutex)
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * InitAtoms --
+ *
+ *	Create the tables of atoms, with the predefined atoms. Called with
+ *	atomMutex locked.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The tables are initialized.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static void
 InitAtoms(void)
 {
@@ -206,6 +247,24 @@ InitAtoms(void)
     }
     atomsInitialized = 1;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XInternAtom --
+ *
+ *	Get the atom of a name, creating it unless onlyIfExists is true. There
+ *	is no server, so atoms are only valid in this process; the predefined
+ *	atoms have their X11 values.
+ *
+ * Results:
+ *	The atom, or None if it does not exist and onlyIfExists is true.
+ *
+ * Side effects:
+ *	A new atom may be created.
+ *
+ *----------------------------------------------------------------------
+ */
 
 Atom
 XInternAtom(
@@ -238,6 +297,23 @@ XInternAtom(
     Tcl_MutexUnlock(&atomMutex);
     return atom;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XGetAtomName --
+ *
+ *	Get the name of an atom.
+ *
+ * Results:
+ *	The name, which the caller frees with XFree, or NULL if the atom does
+ *	not exist.
+ *
+ * Side effects:
+ *	Memory is allocated for the name.
+ *
+ *----------------------------------------------------------------------
+ */
 
 char *
 XGetAtomName(
@@ -275,6 +351,22 @@ XGetAtomName(
  *----------------------------------------------------------------------
  */
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWlGetProperty --
+ *
+ *	Find a property of a window.
+ *
+ * Results:
+ *	The property, or NULL if the window does not have it.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
 TkWlProperty *
 TkWlGetProperty(
     TkWlWindow *winPtr,
@@ -291,7 +383,21 @@ TkWlGetProperty(
 }
 
 /*
- * Send a PropertyNotify event, and tell the window manager.
+ *----------------------------------------------------------------------
+ *
+ * PropertyChanged --
+ *
+ *	Report the change of a property of a window: send a PropertyNotify
+ *	event if the window selected them, and tell the window manager.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	An event may be queued, and the window manager may update the
+ *	surface of the window.
+ *
+ *----------------------------------------------------------------------
  */
 
 static void
@@ -317,12 +423,50 @@ PropertyChanged(
     }
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * PropertyItemSize --
+ *
+ *	Get the size in memory of the items of a property of a format: format
+ *	32 is stored in longs, as in Xlib.
+ *
+ * Results:
+ *	The size in bytes.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static size_t
 PropertyItemSize(
     int format)
 {
     return (format == 8) ? 1 : (format == 16) ? sizeof(short) : sizeof(long);
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XChangeProperty --
+ *
+ *	Replace, prepend to or append to a property of a window. Properties
+ *	are
+ *	only stored, for the windows of this process.
+ *
+ * Results:
+ *	Success, BadWindow if the window does not exist, or BadMatch if the
+ *	type or format differs from those of the property in a prepend or
+ *	append.
+ *
+ * Side effects:
+ *	The property is changed, and the change reported (see
+ *	PropertyChanged).
+ *
+ *----------------------------------------------------------------------
+ */
 
 int
 XChangeProperty(
@@ -392,6 +536,27 @@ XChangeProperty(
     PropertyChanged(winPtr, property, PropertyNewValue);
     return Success;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XGetWindowProperty --
+ *
+ *	Get part of a property of a window, as the X server returns it:
+ *	offset and length are in 32-bit units.
+ *
+ * Results:
+ *	Success, BadWindow if the window does not exist, or BadValue if the
+ *	offset is beyond the end of the property. The data, which the caller
+ *	frees with XFree, and its description are stored in the output
+ *	arguments.
+ *
+ * Side effects:
+ *	Memory is allocated for the data. The property is deleted if asked to
+ *	and all of it was returned.
+ *
+ *----------------------------------------------------------------------
+ */
 
 int
 XGetWindowProperty(
@@ -464,6 +629,22 @@ XGetWindowProperty(
     return Success;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * XDeleteProperty --
+ *
+ *	Delete a property of a window.
+ *
+ * Results:
+ *	Success, or BadWindow if the window does not exist.
+ *
+ * Side effects:
+ *	The property is freed, and its deletion reported.
+ *
+ *----------------------------------------------------------------------
+ */
+
 int
 XDeleteProperty(
     Display *display,
@@ -492,6 +673,22 @@ XDeleteProperty(
     return Success;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWlFreeProperties --
+ *
+ *	Free the properties of a window which is destroyed.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The properties are freed, without being reported.
+ *
+ *----------------------------------------------------------------------
+ */
+
 void
 TkWlFreeProperties(
     TkWlWindow *winPtr)
@@ -504,6 +701,22 @@ TkWlFreeProperties(
 	Tcl_Free(propPtr);
     }
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XFree --
+ *
+ *	Free memory returned by the Xlib emulation; NULL is ignored.
+ *
+ * Results:
+ *	Success.
+ *
+ * Side effects:
+ *	The memory is freed.
+ *
+ *----------------------------------------------------------------------
+ */
 
 int
 XFree(
@@ -525,12 +738,44 @@ XFree(
  *----------------------------------------------------------------------
  */
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWlPixmanRegion --
+ *
+ *	Get the pixman region of a region.
+ *
+ * Results:
+ *	The pixman region.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
 pixman_region32_t *
 TkWlPixmanRegion(
     Region r)
 {
     return &r->rgn;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XCreateRegion, XDestroyRegion --
+ *
+ *	Create an empty region, and destroy a region (NULL is ignored).
+ *
+ * Results:
+ *	XCreateRegion returns the new region, XDestroyRegion Success.
+ *
+ * Side effects:
+ *	Memory is allocated or freed.
+ *
+ *----------------------------------------------------------------------
+ */
 
 Region
 XCreateRegion(void)
@@ -551,6 +796,24 @@ XDestroyRegion(
     }
     return Success;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XUnionRectWithRegion, XUnionRegion, XIntersectRegion,
+ * XSubtractRegion, XXorRegion, XOffsetRegion --
+ *
+ *	Operations on regions, done by pixman.
+ *
+ * Results:
+ *	Success.
+ *
+ * Side effects:
+ *	The result is stored in the destination region (or r for
+ *	XOffsetRegion).
+ *
+ *----------------------------------------------------------------------
+ */
 
 int
 XUnionRectWithRegion(
@@ -619,6 +882,26 @@ XOffsetRegion(
     pixman_region32_translate(&r->rgn, dx, dy);
     return Success;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XEmptyRegion, XEqualRegion, XPointInRegion, XRectInRegion,
+ * XClipBox --
+ *
+ *	Queries of regions, done by pixman.
+ *
+ * Results:
+ *	Whether the region is empty, the regions are equal, or the point is in
+ *	the region; RectangleIn, RectanglePart or RectangleOut for
+ *	XRectInRegion; Success for XClipBox, which stores the bounding box of
+ *	the region in *rectPtr.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
 
 Bool
 XEmptyRegion(
@@ -689,6 +972,23 @@ typedef struct {
     int dir;			/* 1 if the edge goes down, -1 if up. */
 } Crossing;
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * CompareCrossings --
+ *
+ *	Comparison function of qsort for the crossings of XPolygonRegion.
+ *
+ * Results:
+ *	Negative, zero or positive as the first crossing is left of, at or
+ *	right of the second.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static int
 CompareCrossings(
     const void *a,
@@ -696,6 +996,24 @@ CompareCrossings(
 {
     return ((const Crossing *)a)->x - ((const Crossing *)b)->x;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XPolygonRegion --
+ *
+ *	Make the region of a polygon, with the even-odd or winding fill rule.
+ *	The region is built one scan line at a time, from the spans between
+ *	the crossings of the edges with the center of the line.
+ *
+ * Results:
+ *	The new region.
+ *
+ * Side effects:
+ *	Memory is allocated for the region.
+ *
+ *----------------------------------------------------------------------
+ */
 
 Region
 XPolygonRegion(
@@ -772,6 +1090,23 @@ XPolygonRegion(
  *----------------------------------------------------------------------
  */
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * XAllocColor --
+ *
+ *	Allocate a color: the visual is TrueColor, so this only computes the
+ *	pixel of the color, rounded to 8 bits per component.
+ *
+ * Results:
+ *	1.
+ *
+ * Side effects:
+ *	The color is rounded, and its pixel stored in it.
+ *
+ *----------------------------------------------------------------------
+ */
+
 Status
 XAllocColor(
     Display *display,
@@ -785,6 +1120,22 @@ XAllocColor(
     colorPtr->pixel = TkpGetPixel(colorPtr);
     return 1;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XLookupColor, XAllocNamedColor --
+ *
+ *	Parse the name of a color, and allocate it.
+ *
+ * Results:
+ *	1 if the name is one of a color, 0 otherwise.
+ *
+ * Side effects:
+ *	The exact and screen colors are stored in the output arguments.
+ *
+ *----------------------------------------------------------------------
+ */
 
 Status
 XLookupColor(
@@ -812,6 +1163,22 @@ XAllocNamedColor(
     return XLookupColor(display, colormap, name, exactPtr, screenPtr);
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * XQueryColors --
+ *
+ *	Get the components of the pixels of colors.
+ *
+ * Results:
+ *	Success.
+ *
+ * Side effects:
+ *	The components are stored in the colors.
+ *
+ *----------------------------------------------------------------------
+ */
+
 int
 XQueryColors(
     Display *display,
@@ -832,6 +1199,25 @@ XQueryColors(
     }
     return Success;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XFreeColors, XCreateColormap, XFreeColormap,
+ * XGetWMColormapWindows --
+ *
+ *	Colormaps: there is one, of the TrueColor visual, and colors are not
+ *	allocated in it.
+ *
+ * Results:
+ *	XCreateColormap returns the default colormap, XGetWMColormapWindows 0
+ *	with no windows, the others Success.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
 
 int
 XFreeColors(
@@ -877,12 +1263,46 @@ XGetWMColormapWindows(
     return 0;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * XVisualIDFromVisual --
+ *
+ *	Get the id of a visual.
+ *
+ * Results:
+ *	The id.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
 VisualID
 XVisualIDFromVisual(
     Visual *visual)
 {
     return visual->visualid;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XGetVisualInfo --
+ *
+ *	Get the visuals which match a template: the only visual is the 24-bit
+ *	TrueColor one.
+ *
+ * Results:
+ *	The visual, which the caller frees with XFree, or NULL if it does not
+ *	match; the number of visuals is stored in *nitemsPtr.
+ *
+ * Side effects:
+ *	Memory is allocated for the result.
+ *
+ *----------------------------------------------------------------------
+ */
 
 XVisualInfo *
 XGetVisualInfo(
@@ -943,6 +1363,22 @@ static Tcl_HashTable keysymNameTable;	/* Maps keysyms to their names. */
 static int keysymNamesInitialized = 0;
 TCL_DECLARE_MUTEX(keysymMutex)
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * XKeysymToString --
+ *
+ *	Get the name of a keysym, from xkbcommon.
+ *
+ * Results:
+ *	The name, which must not be freed, or NULL if the keysym has none.
+ *
+ * Side effects:
+ *	The names are kept in a table, since they must not be freed.
+ *
+ *----------------------------------------------------------------------
+ */
+
 char *
 XKeysymToString(
     KeySym keysym)
@@ -977,6 +1413,22 @@ XKeysymToString(
     return name;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * XStringToKeysym --
+ *
+ *	Get the keysym of a name, from xkbcommon.
+ *
+ * Results:
+ *	The keysym, or NoSymbol.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
 KeySym
 XStringToKeysym(
     const char *name)
@@ -985,6 +1437,24 @@ XStringToKeysym(
 
     return (keysym == XKB_KEY_NoSymbol) ? NoSymbol : (KeySym)keysym;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XKeysymToKeycode --
+ *
+ *	Find a keycode which produces a keysym in the keymap of the
+ *	compositor.
+ *	Keycodes are the evdev codes plus 8, as in X11 servers which use XKB.
+ *
+ * Results:
+ *	The keycode, or 0 if no key produces the keysym.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
 
 KeyCode
 XKeysymToKeycode(
@@ -1027,6 +1497,23 @@ XKeysymToKeycode(
     return 0;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * XkbKeycodeToKeysym --
+ *
+ *	Get the keysym of a key in a group and level of the keymap of the
+ *	compositor.
+ *
+ * Results:
+ *	The keysym, or NoSymbol.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
 KeySym
 XkbKeycodeToKeysym(
     TCL_UNUSED(Display *),
@@ -1041,11 +1528,28 @@ XkbKeycodeToKeysym(
 	return NoSymbol;
     }
     if (xkb_keymap_key_get_syms_by_level(keymap, keycode,
-	    (xkb_layout_index_t)group, (xkb_level_index_t)level, &syms) < 1) {
+	    (xkb_layout_index_t)group, (xkb_level_index_t)level,
+	    &syms) < 1) {
 	return NoSymbol;
     }
     return syms[0];
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XkbOpenDisplay --
+ *
+ *	Tk does not open displays with Xkb on Wayland.
+ *
+ * Results:
+ *	NULL.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
 
 Display *
 XkbOpenDisplay(
@@ -1058,6 +1562,24 @@ XkbOpenDisplay(
 {
     return NULL;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XGetModifierMapping --
+ *
+ *	Get the keys of the modifiers, as X11 servers usually map them: Shift,
+ *	Lock, Control, Mod1 (Alt), Mod2 (Num Lock), Mod4 (Super) and Mod5
+ *	(Level 3).
+ *
+ * Results:
+ *	The map, which the caller frees with XFreeModifiermap.
+ *
+ * Side effects:
+ *	Memory is allocated for the map.
+ *
+ *----------------------------------------------------------------------
+ */
 
 XModifierKeymap *
 XGetModifierMapping(
@@ -1084,6 +1606,22 @@ XGetModifierMapping(
     return map;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * XFreeModifiermap --
+ *
+ *	Free a map returned by XGetModifierMapping; NULL is ignored.
+ *
+ * Results:
+ *	Success.
+ *
+ * Side effects:
+ *	The map is freed.
+ *
+ *----------------------------------------------------------------------
+ */
+
 int
 XFreeModifiermap(
     XModifierKeymap *map)
@@ -1094,6 +1632,25 @@ XFreeModifiermap(
     }
     return Success;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XRefreshKeyboardMapping, XmbLookupString --
+ *
+ *	The keymap of the compositor is used directly, and there are no X
+ *	input
+ *	methods: input methods use text-input-v3.
+ *
+ * Results:
+ *	XRefreshKeyboardMapping returns Success, XmbLookupString 0 with no
+ *	keysym.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
 
 int
 XRefreshKeyboardMapping(
@@ -1127,6 +1684,13 @@ XmbLookupString(
  *
  *	Make a fontconfig pattern from an XLFD font name, which Tk expects to
  *	work as on X11.
+ *
+ * Results:
+ *	The pattern, which the caller destroys, or NULL if the name is not an
+ *	XLFD name.
+ *
+ * Side effects:
+ *	None.
  *
  *----------------------------------------------------------------------
  */
@@ -1201,6 +1765,22 @@ TkWlXlfdParse(
  *----------------------------------------------------------------------
  */
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * XLoadFont, XUnloadFont --
+ *
+ *	Tk draws text with its own font code, so server fonts are only ids.
+ *
+ * Results:
+ *	XLoadFont returns 1, XUnloadFont Success.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
 Font
 XLoadFont(
     Display *display,
@@ -1219,6 +1799,22 @@ XUnloadFont(
     return Success;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * XGetGCValues --
+ *
+ *	Get the values of a GC: a GC is its values.
+ *
+ * Results:
+ *	1.
+ *
+ * Side effects:
+ *	The values are copied to *values.
+ *
+ *----------------------------------------------------------------------
+ */
+
 Status
 XGetGCValues(
     TCL_UNUSED(Display *),
@@ -1229,6 +1825,22 @@ XGetGCValues(
     *values = *gc;
     return 1;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XQueryColor --
+ *
+ *	Get the components of the pixel of a color.
+ *
+ * Results:
+ *	Success.
+ *
+ * Side effects:
+ *	The components are stored in the color.
+ *
+ *----------------------------------------------------------------------
+ */
 
 int
 XQueryColor(
@@ -1249,6 +1861,23 @@ XQueryColor(
 
 static XErrorHandler errorHandler = NULL;
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * XSetErrorHandler --
+ *
+ *	Set the error handler. There is no server to report errors, so it is
+ *	only stored.
+ *
+ * Results:
+ *	The previous handler.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
 XErrorHandler
 XSetErrorHandler(
     XErrorHandler handler)
@@ -1258,6 +1887,25 @@ XSetErrorHandler(
     errorHandler = handler;
     return prev;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XNoOp, XSynchronize, XGrabServer, XUngrabServer, XForceScreenSaver,
+ * XResetScreenSaver, XListHosts, XSetCommand, XSetIconName,
+ * XSetWMClientMachine --
+ *
+ *	Requests which have no effect without an X server.
+ *
+ * Results:
+ *	XSynchronize returns NULL, XListHosts NULL with no hosts, the others
+ *	Success or nothing.
+ *
+ * Side effects:
+ *	The request is counted.
+ *
+ *----------------------------------------------------------------------
+ */
 
 int
 XNoOp(
@@ -1350,6 +1998,22 @@ XSetWMClientMachine(
     TkWlNextRequest(display);
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * XStringListToTextProperty --
+ *
+ *	Make a text property of a list of strings, separated by null bytes.
+ *
+ * Results:
+ *	1.
+ *
+ * Side effects:
+ *	The value, which the caller frees with XFree, is allocated.
+ *
+ *----------------------------------------------------------------------
+ */
+
 Status
 XStringListToTextProperty(
     char **list,
@@ -1375,6 +2039,24 @@ XStringListToTextProperty(
     textPtr->nitems = (len > 0) ? len - 1 : 0;
     return 1;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XFilterEvent, XCreateIC, XGContextFromGC, XRootWindow, XBell --
+ *
+ *	Functions for things which do not exist on Wayland: X input methods,
+ *	server GC contexts and the bell; the root window is the emulated one.
+ *
+ * Results:
+ *	XFilterEvent returns False, XCreateIC NULL, XGContextFromGC 0,
+ *	XRootWindow the root window, XBell Success.
+ *
+ * Side effects:
+ *	None, except that XBell counts a request.
+ *
+ *----------------------------------------------------------------------
+ */
 
 Bool
 XFilterEvent(
@@ -1426,6 +2108,23 @@ XBell(
  *----------------------------------------------------------------------
  */
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * XPutBackEvent --
+ *
+ *	Put an event back: events are queued directly on the Tk event queue,
+ *	so there is no X event queue.
+ *
+ * Results:
+ *	Success.
+ *
+ * Side effects:
+ *	The event is queued at the head of the Tk event queue.
+ *
+ *----------------------------------------------------------------------
+ */
+
 int
 XPutBackEvent(
     TCL_UNUSED(Display *),
@@ -1434,6 +2133,22 @@ XPutBackEvent(
     Tk_QueueWindowEvent(eventPtr, TCL_QUEUE_HEAD);
     return Success;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XNextEvent, XWindowEvent --
+ *
+ *	There is no X event queue to read events from.
+ *
+ * Results:
+ *	BadImplementation, with an empty event.
+ *
+ * Side effects:
+ *	The event is cleared.
+ *
+ *----------------------------------------------------------------------
+ */
 
 int
 XNextEvent(

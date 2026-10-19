@@ -69,6 +69,22 @@ static const char *const textTypes[] = {
     "TEXT", NULL
 };
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * IsTextType --
+ *
+ *	Tell whether a MIME type or X target is one of text.
+ *
+ * Results:
+ *	True for the types of text, false otherwise.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static bool
 IsTextType(
     const char *type)
@@ -91,6 +107,24 @@ IsTextType(
  *----------------------------------------------------------------------
  */
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * NewOffer --
+ *
+ *	Make the structure of an offer of the compositor, whose types are
+ *	added
+ *	as the compositor announces them.
+ *
+ * Results:
+ *	The new Offer.
+ *
+ * Side effects:
+ *	Memory is allocated, freed by FreeOffer.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static Offer *
 NewOffer(
     void *offer,
@@ -105,6 +139,22 @@ NewOffer(
     return offerPtr;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * AddType --
+ *
+ *	Add a MIME type to an offer.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The type is copied into the offer.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static void
 AddType(
     Offer *offerPtr,
@@ -116,6 +166,22 @@ AddType(
     strcpy(offerPtr->types[offerPtr->numTypes], type);
     offerPtr->numTypes++;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * HasType --
+ *
+ *	Tell whether an offer has a MIME type.
+ *
+ * Results:
+ *	True if the offer has the type, false otherwise.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static bool
 HasType(
@@ -131,6 +197,22 @@ HasType(
     }
     return false;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * FreeOffer --
+ *
+ *	Destroy an offer of the compositor; NULL is ignored.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The offer object is destroyed and its structure freed.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static void
 FreeOffer(
@@ -153,6 +235,23 @@ FreeOffer(
     Tcl_Free(offerPtr->types);
     Tcl_Free(offerPtr);
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * DataOfferOffer, DataOfferSourceActions, DataOfferAction --
+ *
+ *	The events of the clipboard offers (wl_data_offer): the MIME types of
+ *	the offer. Drag and drop actions are not used.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	DataOfferOffer adds the type to the offer.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static void
 DataOfferOffer(
@@ -180,10 +279,26 @@ DataOfferAction(
 }
 
 static const struct wl_data_offer_listener dataOfferListener = {
-    .offer = DataOfferOffer,
-    .source_actions = DataOfferSourceActions,
-    .action = DataOfferAction
+    DataOfferOffer,
+    DataOfferSourceActions,
+    DataOfferAction
 };
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * PrimaryOfferOffer --
+ *
+ *	The event of the primary selection offers: a MIME type of the offer.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The type is added to the offer.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static void
 PrimaryOfferOffer(
@@ -212,6 +327,24 @@ static const struct zwp_primary_selection_offer_v1_listener
 
 static Offer *newOffer = NULL;		/* The offer announced last. */
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * DataDeviceDataOffer --
+ *
+ *	Called when the compositor announces a new clipboard or drag and drop
+ *	offer, before the event which uses it.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The offer becomes the one announced last, with a listener for its
+ *	types.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static void
 DataDeviceDataOffer(
     TCL_UNUSED(void *),
@@ -221,6 +354,22 @@ DataDeviceDataOffer(
     newOffer = NewOffer(offer, false);
     wl_data_offer_add_listener(offer, &dataOfferListener, newOffer);
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TakeOffer --
+ *
+ *	Take the offer announced last, if it is the one an event refers to.
+ *
+ * Results:
+ *	The offer, or NULL.
+ *
+ * Side effects:
+ *	The offer is no longer the one announced last.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static Offer *
 TakeOffer(
@@ -234,6 +383,23 @@ TakeOffer(
     newOffer = NULL;
     return offerPtr;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * DataDeviceEnter, DataDeviceLeave, DataDeviceMotion, DataDeviceDrop --
+ *
+ *	The drag and drop events of the data device. Drag and drop is not
+ *	supported: its offers are only kept to be destroyed.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The drag and drop offer is replaced or destroyed.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static void
 DataDeviceEnter(
@@ -275,6 +441,23 @@ DataDeviceDrop(
 {
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * DataDeviceSelection --
+ *
+ *	Called when the clipboard changes.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The previous clipboard offer is destroyed, and the new one becomes the
+ *	current one.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static void
 DataDeviceSelection(
     TCL_UNUSED(void *),
@@ -286,13 +469,30 @@ DataDeviceSelection(
 }
 
 static const struct wl_data_device_listener dataDeviceListener = {
-    .data_offer = DataDeviceDataOffer,
-    .enter = DataDeviceEnter,
-    .leave = DataDeviceLeave,
-    .motion = DataDeviceMotion,
-    .drop = DataDeviceDrop,
-    .selection = DataDeviceSelection
+    DataDeviceDataOffer,
+    DataDeviceEnter,
+    DataDeviceLeave,
+    DataDeviceMotion,
+    DataDeviceDrop,
+    DataDeviceSelection
 };
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * PrimaryDeviceDataOffer, PrimaryDeviceSelection --
+ *
+ *	The events of the primary selection device: a new offer is announced,
+ *	and the primary selection changes.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The offer announced last, or the current primary offer, changes.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static void
 PrimaryDeviceDataOffer(
@@ -330,7 +530,11 @@ static const struct zwp_primary_selection_device_v1_listener
  *	selections.
  *
  * Results:
- *	True if the global was used.
+ *	True if the global was used, false otherwise.
+ *
+ * Side effects:
+ *	The data device manager or the primary selection device manager may
+ *	be bound.
  *
  *----------------------------------------------------------------------
  */
@@ -364,6 +568,13 @@ TkWlSelectionBind(
  * TkWlSelectionInit --
  *
  *	Create the devices of the selections, once the seat is known.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The data device and the primary selection device are created, if
+ *	their managers exist and they were not yet.
  *
  *----------------------------------------------------------------------
  */
@@ -399,6 +610,22 @@ TkWlSelectionInit(void)
  *----------------------------------------------------------------------
  */
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * AppendProc --
+ *
+ *	Tk_GetSelProc which appends a portion of a selection to a Tcl_DString.
+ *
+ * Results:
+ *	TCL_OK.
+ *
+ * Side effects:
+ *	The portion is appended to the string.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static int
 AppendProc(
     void *clientData,
@@ -408,6 +635,25 @@ AppendProc(
     Tcl_DStringAppend((Tcl_DString *)clientData, portion, TCL_INDEX_NONE);
     return TCL_OK;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * SendData --
+ *
+ *	Write the data of a selection Tk owns, in a MIME type, to the file
+ *	descriptor given by the compositor, getting it from the selection
+ *	handlers of the owner.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The selection handlers are called, the data is written and the file
+ *	descriptor closed.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static void
 SendData(
@@ -470,6 +716,22 @@ SendData(
     Tcl_DStringFree(&ds);
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * FreeSource --
+ *
+ *	Destroy a source of a selection Tk owned.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The source object is destroyed and its structure freed.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static void
 FreeSource(
     Source *srcPtr)
@@ -484,7 +746,21 @@ FreeSource(
 }
 
 /*
- * Another client took the selection: tell the owner, as the X server does.
+ *----------------------------------------------------------------------
+ *
+ * SourceCancelled --
+ *
+ *	Called when another client took a selection Tk owned: tell the owner,
+ *	as the X server does.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	A SelectionClear event is queued for the owner, its offer is
+ *	dropped, and the source is freed.
+ *
+ *----------------------------------------------------------------------
  */
 
 static void
@@ -522,6 +798,25 @@ SourceCancelled(
     }
     FreeSource(srcPtr);
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * DataSourceTarget, DataSourceSend, DataSourceCancelled,
+ * DataSourceDndDropPerformed, DataSourceDndFinished, DataSourceAction --
+ *
+ *	The events of the clipboard sources (wl_data_source): send the data,
+ *	or the selection was taken by another client. The drag and drop events
+ *	are not used.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	See SendData and SourceCancelled.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static void
 DataSourceTarget(
@@ -572,13 +867,30 @@ DataSourceAction(
 }
 
 static const struct wl_data_source_listener dataSourceListener = {
-    .target = DataSourceTarget,
-    .send = DataSourceSend,
-    .cancelled = DataSourceCancelled,
-    .dnd_drop_performed = DataSourceDndDropPerformed,
-    .dnd_finished = DataSourceDndFinished,
-    .action = DataSourceAction
+    DataSourceTarget,
+    DataSourceSend,
+    DataSourceCancelled,
+    DataSourceDndDropPerformed,
+    DataSourceDndFinished,
+    DataSourceAction
 };
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * PrimarySourceSend, PrimarySourceCancelled --
+ *
+ *	The events of the primary selection sources: send the data, or the
+ *	selection was taken by another client.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	See SendData and SourceCancelled.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static void
 PrimarySourceSend(
@@ -607,11 +919,15 @@ static const struct zwp_primary_selection_source_v1_listener
 /*
  *----------------------------------------------------------------------
  *
- * XSetSelectionOwner --
+ * OfferType --
  *
- *	Offer a selection which Tk claims to the compositor. The selection is
- *	offered as text, and in the types of the selection handlers of the
- *	owner which look like MIME types.
+ *	Offer a selection in a MIME type.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The type is added to the source.
  *
  *----------------------------------------------------------------------
  */
@@ -628,6 +944,25 @@ OfferType(
 	wl_data_source_offer((struct wl_data_source *)srcPtr->source, type);
     }
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XSetSelectionOwner --
+ *
+ *	Offer a selection which Tk claims to the compositor. The selection is
+ *	offered as text, and in the types of the selection handlers of the
+ *	owner which look like MIME types. Only CLIPBOARD and PRIMARY exist.
+ *
+ * Results:
+ *	Success.
+ *
+ * Side effects:
+ *	The previous source of the selection is destroyed, and a new one,
+ *	if there is an owner, is given to the compositor.
+ *
+ *----------------------------------------------------------------------
+ */
 
 int
 XSetSelectionOwner(
@@ -720,17 +1055,19 @@ XSetSelectionOwner(
 /*
  *----------------------------------------------------------------------
  *
- * TkSelGetSelection --
+ * ReceiveData --
  *
- *	Retrieve a selection which is not owned by a Tk application of this
- *	process, from the offer of the compositor.
+ *	Read the data of an offer in a MIME type. Wayland events are
+ *	dispatched
+ *	while waiting, since the owner may be this process.
+ *
+ * Results:
+ *	TCL_OK, or TCL_ERROR if the data could not be read within 5 seconds.
+ *
+ * Side effects:
+ *	The data is appended to the string. Wayland events are dispatched.
  *
  *----------------------------------------------------------------------
- */
-
-/*
- * Read the data of an offer in a type. Wayland events are dispatched while
- * waiting, since the owner may be this process.
  */
 
 static int
@@ -796,6 +1133,25 @@ ReceiveData(
     close(fds[0]);
     return TCL_OK;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkSelGetSelection --
+ *
+ *	Retrieve a selection which is not owned by a Tk application of this
+ *	process, from the offer of the compositor.
+ *
+ * Results:
+ *	A standard Tcl result: the result of proc, or an error if the
+ *	selection does not exist in the target.
+ *
+ * Side effects:
+ *	The compositor is waited for, dispatching Wayland events, and proc is
+ *	called with the data.
+ *
+ *----------------------------------------------------------------------
+ */
 
 int
 TkSelGetSelection(
@@ -893,7 +1249,14 @@ TkSelGetSelection(
  *
  * TkSelEventProc, TkSelPropProc --
  *
- *	Only SelectionClear events are generated.
+ *	The selection events of a window. Only SelectionClear events are
+ *	generated, and there are no property transfers.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	TkSelEventProc clears the selection Tk lost.
  *
  *----------------------------------------------------------------------
  */

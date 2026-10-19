@@ -324,6 +324,23 @@ MODULE_SCOPE XID	TkWlNewId(void *ptr);
 MODULE_SCOPE void	TkWlFreeId(XID id);
 MODULE_SCOPE void *	TkWlLookupId(XID id);
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWlGetWindow, TkWlGetPixmap --
+ *
+ *	Find the window or the pixmap which has an id.
+ *
+ * Results:
+ *	The window or the pixmap, or NULL if the id is not that of a window
+ *	(or of a pixmap).
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static inline TkWlWindow *
 TkWlGetWindow(
     Window w)

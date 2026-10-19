@@ -42,16 +42,22 @@ static void		LinkWindow(TkWlWindow *winPtr, TkWlWindow *parentPtr,
 			    TkWlWindow *belowPtr);
 
 static const struct wl_callback_listener frameListener = {
-    .done = FrameDone
+    FrameDone
 };
 
 /*
  *----------------------------------------------------------------------
  *
- * TkWlNewId, TkWlFreeId, TkWlLookupId --
+ * TkWlNewId --
  *
- *	Ids of windows and pixmaps are never reused, so that the requests
- *	and events for destroyed windows are ignored.
+ *	Give a new id to a window or a pixmap. Ids are never reused, so that
+ *	the requests and events for destroyed windows are ignored.
+ *
+ * Results:
+ *	The new id.
+ *
+ * Side effects:
+ *	The id is recorded, so that TkWlLookupId finds the structure.
  *
  *----------------------------------------------------------------------
  */
@@ -73,6 +79,22 @@ TkWlNewId(
     return id;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWlFreeId --
+ *
+ *	Forget the id of a destroyed window or pixmap.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	TkWlLookupId no longer finds the id.
+ *
+ *----------------------------------------------------------------------
+ */
+
 void
 TkWlFreeId(
     XID id)
@@ -84,6 +106,23 @@ TkWlFreeId(
 	Tcl_DeleteHashEntry(hPtr);
     }
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWlLookupId --
+ *
+ *	Find the window or pixmap which has an id.
+ *
+ * Results:
+ *	The structure of the window or pixmap (whose first field tells which),
+ *	or NULL if the id is unknown.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
 
 void *
 TkWlLookupId(
@@ -104,6 +143,12 @@ TkWlLookupId(
  * NewWindow --
  *
  *	Allocate and initialize a window structure.
+ *
+ * Results:
+ *	The new window, which is not linked in the window tree.
+ *
+ * Side effects:
+ *	Memory is allocated, and the window gets a new id.
  *
  *----------------------------------------------------------------------
  */
@@ -126,6 +171,22 @@ NewWindow(
     return winPtr;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWlCreateRootWindow --
+ *
+ *	Create the root window of the emulated display.
+ *
+ * Results:
+ *	The root window.
+ *
+ * Side effects:
+ *	Memory is allocated.
+ *
+ *----------------------------------------------------------------------
+ */
+
 TkWlWindow *
 TkWlCreateRootWindow(
     Display *display,
@@ -146,7 +207,15 @@ TkWlCreateRootWindow(
  * LinkWindow, UnlinkWindow --
  *
  *	Insert a window in the stacking order of its parent, above the given
- *	sibling (at the bottom if it is NULL), or remove it.
+ *	sibling (at the bottom if it is NULL), or remove it from the stacking
+ *	order of its parent.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The links of the window, of its siblings and of its parent are
+ *	changed.
  *
  *----------------------------------------------------------------------
  */
@@ -200,8 +269,13 @@ UnlinkWindow(
  *
  * TkWlTopWindow --
  *
- *	Return the child of the root window which contains a window, or NULL
- *	for the root window.
+ *	Find the child of the root window which contains a window.
+ *
+ * Results:
+ *	The child of the root window, or NULL for the root window.
+ *
+ * Side effects:
+ *	None.
  *
  *----------------------------------------------------------------------
  */
@@ -218,6 +292,23 @@ TkWlTopWindow(
     }
     return winPtr;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWlGetSurface --
+ *
+ *	Find the surface which shows a window.
+ *
+ * Results:
+ *	The surface of the child of the root window which contains the window,
+ *	or NULL.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
 
 TkWlSurface *
 TkWlGetSurface(
@@ -236,7 +327,13 @@ TkWlGetSurface(
  *
  * TkWlIsViewable --
  *
- *	Whether a window and all of its ancestors are mapped.
+ *	Tell whether a window and all of its ancestors are mapped.
+ *
+ * Results:
+ *	True if the window is viewable, false otherwise.
+ *
+ * Side effects:
+ *	None.
  *
  *----------------------------------------------------------------------
  */
@@ -258,8 +355,14 @@ TkWlIsViewable(
  *
  * TkWlWindowOrigin --
  *
- *	Return the position of the inside of a window in the surface of its
+ *	Compute the position of the inside of a window in the surface of its
  *	top window. The outer corner of the top window is at 0,0.
+ *
+ * Results:
+ *	The position is stored in *xPtr and *yPtr.
+ *
+ * Side effects:
+ *	None.
  *
  *----------------------------------------------------------------------
  */
@@ -283,16 +386,16 @@ TkWlWindowOrigin(
 /*
  *----------------------------------------------------------------------
  *
- * TkWlVisibleRegion --
+ * SubtractOuter --
  *
- *	Compute the part of a window which can be drawn into, in the
- *	coordinates of its surface: the inside of the window, clipped by its
- *	ancestors, minus the mapped siblings above it and above its
- *	ancestors, and minus its mapped children unless includeInferiors is
- *	set.
+ *	Remove the outside of a window (including its border) from a region,
+ *	in the coordinates of the surface.
  *
  * Results:
- *	The region is stored in rgn, which must be initialized.
+ *	None.
+ *
+ * Side effects:
+ *	The region is changed.
  *
  *----------------------------------------------------------------------
  */
@@ -312,6 +415,25 @@ SubtractOuter(
     pixman_region32_subtract(rgn, rgn, &box);
     pixman_region32_fini(&box);
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWlVisibleRegion --
+ *
+ *	Compute the part of a window which can be drawn into, in the
+ *	coordinates of its surface: the inside of the window, clipped by its
+ *	ancestors, minus the mapped siblings above it and above its ancestors,
+ *	and minus its mapped children unless includeInferiors is set.
+ *
+ * Results:
+ *	The region is stored in rgn, which must be initialized.
+ *
+ * Side effects:
+ *	The region is cached in the window until the window tree changes.
+ *
+ *----------------------------------------------------------------------
+ */
 
 void
 TkWlVisibleRegion(
@@ -379,11 +501,16 @@ TkWlVisibleRegion(
 /*
  *----------------------------------------------------------------------
  *
- * TkWlTreeChanged --
+ * ExposeIdle --
  *
- *	Called when the window tree changes in a way which can change what is
- *	visible: invalidates the visible regions, and schedules Expose events
- *	for the surface of the window.
+ *	Idle handler which generates the Expose events of the surfaces whose
+ *	windows changed.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	See TkWlProcessExposures.
  *
  *----------------------------------------------------------------------
  */
@@ -400,6 +527,24 @@ ExposeIdle(
 	TkWlProcessExposures(surfPtr);
     }
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWlTreeChanged --
+ *
+ *	Called when the window tree changes in a way which can change what is
+ *	visible.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The cached visible regions are invalidated, and Expose events are
+ *	scheduled for the surface of the window.
+ *
+ *----------------------------------------------------------------------
+ */
 
 void
 TkWlTreeChanged(
@@ -425,13 +570,19 @@ TkWlTreeChanged(
 /*
  *----------------------------------------------------------------------
  *
- * TkWlProcessExposures --
+ * ExposeWindow --
  *
- *	Generate Expose events for the parts of the windows of a surface
- *	which became visible since the last call, after painting them with
- *	the background of their window, as the X server does. This is called
- *	before anything is drawn in the surface, so that the order of drawing
- *	and of painting backgrounds is the same as with X.
+ *	Generate the Expose events of a window and of its descendants for
+ *	their parts which became visible since the last call, after painting
+ *	them with the background of their window, as the X server does, and
+ *	VisibilityNotify events when their visibility changed.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The backgrounds are painted, events are queued, and what is visible of
+ *	the windows is recorded.
  *
  *----------------------------------------------------------------------
  */
@@ -527,6 +678,25 @@ ExposeWindow(
     }
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWlProcessExposures --
+ *
+ *	Generate the Expose events of the windows of a surface, if its window
+ *	tree changed. This is called before anything is drawn in the surface,
+ *	so that the order of drawing and of painting backgrounds is the same
+ *	as with X.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	See ExposeWindow.
+ *
+ *----------------------------------------------------------------------
+ */
+
 void
 TkWlProcessExposures(
     TkWlSurface *surfPtr)
@@ -545,6 +715,13 @@ TkWlProcessExposures(
  *
  *	Queue an event generated by the Xlib emulation, as if it came from the
  *	X server.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The event gets the serial of the last request, and is queued at the
+ *	tail of the Tcl event queue.
  *
  *----------------------------------------------------------------------
  */
@@ -566,9 +743,21 @@ TkWlQueueEvent(
 }
 
 /*
- * Send a StructureNotify event to the window and a SubstructureNotify event
- * to its parent, as the X server does. The event and window fields of all
- * these events are at the same place.
+ *----------------------------------------------------------------------
+ *
+ * QueueStructureEvent --
+ *
+ *	Send a StructureNotify event to a window and a SubstructureNotify
+ *	event to its parent, as the X server does. The event and window fields
+ *	of all these events are at the same place.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Events are queued, as the event masks of the windows ask.
+ *
+ *----------------------------------------------------------------------
  */
 
 static void
@@ -581,11 +770,29 @@ QueueStructureEvent(
 	eventPtr->xmap.event = winPtr->id;
 	TkWlQueueEvent(eventPtr);
     }
-    if (winPtr->parent && (winPtr->parent->eventMask & SubstructureNotifyMask)) {
+    if (winPtr->parent
+	    && (winPtr->parent->eventMask & SubstructureNotifyMask)) {
 	eventPtr->xmap.event = winPtr->parent->id;
 	TkWlQueueEvent(eventPtr);
     }
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * QueueConfigureNotify --
+ *
+ *	Send the ConfigureNotify events of a window which was moved, resized
+ *	or restacked.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Events are queued.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static void
 QueueConfigureNotify(
@@ -619,10 +826,22 @@ QueueConfigureNotify(
  */
 
 /*
- * The scale of a surface is the preferred fractional scale the compositor
- * gives, or its preferred integer scale, or the largest scale of the
- * outputs the surface is on, in this order. Fractional scales need the
- * viewporter.
+ *----------------------------------------------------------------------
+ *
+ * SurfaceEnter, SurfaceLeave --
+ *
+ *	The compositor tells which outputs a surface is on. The scale of a
+ *	surface is the preferred fractional scale the compositor gives, or its
+ *	preferred integer scale, or the largest scale of the outputs the
+ *	surface is on, in this order. Fractional scales need the viewporter.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The outputs of the surface are recorded, and its scale updated.
+ *
+ *----------------------------------------------------------------------
  */
 
 static void
@@ -663,6 +882,22 @@ SurfaceLeave(
     }
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * SurfacePreferredScale --
+ *
+ *	The compositor gives the integer scale it prefers for a surface.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The scale of the surface is updated.
+ *
+ *----------------------------------------------------------------------
+ */
+
 #ifdef WL_SURFACE_PREFERRED_BUFFER_SCALE_SINCE_VERSION
 static void
 SurfacePreferredScale(
@@ -677,6 +912,23 @@ SurfacePreferredScale(
 }
 #endif
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * FractionalPreferredScale --
+ *
+ *	The compositor gives the fractional scale it prefers for a surface, in
+ *	120ths.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The scale of the surface is updated.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static void
 FractionalPreferredScale(
     void *data,
@@ -690,8 +942,25 @@ FractionalPreferredScale(
 }
 
 static const struct wp_fractional_scale_v1_listener fractionalListener = {
-    .preferred_scale = FractionalPreferredScale
+    FractionalPreferredScale
 };
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * SurfacePreferredTransform --
+ *
+ *	The compositor gives the transform it prefers for the buffers of a
+ *	surface, which is not used.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
 
 #ifdef WL_SURFACE_PREFERRED_BUFFER_SCALE_SINCE_VERSION
 static void
@@ -704,17 +973,36 @@ SurfacePreferredTransform(
 }
 #endif
 
+/*
+ * The events of version 6 of wl_surface are in the listener only with the
+ * headers which have them.
+ */
+
 static const struct wl_surface_listener surfaceListener = {
-    .enter = SurfaceEnter,
-    .leave = SurfaceLeave,
+    SurfaceEnter,
+    SurfaceLeave,
 #ifdef WL_SURFACE_PREFERRED_BUFFER_SCALE_SINCE_VERSION
-    .preferred_buffer_scale = SurfacePreferredScale,
-    .preferred_buffer_transform = SurfacePreferredTransform
+    SurfacePreferredScale,
+    SurfacePreferredTransform
 #endif
 };
 
 /*
- * Create and destroy the wl_surface of a surface, with its viewport.
+ *----------------------------------------------------------------------
+ *
+ * CreateWlSurface, DestroyWlSurface --
+ *
+ *	Create the wl_surface of a surface, with its viewport and its
+ *	fractional scale object, or destroy them.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Objects of the compositor are created, or destroyed with the pending
+ *	callbacks of the surface.
+ *
+ *----------------------------------------------------------------------
  */
 
 static void
@@ -777,6 +1065,13 @@ DestroyWlSurface(
  *	xdg_toplevel was destroyed), so the wl_surface is replaced when the
  *	surface gets a role of another type.
  *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The wl_surface may be replaced, in which case the surface has to be
+ *	configured and drawn entirely again.
+ *
  *----------------------------------------------------------------------
  */
 
@@ -804,6 +1099,23 @@ TkWlSurfaceSetRole(
     surfPtr->roleType = roleType;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * NewSurface --
+ *
+ *	Create the surface of a child of the root window.
+ *
+ * Results:
+ *	The new surface.
+ *
+ * Side effects:
+ *	Memory is allocated, a wl_surface is created, and the surface is
+ *	linked in the list of the display.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static TkWlSurface *
 NewSurface(
     TkWlWindow *winPtr)
@@ -827,6 +1139,22 @@ NewSurface(
     return surfPtr;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWlSurfaceFromWl --
+ *
+ *	Find the surface which has a wl_surface.
+ *
+ * Results:
+ *	The surface, or NULL if the wl_surface is not one of Tk.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
 TkWlSurface *
 TkWlSurfaceFromWl(
     struct wl_surface *surface)
@@ -841,6 +1169,22 @@ TkWlSurfaceFromWl(
     return NULL;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * FreeBuffer --
+ *
+ *	Free the wl_shm buffer of a buffer structure.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The buffer is destroyed and its memory unmapped.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static void
 FreeBuffer(
     TkWlBuffer *bufPtr)
@@ -853,6 +1197,23 @@ FreeBuffer(
     }
     bufPtr->busy = false;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * DestroySurface --
+ *
+ *	Destroy the surface of a window.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The role, the buffers, the wl_surface and the backing image of the
+ *	surface are destroyed, and the surface is freed.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static void
 DestroySurface(
@@ -897,17 +1258,18 @@ DestroySurface(
 /*
  *----------------------------------------------------------------------
  *
- * ResizeBacking --
+ * BufferSize --
  *
- *	Make the backing image of a surface the size of its window, keeping
- *	what was drawn in it.
+ *	Compute the size in pixels of a length in logical pixels, as in the
+ *	fractional scale protocol.
+ *
+ * Results:
+ *	The size, at least 1.
+ *
+ * Side effects:
+ *	None.
  *
  *----------------------------------------------------------------------
- */
-
-/*
- * The size in pixels of a length in logical pixels, as in the fractional
- * scale protocol.
  */
 
 static int
@@ -921,8 +1283,21 @@ BufferSize(
 }
 
 /*
- * Convert a box in surface coordinates to the pixels of the buffer which it
- * touches.
+ *----------------------------------------------------------------------
+ *
+ * BufferBox --
+ *
+ *	Convert a box in surface coordinates to the pixels of the buffer which
+ *	it touches.
+ *
+ * Results:
+ *	The box is stored in *xPtr, *yPtr, *widthPtr and *heightPtr, clipped
+ *	to the buffer.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
  */
 
 static void
@@ -945,12 +1320,46 @@ BufferBox(
     *heightPtr = (y2 > y1) ? y2 - y1 : 0;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWlIntegralScale --
+ *
+ *	Tell whether the scale of a surface is a whole number.
+ *
+ * Results:
+ *	True if the scale is integral, false otherwise.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
 bool
 TkWlIntegralScale(
     TkWlSurface *surfPtr)
 {
     return surfPtr->scale == floor(surfPtr->scale);
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * ResizeBacking --
+ *
+ *	Make the backing image of a surface the size of its window, keeping
+ *	what was drawn in it.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The backing image may be replaced, and the damage of the surface is
+ *	clipped to its new size.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static void
 ResizeBacking(
@@ -993,8 +1402,20 @@ ResizeBacking(
 }
 
 /*
- * Forget what was drawn in a window and its descendants, so that they get
- * Expose events for all of their visible parts.
+ *----------------------------------------------------------------------
+ *
+ * ForgetExposed --
+ *
+ *	Forget what was drawn in a window and its descendants, so that they
+ *	get Expose events for all of their visible parts.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The exposed regions of the windows are cleared.
+ *
+ *----------------------------------------------------------------------
  */
 
 static void
@@ -1009,6 +1430,24 @@ ForgetExposed(
 	ForgetExposed(childPtr);
     }
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWlUpdateScale --
+ *
+ *	Compute the scale of a surface again, after the compositor told
+ *	something which may change it.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	When the scale changes, the backing image is replaced, everything in
+ *	the surface is drawn again and the cursor is updated.
+ *
+ *----------------------------------------------------------------------
+ */
 
 void
 TkWlUpdateScale(
@@ -1061,8 +1500,14 @@ TkWlUpdateScale(
  *
  * TkWlAddDamage --
  *
- *	Record that a region of a surface was drawn into, and schedule its
- *	presentation.
+ *	Record that a region of a surface was drawn into.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The region is added to the damage of the surface and of its buffers,
+ *	and the presentation of the surface is scheduled.
  *
  *----------------------------------------------------------------------
  */
@@ -1095,6 +1540,23 @@ TkWlAddDamage(
  *----------------------------------------------------------------------
  */
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * CornerRadius --
+ *
+ *	Compute the radius of the corners of a surface as it is now: none when
+ *	they are square, and at most half the size of the window.
+ *
+ * Results:
+ *	The radius in logical pixels, or 0.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static double
 CornerRadius(
     TkWlSurface *surfPtr)
@@ -1115,9 +1577,22 @@ CornerRadius(
 }
 
 /*
- * Copy the corners of the backing image to the buffer through the mask: the
- * corners are copied whole every time, so that the mask is applied to the
- * backing image once whatever was damaged.
+ *----------------------------------------------------------------------
+ *
+ * RoundCorners --
+ *
+ *	Copy the corners of the backing image to the buffer through the mask:
+ *	the corners are copied whole every time, so that the mask is applied
+ *	to the backing image once whatever was damaged.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The corners of the buffer are written; the mask is made again when the
+ *	radius or the opacity changed.
+ *
+ *----------------------------------------------------------------------
  */
 
 static void
@@ -1177,6 +1652,12 @@ RoundCorners(
  *	Set the radius of the corners of a surface, and whether they are
  *	square for now (when the window is maximized, for instance).
  *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The whole surface is presented again if something changed.
+ *
  *----------------------------------------------------------------------
  */
 
@@ -1216,6 +1697,22 @@ TkWlSurfaceSetCorners(
  *----------------------------------------------------------------------
  */
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * SchedulePresent --
+ *
+ *	Schedule the presentation of a surface at idle time.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	An idle handler is created, unless one is pending.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static void
 SchedulePresent(
     TkWlSurface *surfPtr)
@@ -1225,6 +1722,22 @@ SchedulePresent(
 	Tcl_DoWhenIdle(PresentIdle, surfPtr);
     }
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * PresentIdle --
+ *
+ *	Idle handler which presents a surface, the second time it is called.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	See Present.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static void
 PresentIdle(
@@ -1242,6 +1755,22 @@ PresentIdle(
     Present(surfPtr);
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * FrameDone --
+ *
+ *	The compositor is ready for a new frame of a surface.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The surface is presented again if it was drawn into meanwhile.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static void
 FrameDone(
     void *data,
@@ -1258,6 +1787,22 @@ FrameDone(
     }
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * BufferRelease --
+ *
+ *	The compositor no longer uses a buffer.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The buffer can be used again.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static void
 BufferRelease(
     void *data,
@@ -1267,8 +1812,24 @@ BufferRelease(
 }
 
 static const struct wl_buffer_listener bufferListener = {
-    .release = BufferRelease
+    BufferRelease
 };
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * AllocBuffer --
+ *
+ *	Allocate a wl_shm buffer of the given size and format.
+ *
+ * Results:
+ *	True if the buffer was allocated, false otherwise.
+ *
+ * Side effects:
+ *	Shared memory is allocated and mapped, and a wl_buffer is created.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static bool
 AllocBuffer(
@@ -1309,6 +1870,25 @@ AllocBuffer(
     bufPtr->busy = false;
     return true;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Present --
+ *
+ *	Present a surface: bring a free buffer up to date with the backing
+ *	image, and commit it with its damage.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The pending Expose events of the surface are generated first. The
+ *	buffer is attached and committed, a frame callback is requested, and
+ *	the presentation is retried later when no buffer is free.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static void
 Present(
@@ -1446,6 +2026,12 @@ Present(
  *	Set the opacity of a surface ([wm attributes -alpha]), which is
  *	applied when the backing image is copied to the buffers.
  *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The whole surface is presented again if the opacity changed.
+ *
  *----------------------------------------------------------------------
  */
 
@@ -1479,6 +2065,12 @@ TkWlSurfaceSetOpacity(
  *	Called by tkWaylandWm.c when the compositor has configured the
  *	surface, so that buffers can be attached to it.
  *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The surface is presented.
+ *
  *----------------------------------------------------------------------
  */
 
@@ -1498,8 +2090,14 @@ TkWlSurfaceConfigured(
  *
  * TkWlWindowAtPoint --
  *
- *	Find the deepest mapped descendant of a window which contains a
- *	point, given relative to the inside of the window.
+ *	Find the deepest mapped descendant of a window which contains a point,
+ *	given relative to the inside of the window.
+ *
+ * Results:
+ *	The descendant, or the window itself.
+ *
+ * Side effects:
+ *	None.
  *
  *----------------------------------------------------------------------
  */
@@ -1532,7 +2130,15 @@ TkWlWindowAtPoint(
 /*
  *----------------------------------------------------------------------
  *
- * XCreateWindow --
+ * ChangeAttributes --
+ *
+ *	Change the attributes of a window given by valueMask.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The window structure is changed.
  *
  *----------------------------------------------------------------------
  */
@@ -1576,6 +2182,23 @@ ChangeAttributes(
 	winPtr->cursor = attrPtr->cursor;
     }
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XCreateWindow --
+ *
+ *	Create a window, on top of its siblings. The children of the root
+ *	window get a surface.
+ *
+ * Results:
+ *	The id of the window, or None if the parent does not exist.
+ *
+ * Side effects:
+ *	A CreateNotify event is queued if the parent asks for it.
+ *
+ *----------------------------------------------------------------------
+ */
 
 Window
 XCreateWindow(
@@ -1634,9 +2257,16 @@ XCreateWindow(
 /*
  *----------------------------------------------------------------------
  *
- * XDestroyWindow --
+ * FreeWindow --
  *
- *	Destroy a window and its descendants.
+ *	Free a window and its descendants.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The windows are freed with their surfaces and properties, and Tk
+ *	forgets them as windows under the pointer.
  *
  *----------------------------------------------------------------------
  */
@@ -1666,6 +2296,24 @@ FreeWindow(
     pixman_region32_fini(&winPtr->clip);
     Tcl_Free(winPtr);
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XDestroyWindow --
+ *
+ *	Destroy a window and its descendants.
+ *
+ * Results:
+ *	Success, or BadWindow if the window does not exist or is the root
+ *	window.
+ *
+ * Side effects:
+ *	The window is unmapped first, and a DestroyNotify event is queued if
+ *	its parent asks for it.
+ *
+ *----------------------------------------------------------------------
+ */
 
 int
 XDestroyWindow(
@@ -1702,7 +2350,15 @@ XDestroyWindow(
 /*
  *----------------------------------------------------------------------
  *
- * XMapWindow, XUnmapWindow --
+ * XMapWindow --
+ *
+ *	Map a window. A child of the root window is shown by tkWaylandWm.c.
+ *
+ * Results:
+ *	Success, or BadWindow if the window does not exist.
+ *
+ * Side effects:
+ *	Expose events are scheduled, and a MapNotify event is queued.
  *
  *----------------------------------------------------------------------
  */
@@ -1741,6 +2397,22 @@ XMapWindow(
     return Success;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * XMapRaised --
+ *
+ *	Raise and map a window.
+ *
+ * Results:
+ *	As XMapWindow.
+ *
+ * Side effects:
+ *	See XRaiseWindow and XMapWindow.
+ *
+ *----------------------------------------------------------------------
+ */
+
 int
 XMapRaised(
     Display *display,
@@ -1749,6 +2421,24 @@ XMapRaised(
     XRaiseWindow(display, w);
     return XMapWindow(display, w);
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XUnmapWindow --
+ *
+ *	Unmap a window. The surface of a child of the root window loses its
+ *	role, unless the window is iconic.
+ *
+ * Results:
+ *	Success, or BadWindow if the window does not exist.
+ *
+ * Side effects:
+ *	Expose events are scheduled for what becomes visible, and an
+ *	UnmapNotify event is queued.
+ *
+ *----------------------------------------------------------------------
+ */
 
 int
 XUnmapWindow(
@@ -1802,6 +2492,22 @@ XUnmapWindow(
     return Success;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * XWithdrawWindow --
+ *
+ *	Withdraw a toplevel, which unmaps it.
+ *
+ * Results:
+ *	Non-zero if the window was unmapped.
+ *
+ * Side effects:
+ *	See XUnmapWindow.
+ *
+ *----------------------------------------------------------------------
+ */
+
 Status
 XWithdrawWindow(
     Display *display,
@@ -1814,7 +2520,16 @@ XWithdrawWindow(
 /*
  *----------------------------------------------------------------------
  *
- * XConfigureWindow and friends --
+ * Restack --
+ *
+ *	Move a window in the stacking order of its parent, relative to a
+ *	sibling or to all of them.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The links of the window and its siblings are changed.
  *
  *----------------------------------------------------------------------
  */
@@ -1844,6 +2559,24 @@ Restack(
 	break;
     }
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XConfigureWindow --
+ *
+ *	Move, resize, restack or change the border width of a window.
+ *
+ * Results:
+ *	Success, or BadWindow if the window does not exist.
+ *
+ * Side effects:
+ *	The window and its surface are changed, Expose events are scheduled,
+ *	tkWaylandWm.c is told when a child of the root window is resized, and
+ *	ConfigureNotify events are queued.
+ *
+ *----------------------------------------------------------------------
+ */
 
 int
 XConfigureWindow(
@@ -1894,6 +2627,23 @@ XConfigureWindow(
     QueueConfigureNotify(winPtr);
     return Success;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XMoveWindow, XResizeWindow, XMoveResizeWindow,
+ * XSetWindowBorderWidth --
+ *
+ *	Change the position, the size or the border width of a window.
+ *
+ * Results:
+ *	As XConfigureWindow.
+ *
+ * Side effects:
+ *	See XConfigureWindow.
+ *
+ *----------------------------------------------------------------------
+ */
 
 int
 XMoveWindow(
@@ -1950,6 +2700,23 @@ XSetWindowBorderWidth(
     return XConfigureWindow(display, w, CWBorderWidth, &values);
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * XRaiseWindow --
+ *
+ *	Raise a window. A Wayland client cannot raise its toplevels; it can
+ *	ask the compositor to activate them.
+ *
+ * Results:
+ *	As XConfigureWindow.
+ *
+ * Side effects:
+ *	Mapped toplevels are activated; see XConfigureWindow.
+ *
+ *----------------------------------------------------------------------
+ */
+
 int
 XRaiseWindow(
     Display *display,
@@ -1971,6 +2738,22 @@ XRaiseWindow(
     return XConfigureWindow(display, w, CWStackMode, &values);
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * XLowerWindow --
+ *
+ *	Lower a window below its siblings.
+ *
+ * Results:
+ *	As XConfigureWindow.
+ *
+ * Side effects:
+ *	See XConfigureWindow.
+ *
+ *----------------------------------------------------------------------
+ */
+
 int
 XLowerWindow(
     Display *display,
@@ -1981,6 +2764,24 @@ XLowerWindow(
     values.stack_mode = Below;
     return XConfigureWindow(display, w, CWStackMode, &values);
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XReparentWindow --
+ *
+ *	Give a window another parent. A window which becomes a child of the
+ *	root window gets a surface, and one which stops being one loses it.
+ *
+ * Results:
+ *	Success, or BadWindow if a window does not exist.
+ *
+ * Side effects:
+ *	The window is unmapped during the change and mapped again, and
+ *	ReparentNotify events are queued.
+ *
+ *----------------------------------------------------------------------
+ */
 
 int
 XReparentWindow(
@@ -2040,7 +2841,16 @@ XReparentWindow(
 /*
  *----------------------------------------------------------------------
  *
- * Window attributes --
+ * XChangeWindowAttributes --
+ *
+ *	Change the attributes of a window.
+ *
+ * Results:
+ *	Success, or BadWindow if the window does not exist.
+ *
+ * Side effects:
+ *	The window structure is changed, and the cursor updated when it is one
+ *	of the changes.
  *
  *----------------------------------------------------------------------
  */
@@ -2064,6 +2874,23 @@ XChangeWindowAttributes(
     }
     return Success;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XSelectInput, XSetWindowBackground,
+ * XSetWindowBackgroundPixmap, XSetWindowBorder --
+ *
+ *	Change one attribute of a window.
+ *
+ * Results:
+ *	As XChangeWindowAttributes.
+ *
+ * Side effects:
+ *	See XChangeWindowAttributes.
+ *
+ *----------------------------------------------------------------------
+ */
 
 int
 XSelectInput(
@@ -2113,6 +2940,23 @@ XSetWindowBorder(
     return XChangeWindowAttributes(display, w, CWBorderPixel, &attr);
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * XSetWindowBorderPixmap --
+ *
+ *	Borders of pixmaps are not drawn by the emulation: Tk does not use
+ *	them.
+ *
+ * Results:
+ *	Success.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
 int
 XSetWindowBorderPixmap(
     Display *display,
@@ -2122,6 +2966,22 @@ XSetWindowBorderPixmap(
     TkWlNextRequest(display);
     return Success;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XSetWindowColormap, XUndefineCursor --
+ *
+ *	Change one attribute of a window.
+ *
+ * Results:
+ *	As XChangeWindowAttributes.
+ *
+ * Side effects:
+ *	See XChangeWindowAttributes.
+ *
+ *----------------------------------------------------------------------
+ */
 
 int
 XSetWindowColormap(
@@ -2146,6 +3006,23 @@ XUndefineCursor(
     return XChangeWindowAttributes(display, w, CWCursor, &attr);
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * XClearWindow --
+ *
+ *	Paint the visible part of a window with its background.
+ *
+ * Results:
+ *	Success, or BadWindow if the window does not exist.
+ *
+ * Side effects:
+ *	The pending Expose events of its surface are generated first, then the
+ *	window is painted.
+ *
+ *----------------------------------------------------------------------
+ */
+
 int
 XClearWindow(
     Display *display,
@@ -2169,6 +3046,22 @@ XClearWindow(
     pixman_region32_fini(&rgn);
     return Success;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XGetWindowAttributes --
+ *
+ *	Get the attributes of a window.
+ *
+ * Results:
+ *	Non-zero, or zero if the window does not exist.
+ *
+ * Side effects:
+ *	The attributes are stored in *attrPtr.
+ *
+ *----------------------------------------------------------------------
+ */
 
 int
 XGetWindowAttributes(
@@ -2205,6 +3098,23 @@ XGetWindowAttributes(
     attrPtr->screen = DefaultScreenOfDisplay(display);
     return 1;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XGetGeometry --
+ *
+ *	Get the position, size, border width and depth of a window or a
+ *	pixmap.
+ *
+ * Results:
+ *	Non-zero, or zero if the drawable does not exist.
+ *
+ * Side effects:
+ *	The values are stored in the given variables.
+ *
+ *----------------------------------------------------------------------
+ */
 
 Status
 XGetGeometry(
@@ -2243,6 +3153,23 @@ XGetGeometry(
     }
     return 1;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XQueryTree --
+ *
+ *	Get the parent and the children of a window, from bottom to top.
+ *
+ * Results:
+ *	Non-zero, or zero if the window does not exist.
+ *
+ * Side effects:
+ *	*childrenPtr is set to an array of ids allocated with Tcl_Alloc, which
+ *	the caller frees (with XFree), or NULL if there are no children.
+ *
+ *----------------------------------------------------------------------
+ */
 
 Status
 XQueryTree(
@@ -2287,12 +3214,19 @@ XQueryTree(
 /*
  *----------------------------------------------------------------------
  *
- * XTranslateCoordinates --
+ * RootPosition --
  *
- *	Wayland clients do not know where their windows are on the screen.
- *	The root coordinates of a toplevel are those Tk thinks it has (the
+ *	Compute the position of the inside of a window in root coordinates.
+ *	Wayland clients do not know where their windows are on the screen: the
+ *	root coordinates of a toplevel are those Tk thinks it has (the
  *	position of its wrapper window), which keeps the coordinates
  *	consistent within the application.
+ *
+ * Results:
+ *	The position is stored in *xPtr and *yPtr.
+ *
+ * Side effects:
+ *	None.
  *
  *----------------------------------------------------------------------
  */
@@ -2311,6 +3245,24 @@ RootPosition(
     *xPtr = x;
     *yPtr = y;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XTranslateCoordinates --
+ *
+ *	Convert a position relative to a window to one relative to another
+ *	window, and find the child of that window which contains it.
+ *
+ * Results:
+ *	True, or False if a window does not exist.
+ *
+ * Side effects:
+ *	The position is stored in *dstXPtr and *dstYPtr, and the child in
+ *	*childPtr.
+ *
+ *----------------------------------------------------------------------
+ */
 
 Bool
 XTranslateCoordinates(
@@ -2359,6 +3311,15 @@ XTranslateCoordinates(
  *----------------------------------------------------------------------
  *
  * XFlush, XSync, TkpSync --
+ *
+ *	Send the pending requests to the compositor. With XSync and TkpSync,
+ *	all the requests made so far are also considered processed.
+ *
+ * Results:
+ *	Success, or nothing for TkpSync.
+ *
+ * Side effects:
+ *	The connection is flushed.
  *
  *----------------------------------------------------------------------
  */

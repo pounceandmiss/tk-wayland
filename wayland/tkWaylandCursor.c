@@ -126,6 +126,12 @@ static Cursor currentCursor = None;
  *	pixels set in the mask (all, without a mask) are drawn, with the
  *	foreground where the source is set, else with the background.
  *
+ * Results:
+ *	The new cursor, or NULL if it could not be made.
+ *
+ * Side effects:
+ *	Allocates the cursor, and a wl_shm buffer with its image.
+ *
  *----------------------------------------------------------------------
  */
 
@@ -192,12 +198,17 @@ MakeImageCursor(
 /*
  *----------------------------------------------------------------------
  *
- * TkGetCursorByName --
+ * CursorFromFiles --
  *
- *	Retrieve a cursor by name: a name of the X cursor font, optionally
- *	followed by colors, which are ignored, "none", or, as on X11,
- *	"@sourceFile fg" or "@sourceFile maskFile fg bg" for a cursor made of
- *	bitmap files.
+ *	Make a cursor from X11 bitmap files, as given in the cursor names
+ *	"@sourceFile fg" and "@sourceFile maskFile fg bg", already split into
+ *	the list argv of argc elements.
+ *
+ * Results:
+ *	The new cursor, or NULL with an error message in interp.
+ *
+ * Side effects:
+ *	Reads the bitmap files, and allocates the cursor and its image.
  *
  *----------------------------------------------------------------------
  */
@@ -272,6 +283,27 @@ CursorFromFiles(
     return cursorPtr;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkGetCursorByName --
+ *
+ *	Retrieve a cursor by name: a name of the X cursor font, optionally
+ *	followed by colors, which are ignored, "none", or, as on X11,
+ *	"@sourceFile fg" or "@sourceFile maskFile fg bg" for a cursor made of
+ *	bitmap files.
+ *
+ * Results:
+ *	The new cursor, or NULL with an error message in interp if the name is
+ *	not valid.
+ *
+ * Side effects:
+ *	Allocates the cursor; a cursor made of bitmap files has an image in a
+ *	wl_shm buffer.
+ *
+ *----------------------------------------------------------------------
+ */
+
 TkCursor *
 TkGetCursorByName(
     Tcl_Interp *interp,
@@ -327,6 +359,22 @@ TkGetCursorByName(
     return NULL;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkCreateCursorFromData --
+ *
+ *	Make a cursor from bitmap data in the format of X11 bitmap files.
+ *
+ * Results:
+ *	The new cursor, or NULL if it could not be made.
+ *
+ * Side effects:
+ *	Allocates the cursor, and a wl_shm buffer with its image.
+ *
+ *----------------------------------------------------------------------
+ */
+
 TkCursor *
 TkCreateCursorFromData(
     TCL_UNUSED(Tk_Window),
@@ -342,6 +390,23 @@ TkCreateCursorFromData(
 
     return cursorPtr ? &cursorPtr->info : NULL;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkpFreeCursor --
+ *
+ *	Release the resources of a cursor; tkCursor.c frees the cursor itself.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The image of a cursor made of bitmaps is freed. If the cursor is the
+ *	one shown, the default cursor is shown instead.
+ *
+ *----------------------------------------------------------------------
+ */
 
 void
 TkpFreeCursor(
@@ -359,6 +424,23 @@ TkpFreeCursor(
 	wlCursorPtr->buffer = NULL;
     }
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XCreatePixmapCursor, XCreateGlyphCursor --
+ *
+ *	Xlib functions which Tk does not use on Wayland, where cursors are
+ *	made by TkGetCursorByName and TkCreateCursorFromData.
+ *
+ * Results:
+ *	None, the cursor of the parent window.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
 
 Cursor
 XCreatePixmapCursor(
@@ -386,6 +468,23 @@ XCreateGlyphCursor(
     return None;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * XFreeCursor --
+ *
+ *	Free a cursor made by XCreatePixmapCursor or XCreateGlyphCursor, which
+ *	make none.
+ *
+ * Results:
+ *	Success.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
 int
 XFreeCursor(
     Display *display,
@@ -398,10 +497,20 @@ XFreeCursor(
 /*
  *----------------------------------------------------------------------
  *
- * TkpSetCursor --
+ * LoadCursor --
  *
- *	Set the cursor of the pointer. Called by tkPointer.c when the pointer
- *	enters a window with another cursor; None means the default cursor.
+ *	Find a cursor of the cursor theme by its name in the X cursor font, or
+ *	by its CSS name if the theme lacks the X name, or else the default
+ *	cursor. The theme is loaded at the size given by XCURSOR_SIZE (24 by
+ *	default) times the scale.
+ *
+ * Results:
+ *	The cursor, or NULL if the theme cannot be loaded or has none of these
+ *	cursors.
+ *
+ * Side effects:
+ *	The cursor theme is (re)loaded the first time and when the scale
+ *	changes.
  *
  *----------------------------------------------------------------------
  */
@@ -453,6 +562,24 @@ LoadCursor(
     }
     return cursor;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWlUpdateCursor --
+ *
+ *	Show the current cursor on the surface under the pointer, at the scale
+ *	of that surface.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Creates the surface of the cursor if needed, attaches the image of the
+ *	cursor to it, and sets it as the cursor of the pointer.
+ *
+ *----------------------------------------------------------------------
+ */
 
 void
 TkWlUpdateCursor(void)
@@ -509,6 +636,23 @@ TkWlUpdateCursor(void)
 	    tkWlDisplay->cursorSurface, (int32_t)image->hotspot_x / scale,
 	    (int32_t)image->hotspot_y / scale);
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkpSetCursor --
+ *
+ *	Set the cursor of the pointer. Called by tkPointer.c when the pointer
+ *	enters a window with another cursor; None means the default cursor.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The cursor is shown if it changed.
+ *
+ *----------------------------------------------------------------------
+ */
 
 void
 TkpSetCursor(

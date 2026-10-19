@@ -68,6 +68,24 @@ static struct zwp_idle_inhibit_manager_v1 *idleInhibitManager = NULL;
  *----------------------------------------------------------------------
  */
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * ToplevelDestroyed --
+ *
+ *	Event handler for the destruction of a toplevel which one of the
+ *	commands has set something for.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The idle inhibitor of the toplevel is destroyed, and its ToplevelInfo
+ *	is freed and removed from the table.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static void
 ToplevelDestroyed(
     void *clientData,
@@ -91,6 +109,24 @@ ToplevelDestroyed(
     }
     Tcl_Free(infoPtr);
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * GetInfo --
+ *
+ *	Find the ToplevelInfo of a toplevel, creating it if asked to.
+ *
+ * Results:
+ *	The ToplevelInfo of the toplevel, or NULL if it has none and create is
+ *	false.
+ *
+ * Side effects:
+ *	When created, a ToplevelInfo is added to the table, with an event
+ *	handler which frees it when the toplevel is destroyed.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static ToplevelInfo *
 GetInfo(
@@ -123,8 +159,20 @@ GetInfo(
 }
 
 /*
- * The surface of a toplevel: that of its wrapper, the X window of which is
- * the child of the root window which contains it.
+ *----------------------------------------------------------------------
+ *
+ * ToplevelSurface --
+ *
+ *	Find the surface of a toplevel: that of its wrapper, the X window of
+ *	which is the child of the root window which contains it.
+ *
+ * Results:
+ *	The surface, or NULL if the toplevel has none (yet).
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
  */
 
 static TkWlSurface *
@@ -142,8 +190,20 @@ ToplevelSurface(
 }
 
 /*
- * The Tk toplevel in a surface: the X window of the surface is the wrapper of
- * the toplevel, or the toplevel itself.
+ *----------------------------------------------------------------------
+ *
+ * SurfaceToplevel --
+ *
+ *	Find the Tk toplevel shown in a surface: the X window of the surface is
+ *	the wrapper of the toplevel, or the toplevel itself.
+ *
+ * Results:
+ *	The toplevel, or NULL if the surface shows none.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
  */
 
 static TkWindow *
@@ -170,10 +230,17 @@ SurfaceToplevel(
 /*
  *----------------------------------------------------------------------
  *
- * TkWlCmdsAppId, TkWlCmdsSurfaceMapped, TkWlCmdsSurfaceUnmapped --
+ * TkWlCmdsAppId --
  *
- *	Called by tkWaylandWm.c: the app_id set for the toplevel of a surface,
- *	and the settings applied when a surface gets or loses its role.
+ *	Called by tkWaylandWm.c to know the app_id set with
+ *	::tk::wayland::appid for the toplevel shown in a surface.
+ *
+ * Results:
+ *	The app_id, or NULL if none was set (the class of the toplevel is the
+ *	app_id then).
+ *
+ * Side effects:
+ *	None.
  *
  *----------------------------------------------------------------------
  */
@@ -187,6 +254,24 @@ TkWlCmdsAppId(
 
     return infoPtr ? infoPtr->appId : NULL;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * UpdateInhibitor --
+ *
+ *	Create or destroy the idle inhibitor of a toplevel, so that there is
+ *	one, on the current surface of the toplevel, exactly while idle
+ *	inhibition is asked for and the surface has a toplevel role.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	An idle inhibitor may be created or destroyed.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static void
 UpdateInhibitor(
@@ -210,7 +295,20 @@ UpdateInhibitor(
 }
 
 /*
- * Rounded corners are for windows without decorations.
+ *----------------------------------------------------------------------
+ *
+ * ApplyCorners --
+ *
+ *	Give the surface of a toplevel the radius of its corners: rounded
+ *	corners are for windows without decorations.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The surface is redrawn if its corners change.
+ *
+ *----------------------------------------------------------------------
  */
 
 static void
@@ -225,6 +323,25 @@ ApplyCorners(
 		surfPtr->squareCorners);
     }
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWlCmdsSurfaceMapped --
+ *
+ *	Called by tkWaylandWm.c when the surface of a toplevel gets its role,
+ *	and when it is first configured: apply what the commands set for the
+ *	toplevel.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The decorations, the corners and the idle inhibitor of the toplevel
+ *	are set.
+ *
+ *----------------------------------------------------------------------
+ */
 
 void
 TkWlCmdsSurfaceMapped(
@@ -243,6 +360,22 @@ TkWlCmdsSurfaceMapped(
     UpdateInhibitor(infoPtr);
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWlCmdsSurfaceUnmapped --
+ *
+ *	Called by tkWaylandWm.c when the surface of a toplevel loses its role.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The idle inhibitor of the surface, if any, is destroyed.
+ *
+ *----------------------------------------------------------------------
+ */
+
 void
 TkWlCmdsSurfaceUnmapped(
     TkWlSurface *surfPtr)
@@ -250,7 +383,8 @@ TkWlCmdsSurfaceUnmapped(
     TkWindow *winPtr = SurfaceToplevel(surfPtr);
     ToplevelInfo *infoPtr = winPtr ? GetInfo(winPtr, false) : NULL;
 
-    if (infoPtr && infoPtr->inhibitor && infoPtr->inhibitedSurface == surfPtr) {
+    if (infoPtr && infoPtr->inhibitor
+	    && infoPtr->inhibitedSurface == surfPtr) {
 	zwp_idle_inhibitor_v1_destroy(infoPtr->inhibitor);
 	infoPtr->inhibitor = NULL;
 	infoPtr->inhibitedSurface = NULL;
@@ -261,6 +395,23 @@ TkWlCmdsSurfaceUnmapped(
  *----------------------------------------------------------------------
  *
  * The commands --
+ *
+ *----------------------------------------------------------------------
+ */
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * GetToplevel --
+ *
+ *	Get the toplevel named by an argument of a command.
+ *
+ * Results:
+ *	The toplevel, or NULL with an error message in the interpreter if the
+ *	window does not exist or is not a toplevel.
+ *
+ * Side effects:
+ *	None.
  *
  *----------------------------------------------------------------------
  */
@@ -287,8 +438,21 @@ GetToplevel(
 }
 
 /*
- * The surface of a mapped toplevel, with a role which can be moved, resized
- * and given a window menu, or NULL with an error.
+ *----------------------------------------------------------------------
+ *
+ * MappedSurface --
+ *
+ *	Get the surface of a toplevel shown with a toplevel role, which can be
+ *	moved, resized and given a window menu.
+ *
+ * Results:
+ *	The surface, or NULL with an error message in the interpreter if the
+ *	toplevel is not shown.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
  */
 
 static TkWlSurface *
@@ -307,6 +471,24 @@ MappedSurface(
     }
     return surfPtr;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * AppIdCmd --
+ *
+ *	This function is invoked to process the "::tk::wayland::appid" Tcl
+ *	command. See the user documentation for details on what it does.
+ *
+ * Results:
+ *	A standard Tcl result.
+ *
+ * Side effects:
+ *	The app_id of the toplevel may be set, and given to the compositor if
+ *	the toplevel is shown.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static int
 AppIdCmd(
@@ -348,6 +530,24 @@ AppIdCmd(
     return TCL_OK;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * DecorationsCmd --
+ *
+ *	This function is invoked to process the "::tk::wayland::decorations"
+ *	Tcl command. See the user documentation for details on what it does.
+ *
+ * Results:
+ *	A standard Tcl result.
+ *
+ * Side effects:
+ *	The decorations of the toplevel may be shown or hidden, which also
+ *	changes whether its corners are rounded.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static int
 DecorationsCmd(
     TCL_UNUSED(void *),
@@ -387,6 +587,24 @@ DecorationsCmd(
     return TCL_OK;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * CornersCmd --
+ *
+ *	This function is invoked to process the "::tk::wayland::corners" Tcl
+ *	command. See the user documentation for details on what it does.
+ *
+ * Results:
+ *	A standard Tcl result.
+ *
+ * Side effects:
+ *	The radius of the corners of the toplevel may change, and the toplevel
+ *	be redrawn.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static int
 CornersCmd(
     TCL_UNUSED(void *),
@@ -425,6 +643,24 @@ CornersCmd(
     return TCL_OK;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * StartMoveCmd --
+ *
+ *	This function is invoked to process the "::tk::wayland::startmove" Tcl
+ *	command. See the user documentation for details on what it does.
+ *
+ * Results:
+ *	A standard Tcl result.
+ *
+ * Side effects:
+ *	The compositor lets the user move the toplevel, if the last input
+ *	event allows it.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static int
 StartMoveCmd(
     TCL_UNUSED(void *),
@@ -456,6 +692,24 @@ StartMoveCmd(
     wl_display_flush(tkWlDisplay->wlDisplay);
     return TCL_OK;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * StartResizeCmd --
+ *
+ *	This function is invoked to process the "::tk::wayland::startresize"
+ *	Tcl command. See the user documentation for details on what it does.
+ *
+ * Results:
+ *	A standard Tcl result.
+ *
+ * Side effects:
+ *	The compositor lets the user resize the toplevel from one of its edges,
+ *	if the last input event allows it.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static int
 StartResizeCmd(
@@ -508,6 +762,24 @@ StartResizeCmd(
     return TCL_OK;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * WindowMenuCmd --
+ *
+ *	This function is invoked to process the "::tk::wayland::windowmenu"
+ *	Tcl command. See the user documentation for details on what it does.
+ *
+ * Results:
+ *	A standard Tcl result.
+ *
+ * Side effects:
+ *	The compositor shows its menu for the toplevel, if the last input event
+ *	allows it.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static int
 WindowMenuCmd(
     TCL_UNUSED(void *),
@@ -547,6 +819,23 @@ WindowMenuCmd(
     return TCL_OK;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * InhibitIdleCmd --
+ *
+ *	This function is invoked to process the "::tk::wayland::inhibitidle"
+ *	Tcl command. See the user documentation for details on what it does.
+ *
+ * Results:
+ *	A standard Tcl result.
+ *
+ * Side effects:
+ *	An idle inhibitor may be created or destroyed for the toplevel.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static int
 InhibitIdleCmd(
     TCL_UNUSED(void *),
@@ -579,8 +868,21 @@ InhibitIdleCmd(
 }
 
 /*
- * ::tk::wayland::activationtoken: the token is made by the compositor, which
- * is waited for.
+ *----------------------------------------------------------------------
+ *
+ * TokenDone --
+ *
+ *	Called when the compositor has made the activation token asked for by
+ *	::tk::wayland::activationtoken.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The token is stored, as a Tcl object with a reference, where the
+ *	command waits for it.
+ *
+ *----------------------------------------------------------------------
  */
 
 static void
@@ -596,8 +898,28 @@ TokenDone(
 }
 
 static const struct xdg_activation_token_v1_listener tokenListener = {
-    .done = TokenDone
+    TokenDone
 };
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * ActivationTokenCmd --
+ *
+ *	This function is invoked to process the
+ *	"::tk::wayland::activationtoken" Tcl command. See the user
+ *	documentation for details on what it does. The token is made by the
+ *	compositor, which is waited for.
+ *
+ * Results:
+ *	A standard Tcl result: the token, or an empty string if the compositor
+ *	gave none.
+ *
+ * Side effects:
+ *	Waits for the compositor, processing the events of the connection.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static int
 ActivationTokenCmd(
@@ -641,6 +963,23 @@ ActivationTokenCmd(
     return TCL_OK;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * ScaleCmd --
+ *
+ *	This function is invoked to process the "::tk::wayland::scale" Tcl
+ *	command. See the user documentation for details on what it does.
+ *
+ * Results:
+ *	A standard Tcl result.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static int
 ScaleCmd(
     TCL_UNUSED(void *),
@@ -659,16 +998,23 @@ ScaleCmd(
 	return TCL_ERROR;
     }
     surfPtr = ToplevelSurface(winPtr);
-    Tcl_SetObjResult(interp, Tcl_NewDoubleObj(surfPtr ? surfPtr->scale : 1.0));
+    Tcl_SetObjResult(interp,
+	    Tcl_NewDoubleObj(surfPtr ? surfPtr->scale : 1.0));
     return TCL_OK;
 }
 
 /*
  *----------------------------------------------------------------------
  *
- * TkWlCmdsBind, TkWaylandCmdsInit --
+ * TkWlCmdsBind --
  *
- *	Bind the globals the commands need, and create the commands.
+ *	Called for the globals of the registry: bind those the commands need.
+ *
+ * Results:
+ *	True if the global was bound here, false otherwise.
+ *
+ * Side effects:
+ *	The idle inhibit manager may be bound.
  *
  *----------------------------------------------------------------------
  */
@@ -687,6 +1033,22 @@ TkWlCmdsBind(
     }
     return false;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWaylandCmdsInit --
+ *
+ *	Create the ::tk::wayland commands in an interpreter.
+ *
+ * Results:
+ *	A standard Tcl result.
+ *
+ * Side effects:
+ *	The namespace ::tk::wayland and its commands are created.
+ *
+ *----------------------------------------------------------------------
+ */
 
 int
 TkWaylandCmdsInit(
