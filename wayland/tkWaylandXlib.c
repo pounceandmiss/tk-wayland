@@ -358,6 +358,11 @@ XChangeProperty(
 	return BadMatch;
     }
 
+    if (nelements == 0 || data == NULL) {
+	/* memcpy() must not be given NULL, even for no data. */
+	nelements = 0;
+	data = (const unsigned char *)"";
+    }
     nitems = (mode == PropModeReplace) ? (unsigned long)nelements
 	    : propPtr->nitems + nelements;
     newData = (unsigned char *)Tcl_Alloc(nitems * itemSize + 1);

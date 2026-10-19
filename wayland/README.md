@@ -71,11 +71,34 @@ resolutions are handled with the buffer scale.
 - Input methods (`text-input-v3`), shown with the IME marked text virtual
   events used on Aqua.
 
+## Commands for Wayland
+
+What Wayland has that X11 has not is in the namespace `::tk::wayland`, as
+`::tk::mac` on Aqua (`tkWaylandCmds.c`):
+
+- `appid window ?id?`: the app_id of a toplevel, which compositors match
+  with the `.desktop` file of the application; by default its class.
+- `decorations window ?server|none?`: whether the compositor (or libdecor)
+  decorates the toplevel, or nothing does, for applications which draw their
+  own title bar.
+- `corners window ?radius?`: rounded corners for a toplevel without
+  decorations (square while it is maximized, fullscreen or tiled).
+- `startmove window`, `startresize window edge` (`n`, `se`, ...),
+  `windowmenu window ?x y?`: interactive move and resize, and the window
+  menu of the compositor, for such a title bar; called from a `ButtonPress`
+  binding.
+- `inhibitidle window ?boolean?`: keep the screen on while the toplevel is
+  visible (idle-inhibit-unstable-v1).
+- `activationtoken`: a token for a program started by the application, given
+  to it in `XDG_ACTIVATION_TOKEN`.
+- `scale window`: the scale of the surface of the toplevel.
+
+`demos/headerbar.tcl` is a window with a title bar written in Tcl.
+
 ## Not done yet
 
 - Drag and drop between applications.
-- Cursors made of bitmaps; cursor-shape-v1.
-- The system tray (StatusNotifierItem), window icons
-  (`xdg-toplevel-icon`), `wm attributes -alpha`.
+- cursor-shape-v1.
+- The system tray (StatusNotifierItem).
 - `send` and embedding between processes (they work within a process).
 - `tk inactive` (the idle time of the user).

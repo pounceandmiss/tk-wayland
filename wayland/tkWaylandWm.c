@@ -262,6 +262,22 @@ XIconifyWindow(
 	    SubstructureRedirectMask | SubstructureNotifyMask, &event);
 }
 
+static void
+ResizeSyncDone(
+    void *data,
+    struct wl_callback *callback,
+    TCL_UNUSED(uint32_t))
+{
+    TkWlSurface *surfPtr = (TkWlSurface *)data;
+
+    wl_callback_destroy(callback);
+    surfPtr->resizeSync = NULL;
+}
+
+static const struct wl_callback_listener resizeSyncListener = {
+    .done = ResizeSyncDone
+};
+
 /*
  *----------------------------------------------------------------------
  *
@@ -336,8 +352,14 @@ ApplyClass(
     TkWlSurface *surfPtr)
 {
     TkWlProperty *propPtr = TkWlGetProperty(surfPtr->winPtr, XA_WM_CLASS);
+    const char *explicitId = TkWlCmdsAppId(surfPtr);
 
-    if (propPtr && propPtr->format == 8) {
+    if (explicitId) {
+	char *appId = TruncatedString(explicitId, -1);
+
+	libdecor_frame_set_app_id(surfPtr->frame, appId);
+	Tcl_Free(appId);
+    } else if (propPtr && propPtr->format == 8) {
 	const char *name = (const char *)propPtr->data;
 	size_t nameLen = strlen(name);
 
@@ -584,6 +606,22 @@ SetNetWmState(
 	    XA_ATOM, 32, PropModeReplace, (unsigned char *)states, n);
 }
 
+static void
+MinimizeSyncDone(
+    void *data,
+    struct wl_callback *callback,
+    TCL_UNUSED(uint32_t))
+{
+    TkWlSurface *surfPtr = (TkWlSurface *)data;
+
+    wl_callback_destroy(callback);
+    surfPtr->minimizeSync = NULL;
+}
+
+static const struct wl_callback_listener minimizeSyncListener = {
+    .done = MinimizeSyncDone
+};
+
 /*
  * Minimize a toplevel. Compositors (Weston) do not expect toplevels to be
  * minimized before they are shown, so this waits for the first buffer.
@@ -606,6 +644,12 @@ Minimize(
 
     libdecor_frame_set_minimized(surfPtr->frame);
     surfPtr->iconic = true;
+    if (surfPtr->minimizeSync) {
+	wl_callback_destroy(surfPtr->minimizeSync);
+    }
+    surfPtr->minimizeSync = wl_display_sync(tkWlDisplay->wlDisplay);
+    wl_callback_add_listener(surfPtr->minimizeSync, &minimizeSyncListener,
+	    surfPtr);
     XUnmapWindow(surfPtr->winPtr->display, surfPtr->winPtr->id);
 }
 
@@ -616,6 +660,21 @@ TkWlWmSurfaceCommitted(
     if (surfPtr->minimizePending && surfPtr->frame) {
 	surfPtr->minimizePending = false;
 	Minimize(surfPtr);
+    }
+
+    /*
+     * The compositor has seen the size the application gave the window when
+     * it answers a sync request sent after the commit.
+     */
+
+    if (surfPtr->resized) {
+	surfPtr->resized = false;
+	if (surfPtr->resizeSync) {
+	    wl_callback_destroy(surfPtr->resizeSync);
+	}
+	surfPtr->resizeSync = wl_display_sync(tkWlDisplay->wlDisplay);
+	wl_callback_add_listener(surfPtr->resizeSync, &resizeSyncListener,
+		surfPtr);
     }
 }
 
@@ -688,6 +747,7 @@ MapToplevel(
     ApplySizeHints(surfPtr);
     ApplyTransient(surfPtr);
     ApplyNetWmState(surfPtr);
+    TkWlCmdsSurfaceMapped(surfPtr);
     libdecor_frame_map(surfPtr->frame);
     ApplyIcon(surfPtr);
 
@@ -796,6 +856,7 @@ TkWlWmSurfaceResized(
     state = libdecor_state_new(width, height);
     libdecor_frame_commit(surfPtr->frame, state, NULL);
     libdecor_state_free(state);
+    surfPtr->resized = true;
     ResizeWindow(surfPtr, width, height);
 }
 
@@ -1271,6 +1332,7 @@ DestroyRole(
 	surfPtr->xdgSurface = NULL;
     }
     surfPtr->popupParent = NULL;
+    TkWlCmdsSurfaceUnmapped(surfPtr);
     TkWlSurfaceSetFrame(surfPtr, NULL);
 }
 
@@ -1294,12 +1356,63 @@ FrameConfigure(
     struct libdecor_state *state;
     int width, height;
 
+    libdecor_configuration_get_window_state(configuration, &windowState);
     if (!libdecor_configuration_get_content_size(configuration, frame,
 	    &width, &height) || width <= 0 || height <= 0) {
+	width = height = 0;
+    }
+
+    /*
+     * A floating window keeps the size the application gave it, until the
+     * compositor has seen it: compositors give the size they know in every
+     * configure, and those sent before (when the window is activated, for
+     * instance) would undo the resize.
+     */
+
+    if ((surfPtr->resized || surfPtr->resizeSync)
+	    && !(windowState & (LIBDECOR_WINDOW_STATE_MAXIMIZED
+		| LIBDECOR_WINDOW_STATE_FULLSCREEN
+		| LIBDECOR_WINDOW_STATE_TILED_LEFT
+		| LIBDECOR_WINDOW_STATE_TILED_RIGHT
+		| LIBDECOR_WINDOW_STATE_TILED_TOP
+		| LIBDECOR_WINDOW_STATE_TILED_BOTTOM))) {
+	width = height = 0;
+    }
+    if (width == 0) {
 	width = winPtr->width;
 	height = winPtr->height;
+
+	/*
+	 * The compositor lets the window choose its size when it is no
+	 * longer maximized or fullscreen: it gets back the size it had, as
+	 * window managers of X11 do.
+	 */
+
+	if (!(windowState & (LIBDECOR_WINDOW_STATE_MAXIMIZED
+		| LIBDECOR_WINDOW_STATE_FULLSCREEN))
+		&& surfPtr->floatingWidth > 0) {
+	    width = surfPtr->floatingWidth;
+	    height = surfPtr->floatingHeight;
+	}
     }
-    libdecor_configuration_get_window_state(configuration, &windowState);
+    if (windowState & (LIBDECOR_WINDOW_STATE_MAXIMIZED
+	    | LIBDECOR_WINDOW_STATE_FULLSCREEN)) {
+	if (surfPtr->floatingWidth == 0) {
+	    surfPtr->floatingWidth = winPtr->width;
+	    surfPtr->floatingHeight = winPtr->height;
+	}
+    } else {
+	surfPtr->floatingWidth = surfPtr->floatingHeight = 0;
+    }
+
+    /*
+     * Whether the compositor decorates the window is set again when the
+     * decoration mode is known: libdecor ignores it before.
+     */
+
+    if (!surfPtr->configured) {
+	TkWlCmdsSurfaceMapped(surfPtr);
+    }
     ClampSize(surfPtr, &width, &height);
     state = libdecor_state_new(width, height);
     libdecor_frame_commit(frame, state, configuration);
@@ -1321,10 +1434,23 @@ FrameConfigure(
 	    libdecor_state_free(state);
 	}
     }
-    ResizeWindow(surfPtr, width, height);
+
+    /*
+     * The state is set before the size, so that it is known when the
+     * window gets its new size.
+     */
+
     SetNetWmState(surfPtr,
 	    (windowState & LIBDECOR_WINDOW_STATE_MAXIMIZED) != 0,
 	    (windowState & LIBDECOR_WINDOW_STATE_FULLSCREEN) != 0);
+    TkWlSurfaceSetCorners(surfPtr, surfPtr->cornerRadius,
+	    (windowState & (LIBDECOR_WINDOW_STATE_MAXIMIZED
+		| LIBDECOR_WINDOW_STATE_FULLSCREEN
+		| LIBDECOR_WINDOW_STATE_TILED_LEFT
+		| LIBDECOR_WINDOW_STATE_TILED_RIGHT
+		| LIBDECOR_WINDOW_STATE_TILED_TOP
+		| LIBDECOR_WINDOW_STATE_TILED_BOTTOM)) != 0);
+    ResizeWindow(surfPtr, width, height);
     TkWlSurfaceConfigured(surfPtr);
 }
 

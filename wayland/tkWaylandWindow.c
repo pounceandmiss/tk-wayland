@@ -747,6 +747,14 @@ DestroyWlSurface(
 	wl_callback_destroy(surfPtr->frameCallback);
 	surfPtr->frameCallback = NULL;
     }
+    if (surfPtr->resizeSync) {
+	wl_callback_destroy(surfPtr->resizeSync);
+	surfPtr->resizeSync = NULL;
+    }
+    if (surfPtr->minimizeSync) {
+	wl_callback_destroy(surfPtr->minimizeSync);
+	surfPtr->minimizeSync = NULL;
+    }
     if (surfPtr->fractional) {
 	wp_fractional_scale_v1_destroy(surfPtr->fractional);
 	surfPtr->fractional = NULL;
@@ -877,6 +885,9 @@ DestroySurface(
     DestroyWlSurface(surfPtr);
     if (surfPtr->backing) {
 	cairo_surface_destroy(surfPtr->backing);
+    }
+    if (surfPtr->cornerMask) {
+	pixman_image_unref(surfPtr->cornerMask);
     }
     pixman_region32_fini(&surfPtr->damage);
     surfPtr->winPtr->surface = NULL;
@@ -1074,6 +1085,126 @@ TkWlAddDamage(
 /*
  *----------------------------------------------------------------------
  *
+ * Rounded corners --
+ *
+ *	Windows without decorations can have rounded corners: their buffers
+ *	are translucent, with the corners copied from the backing image
+ *	through an antialiased mask. The corners still take input, where
+ *	users grab windows to resize them.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static double
+CornerRadius(
+    TkWlSurface *surfPtr)
+{
+    double radius = surfPtr->squareCorners ? 0.0 : surfPtr->cornerRadius;
+
+    /*
+     * The corners cannot be larger than half the window.
+     */
+
+    if (radius > surfPtr->width / 2.0) {
+	radius = surfPtr->width / 2.0;
+    }
+    if (radius > surfPtr->height / 2.0) {
+	radius = surfPtr->height / 2.0;
+    }
+    return (radius > 0.0) ? radius : 0.0;
+}
+
+/*
+ * Copy the corners of the backing image to the buffer through the mask: the
+ * corners are copied whole every time, so that the mask is applied to the
+ * backing image once whatever was damaged.
+ */
+
+static void
+RoundCorners(
+    TkWlSurface *surfPtr,
+    pixman_image_t *src,
+    pixman_image_t *dst,
+    double radius)
+{
+    double r = radius * surfPtr->scale;
+    int size = (int)ceil(r), i;
+    int width = surfPtr->bufferWidth, height = surfPtr->bufferHeight;
+
+    if (surfPtr->cornerMask == NULL || surfPtr->cornerMaskRadius != r
+	    || surfPtr->cornerMaskOpacity != surfPtr->opacity) {
+	cairo_surface_t *maskSurf;
+	cairo_t *cr;
+
+	if (surfPtr->cornerMask) {
+	    pixman_image_unref(surfPtr->cornerMask);
+	}
+	surfPtr->cornerMask = pixman_image_create_bits(PIXMAN_a8, 2 * size,
+		2 * size, NULL, 0);
+	maskSurf = cairo_image_surface_create_for_data(
+		(unsigned char *)pixman_image_get_data(surfPtr->cornerMask),
+		CAIRO_FORMAT_A8, 2 * size, 2 * size,
+		pixman_image_get_stride(surfPtr->cornerMask));
+	cr = cairo_create(maskSurf);
+	cairo_set_source_rgba(cr, 0, 0, 0, surfPtr->opacity);
+	cairo_new_sub_path(cr);
+	cairo_arc(cr, r, r, r, M_PI, 1.5 * M_PI);
+	cairo_arc(cr, 2 * size - r, r, r, 1.5 * M_PI, 2 * M_PI);
+	cairo_arc(cr, 2 * size - r, 2 * size - r, r, 0, 0.5 * M_PI);
+	cairo_arc(cr, r, 2 * size - r, r, 0.5 * M_PI, M_PI);
+	cairo_close_path(cr);
+	cairo_fill(cr);
+	cairo_destroy(cr);
+	cairo_surface_flush(maskSurf);
+	cairo_surface_destroy(maskSurf);
+	surfPtr->cornerMaskRadius = r;
+	surfPtr->cornerMaskOpacity = surfPtr->opacity;
+    }
+    for (i = 0; i < 4; i++) {
+	int right = i & 1, bottom = i >> 1;
+	int x = right ? width - size : 0, y = bottom ? height - size : 0;
+
+	pixman_image_composite32(PIXMAN_OP_SRC, src, surfPtr->cornerMask,
+		dst, x, y, right * size, bottom * size, x, y, size, size);
+    }
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWlSurfaceSetCorners --
+ *
+ *	Set the radius of the corners of a surface, and whether they are
+ *	square for now (when the window is maximized, for instance).
+ *
+ *----------------------------------------------------------------------
+ */
+
+void
+TkWlSurfaceSetCorners(
+    TkWlSurface *surfPtr,
+    double radius,
+    bool square)
+{
+    pixman_region32_t all;
+
+    if (radius < 0.0) {
+	radius = 0.0;
+    }
+    if (radius == surfPtr->cornerRadius && square == surfPtr->squareCorners) {
+	return;
+    }
+    surfPtr->cornerRadius = radius;
+    surfPtr->squareCorners = square;
+    pixman_region32_init_rect(&all, 0, 0, (unsigned)surfPtr->width,
+	    (unsigned)surfPtr->height);
+    TkWlAddDamage(surfPtr, &all);
+    pixman_region32_fini(&all);
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
  * Presentation --
  *
  *	The damaged parts of the backing image are copied to a free wl_shm
@@ -1187,8 +1318,9 @@ Present(
     int i, n, width, height;
     pixman_box32_t *boxes;
     pixman_image_t *src, *dst, *mask = NULL;
-    uint32_t format = (surfPtr->opacity < 1.0) ? WL_SHM_FORMAT_ARGB8888
-	    : WL_SHM_FORMAT_XRGB8888;
+    double radius = CornerRadius(surfPtr);
+    uint32_t format = (surfPtr->opacity < 1.0 || radius > 0.0)
+	    ? WL_SHM_FORMAT_ARGB8888 : WL_SHM_FORMAT_XRGB8888;
 
     TkWlProcessExposures(surfPtr);
     if (!surfPtr->configured || surfPtr->backing == NULL
@@ -1244,7 +1376,7 @@ Present(
     dst = pixman_image_create_bits((format == WL_SHM_FORMAT_ARGB8888)
 	    ? PIXMAN_a8r8g8b8 : PIXMAN_x8r8g8b8, width, height,
 	    (uint32_t *)bufPtr->data, bufPtr->stride);
-    if (format == WL_SHM_FORMAT_ARGB8888) {
+    if (surfPtr->opacity < 1.0) {
 	/*
 	 * A translucent window: the pixels are multiplied by its opacity.
 	 */
@@ -1261,6 +1393,9 @@ Present(
 	BufferBox(surfPtr, &boxes[i], &x, &y, &w, &h);
 	pixman_image_composite32(PIXMAN_OP_SRC, src, mask, dst, x, y, 0, 0,
 		x, y, w, h);
+    }
+    if (radius > 0.0) {
+	RoundCorners(surfPtr, src, dst, radius);
     }
     pixman_image_unref(src);
     pixman_image_unref(dst);

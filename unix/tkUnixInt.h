@@ -33,6 +33,9 @@ MODULE_SCOPE  int       Tktray_Init (Tcl_Interp* interp);
 MODULE_SCOPE  int       SysNotify_Init (Tcl_Interp* interp);
 MODULE_SCOPE  int       Cups_Init (Tcl_Interp* interp);
 MODULE_SCOPE  int       TkAtkAccessibility_Init (Tcl_Interp *interp) ;
+#ifdef TK_USE_WAYLAND
+MODULE_SCOPE  int       TkWaylandCmdsInit (Tcl_Interp *interp);
+#endif
 
 #endif /* _TKUNIXINT */
 

@@ -260,6 +260,17 @@ PointerLeave(
     TCL_UNUSED(uint32_t),
     TCL_UNUSED(struct wl_surface *))
 {
+    /*
+     * The pointer leaves with buttons pressed when the compositor takes it,
+     * to move or resize the window or for its window menu: the buttons are
+     * released then, since the client gets no release.
+     */
+
+    if (tkWlDisplay->buttonState && tkWlDisplay->pointerSurface) {
+	tkWlDisplay->buttonState = 0;
+	UpdatePointer(CurrentState());
+    }
+    tkWlDisplay->buttonState = 0;
     tkWlDisplay->pointerSurface = NULL;
     UpdatePointer(CurrentState());
 }
@@ -634,9 +645,10 @@ KeyboardEnter(
     if (surfPtr == NULL) {
 	return;
     }
-    if (surfPtr->iconic) {
+    if (surfPtr->iconic && surfPtr->minimizeSync == NULL) {
 	/*
-	 * The user deiconified the window.
+	 * The user deiconified the window (once the compositor has seen it
+	 * minimized: the keyboard can enter it before).
 	 */
 
 	XMapWindow(surfPtr->winPtr->display, surfPtr->winPtr->id);
@@ -932,7 +944,8 @@ RegistryGlobal(
 	tkWlDisplay->weston = true;
     }
     if (TkWlSelectionBind(registry, name, interface, version)
-	    || TkWlTextInputBind(registry, name, interface)) {
+	    || TkWlTextInputBind(registry, name, interface)
+	    || TkWlCmdsBind(registry, name, interface)) {
 	return;
     }
     if (!strcmp(interface, wl_compositor_interface.name)) {

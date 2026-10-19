@@ -46,6 +46,9 @@ TkpInit(
     Icu_Init(interp);
     Cups_Init(interp);
     TkAtkAccessibility_Init(interp);
+#ifdef TK_USE_WAYLAND
+    TkWaylandCmdsInit(interp);
+#endif
     return TCL_OK;
 }
 

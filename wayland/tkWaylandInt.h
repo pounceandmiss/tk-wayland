@@ -181,10 +181,32 @@ typedef struct TkWlSurface {
 				 * unmapped, but the surface keeps its role,
 				 * since Wayland has no iconic state. */
     double opacity;		/* From _NET_WM_WINDOW_OPACITY. */
+    double cornerRadius;	/* Radius of the rounded corners, in logical
+				 * pixels, or 0. */
+    bool squareCorners;		/* Maximized, fullscreen or tiled: the
+				 * corners are not rounded. */
+    pixman_image_t *cornerMask;	/* Rounded rectangle of twice the size of a
+				 * corner, with the opacity, whose corners are
+				 * those of the buffers. */
+    double cornerMaskRadius, cornerMaskOpacity;
+				/* What cornerMask was made for. */
     int roleType;		/* TKWL_ROLE_*: the type of the role the
 				 * wl_surface had, which cannot change. */
     bool rolePending;		/* The role is created at idle time. */
     bool minimizePending;	/* Minimize after the first commit. */
+    struct wl_callback *minimizeSync;
+				/* Until it is done, the keyboard may enter
+				 * the surface because of events from before
+				 * it was minimized. */
+    bool resized;		/* The application resized the window, and
+				 * has not committed the new size yet. */
+    struct wl_callback *resizeSync;
+				/* Until it is done, configures may have been
+				 * sent before the compositor saw the size
+				 * last committed by the application. */
+    int floatingWidth, floatingHeight;
+				/* Size before being maximized or made
+				 * fullscreen, restored after. */
     bool inConfigure;		/* The window is being resized by the
 				 * compositor. */
     bool committed;		/* A buffer was attached. */
@@ -351,6 +373,8 @@ MODULE_SCOPE TkWlProperty *TkWlGetProperty(TkWlWindow *winPtr, Atom name);
 MODULE_SCOPE void	TkWlFreeProperties(TkWlWindow *winPtr);
 MODULE_SCOPE TkWlSurface *TkWlGetSurface(Window w);
 MODULE_SCOPE void	TkWlUpdateScale(TkWlSurface *surfPtr);
+MODULE_SCOPE void	TkWlSurfaceSetCorners(TkWlSurface *surfPtr,
+			    double radius, bool square);
 MODULE_SCOPE void	TkWlSurfaceSetOpacity(TkWlSurface *surfPtr,
 			    double opacity);
 MODULE_SCOPE bool	TkWlIntegralScale(TkWlSurface *surfPtr);
@@ -396,5 +420,15 @@ MODULE_SCOPE void	TkWlWmPropertyChanged(TkWlSurface *surfPtr,
 MODULE_SCOPE bool	TkWlWmClientMessage(XEvent *eventPtr);
 MODULE_SCOPE void	TkWlWmActivate(TkWlSurface *surfPtr);
 MODULE_SCOPE void	TkWlWmSurfaceCommitted(TkWlSurface *surfPtr);
+
+/*
+ * The ::tk::wayland commands (tkWaylandCmds.c).
+ */
+
+MODULE_SCOPE bool	TkWlCmdsBind(struct wl_registry *registry,
+			    uint32_t name, const char *interface);
+MODULE_SCOPE const char *TkWlCmdsAppId(TkWlSurface *surfPtr);
+MODULE_SCOPE void	TkWlCmdsSurfaceMapped(TkWlSurface *surfPtr);
+MODULE_SCOPE void	TkWlCmdsSurfaceUnmapped(TkWlSurface *surfPtr);
 
 #endif /* _TKWAYLANDINT */

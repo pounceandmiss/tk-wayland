@@ -8,7 +8,8 @@
 #   (wl-clipboard), on a compositor which supports the protocols they use
 #   (such as sway). Enabled by setting the environment variable
 #   TK_WAYLAND_TEST_INPUT. The seat must have a keyboard, which headless
-#   compositors do not have: run "wtype -s 86400000" in the background.
+#   compositors do not have: keep "wtype -s 3600000" running in the
+#   background (in a loop; longer times overflow in wtype).
 # - swayPointer: swaymsg, to find windows on sway, and a virtual pointer
 #   (a program reading the commands "move X Y", "press N" and "release N",
 #   such as wayland/tools/vpointer.c), whose command is
@@ -38,6 +39,7 @@ testConstraint waylandInput [expr {[testConstraint wayland]
 	&& [llength [auto_execok wtype]] && [llength [auto_execok wl-paste]]}]
 testConstraint swayPointer [expr {[testConstraint waylandInput]
 	&& [info exists env(SWAYSOCK)] && [llength [auto_execok swaymsg]]
+	&& [llength [auto_execok grim]]
 	&& [info exists env(TK_WAYLAND_VPOINTER)]}]
 
 # Ensure a pristine initial window state
@@ -108,6 +110,23 @@ namespace eval ::tk::test::wayland {
 	    return {}
 	}
 	return [list [expr {$x + $wx}] [expr {$y + $wy}]]
+    }
+
+    # A field of the node of a window in the tree of sway, from its title:
+    # the fields of a node are between its "id" and the next one.
+    proc swayField {title field} {
+	set tree [exec swaymsg -t get_tree]
+	set i [string first "\"name\": \"$title\"" $tree]
+	if {$i < 0} {
+	    return {}
+	}
+	set end [string first "\"id\":" $tree $i]
+	set node [string range $tree [string last "\"id\":" $tree $i] \
+		[expr {$end < 0 ? "end" : $end}]]
+	if {![regexp "\"$field\": (\"\[^\"\]*\"|\\w+)" $node -> value]} {
+	    return {}
+	}
+	return [string trim $value \"]
     }
 
     # Send a command to the virtual pointer, which is started the first
@@ -1004,6 +1023,315 @@ test wayland-12.3 {a menu entry is invoked by a click} -constraints {
     destroy .t
     unset -nocomplain ::wlinvoked
 } -result 1
+test wayland-14.1 {::tk::wayland commands: bad arguments} -constraints {
+    wayland
+} -setup {
+    frame .f
+} -body {
+    set result {}
+    foreach command {
+	{appid} {appid .f} {appid .nonesuch} {appid . a b}
+	{decorations . bogus} {decorations}
+	{startmove} {startresize .} {startresize . q} {windowmenu . 1}
+	{windowmenu . a b} {inhibitidle . maybe} {activationtoken x}
+	{scale} {corners}
+    } {
+	catch {::tk::wayland::[lindex $command 0] {*}[lrange $command 1 end]} m
+	lappend result $m
+    }
+    join $result \n
+} -cleanup {
+    destroy .f
+} -result {wrong # args: should be "::tk::wayland::appid window ?id?"
+window ".f" isn't a top-level window
+bad window path name ".nonesuch"
+wrong # args: should be "::tk::wayland::appid window ?id?"
+bad mode "bogus": must be server or none
+wrong # args: should be "::tk::wayland::decorations window ?server|none?"
+wrong # args: should be "::tk::wayland::startmove window"
+wrong # args: should be "::tk::wayland::startresize window edge"
+bad edge "q": must be n, s, w, nw, sw, e, ne, or se
+wrong # args: should be "::tk::wayland::windowmenu window ?x y?"
+expected integer but got "a"
+expected boolean value but got "maybe"
+wrong # args: should be "::tk::wayland::activationtoken"
+wrong # args: should be "::tk::wayland::scale window"
+wrong # args: should be "::tk::wayland::corners window ?radius?"}
+test wayland-14.2 {move, resize and window menu of unshown toplevels} -constraints {
+    wayland
+} -setup {
+    toplevel .t
+    wm withdraw .t
+    toplevel .u
+} -body {
+    list [catch {::tk::wayland::startmove .t} m] $m \
+	[catch {::tk::wayland::startresize .u se} m] $m \
+	[catch {::tk::wayland::windowmenu .t} m] $m
+} -cleanup {
+    destroy .t .u
+} -result {1 {window ".t" is not shown as a toplevel} 1 {window ".u" is not shown as a toplevel} 1 {window ".t" is not shown as a toplevel}}
+test wayland-14.3 {move, resize and window menu without a button press} -constraints {
+    wayland
+} -setup {
+    toplevel .t
+    waitShown .t
+} -body {
+    # The compositor ignores them, without closing the connection.
+    ::tk::wayland::startmove .t
+    foreach edge {n s w nw sw e ne se} {
+	::tk::wayland::startresize .t $edge
+    }
+    ::tk::wayland::windowmenu .t
+    ::tk::wayland::windowmenu .t 10 10
+    update
+    after 100
+    stillConnected
+} -cleanup {
+    destroy .t
+} -result 1
+test wayland-14.4 {app_id: the class, or set} -constraints {
+    wayland
+} -setup {
+    toplevel .t -class Foo
+} -body {
+    set result [::tk::wayland::appid .t]
+    lappend result [::tk::wayland::appid .t org.example.Foo]
+    waitShown .t
+    lappend result [::tk::wayland::appid .t org.example.Bar]
+    lappend result [::tk::wayland::appid .t {}]
+    lappend result [::tk::wayland::appid .t [string repeat x 5000]]
+    lappend result [stillConnected]
+    destroy .t
+    toplevel .t
+    lappend result [::tk::wayland::appid .t]
+} -cleanup {
+    destroy .t
+} -match glob -result {Foo org.example.Foo org.example.Bar Foo xxx* 1 Toplevel}
+test wayland-14.5 {decorations set before and after the window is shown} -constraints {
+    wayland
+} -setup {
+    toplevel .t
+} -body {
+    set result [::tk::wayland::decorations .t]
+    lappend result [::tk::wayland::decorations .t none]
+    waitShown .t
+    foreach mode {server none none server} {
+	lappend result [::tk::wayland::decorations .t $mode]
+	update
+    }
+    wm withdraw .t
+    ::tk::wayland::decorations .t none
+    wm deiconify .t
+    waitShown .t
+    lappend result [::tk::wayland::decorations .t] [stillConnected]
+} -cleanup {
+    destroy .t
+} -result {server none server none none server none 1}
+test wayland-14.6 {idle inhibition follows the window} -constraints {
+    wayland
+} -setup {
+    toplevel .t
+} -body {
+    set result [::tk::wayland::inhibitidle .t]
+    lappend result [::tk::wayland::inhibitidle .t yes]
+    waitShown .t
+    wm withdraw .t
+    update
+    wm deiconify .t
+    waitShown .t
+    wm iconify .t
+    update
+    lappend result [::tk::wayland::inhibitidle .t 0] \
+	[::tk::wayland::inhibitidle .t 1]
+    destroy .t
+    lappend result [stillConnected]
+} -cleanup {
+    destroy .t
+} -result {0 1 0 1 1}
+test wayland-14.7 {activation token and scale} -constraints {
+    wayland
+} -setup {
+    toplevel .t
+    waitShown .t
+} -body {
+    # The compositor may give no token.
+    set token [::tk::wayland::activationtoken]
+    list [string is print $token] [expr {[::tk::wayland::scale .t] > 0}] \
+	[stillConnected]
+} -cleanup {
+    destroy .t
+} -result {1 1 1}
+test wayland-14.8 {app_id, decorations and idle inhibition in sway} -constraints {
+    swayPointer
+} -setup {
+    toplevel .t
+    wm title .t wlcmds
+    ::tk::wayland::appid .t org.example.Cmds
+    ::tk::wayland::decorations .t none
+    ::tk::wayland::inhibitidle .t 1
+    waitShown .t
+} -body {
+    waitFor {[swayField wlcmds border] ni {"" normal}}
+    set result [list [swayField wlcmds app_id] \
+	[expr {[swayField wlcmds border] in {none csd}}] \
+	[swayField wlcmds inhibit_idle]]
+    ::tk::wayland::decorations .t server
+    ::tk::wayland::inhibitidle .t 0
+    ::tk::wayland::appid .t org.example.Other
+    waitFor {[swayField wlcmds border] eq "normal"}
+    lappend result [swayField wlcmds app_id] [swayField wlcmds border] \
+	[swayField wlcmds inhibit_idle]
+} -cleanup {
+    destroy .t
+} -result {org.example.Cmds 1 true org.example.Other normal false}
+test wayland-14.9 {move a window by dragging it} -constraints {
+    swayPointer
+} -setup {
+    toplevel .t
+    wm title .t wlmove
+    ::tk::wayland::decorations .t none
+    frame .t.f -width 200 -height 100
+    button .t.b -text Click -command {incr ::wlclicked}
+    pack .t.f .t.b
+    bind .t.f <ButtonPress-1> {::tk::wayland::startmove .t}
+    set ::wlclicked 0
+    waitShown .t
+
+    # Sway removes its title bar after the window is shown.
+    waitFor {[swayField wlmove border] ni {"" normal}}
+    after 100
+    update
+} -body {
+    lassign [swayRect wlmove] x0 y0
+    pointer "move [expr {$x0 + 20}] [expr {$y0 + 20}]"
+    pointer "press 1"
+    after 100
+    pointer "move [expr {$x0 + 80}] [expr {$y0 + 50}]"
+    pointer "move [expr {$x0 + 120}] [expr {$y0 + 70}]"
+    pointer "release 1"
+    waitFor {[swayRect wlmove] ne [list $x0 $y0]}
+    lassign [swayRect wlmove] x1 y1
+
+    # The application has not missed the release of the button: a click
+    # works after the move.
+    swayClick .t.b 5 5
+    waitFor {$::wlclicked}
+    list [expr {$x1 - $x0}] [expr {$y1 - $y0}] $::wlclicked
+} -cleanup {
+    destroy .t
+    unset -nocomplain ::wlclicked
+} -result {100 50 1}
+test wayland-14.10 {resize a window by dragging its corner} -constraints {
+    swayPointer
+} -setup {
+    toplevel .t -width 200 -height 150
+    wm title .t wlresize
+    ::tk::wayland::decorations .t none
+    bind .t <ButtonPress-1> {::tk::wayland::startresize .t se}
+    waitShown .t
+
+    # Sway removes its title bar after the window is shown.
+    waitFor {[swayField wlresize border] ni {"" normal}}
+    after 100
+    update
+} -body {
+    lassign [swayRect wlresize] x0 y0
+    set w0 [winfo width .t]
+    set h0 [winfo height .t]
+    pointer "move [expr {$x0 + $w0 - 2}] [expr {$y0 + $h0 - 2}]"
+    pointer "press 1"
+    after 100
+    pointer "move [expr {$x0 + $w0 + 40}] [expr {$y0 + $h0 + 30}]"
+    pointer "move [expr {$x0 + $w0 + 60}] [expr {$y0 + $h0 + 40}]"
+    pointer "release 1"
+    waitFor {[winfo width .t] != $w0}
+
+    # The size changes by how much the pointer moved, give or take where
+    # the compositor measures from.
+    list [expr {abs([winfo width .t] - $w0 - 62) <= 3}] \
+	[expr {abs([winfo height .t] - $h0 - 42) <= 3}]
+} -cleanup {
+    destroy .t
+} -result {1 1}
+test wayland-14.11 {rounded corners: values, and with other settings} -constraints {
+    wayland
+} -setup {
+    toplevel .t -width 100 -height 60
+} -body {
+    set result [::tk::wayland::corners .t]
+    lappend result [::tk::wayland::corners .t 10]
+    lappend result [catch {::tk::wayland::corners .t -1} m] $m
+    lappend result [catch {::tk::wayland::corners .t big} m]
+    ::tk::wayland::decorations .t none
+    waitShown .t
+
+    # Larger than the window, translucent, resized, decorated again.
+    foreach radius {0 4 200 12} {
+	::tk::wayland::corners .t $radius
+	update
+    }
+    wm attributes .t -alpha 0.5
+    update
+    foreach size {300x200 10x10 1x1 150x90} {
+	wm geometry .t $size
+	update
+    }
+    wm attributes .t -alpha 1.0
+    ::tk::wayland::decorations .t server
+    update
+    ::tk::wayland::decorations .t none
+    wm attributes .t -fullscreen 1
+    update
+    wm attributes .t -fullscreen 0
+    update
+    lappend result [::tk::wayland::corners .t] [stillConnected]
+} -cleanup {
+    destroy .t
+} -result {0 10 1 {bad radius "-1": must be a non-negative distance} 1 12 1}
+test wayland-14.12 {rounded corners are transparent} -constraints {
+    swayPointer
+} -setup {
+    # The main window could be over the window.
+    wm withdraw .
+    toplevel .t -width 200 -height 120 -background red
+    wm title .t wlcorners
+    ::tk::wayland::decorations .t none
+    waitShown .t
+    waitFor {[swayField wlcorners border] ni {"" normal}}
+    after 100
+    update
+
+    # The color of a pixel of the screen.
+    proc pixel {x y} {
+	set f [open "|grim -g \"$x,$y 1x1\" -t ppm -" rb]
+	set data [read $f]
+	close $f
+	binary scan [string range $data end-2 end] cu3 rgb
+	return $rgb
+    }
+} -body {
+    lassign [swayRect wlcorners] x y
+    waitFor {[pixel [expr {$x + 100}] [expr {$y + 60}]] eq {255 0 0}}
+    set result [list [pixel $x $y] [pixel [expr {$x + 100}] [expr {$y + 60}]]]
+    ::tk::wayland::corners .t 16
+    update
+    after 200
+    update
+    lappend result [pixel $x $y] [pixel [expr {$x + 199}] [expr {$y + 119}]] \
+	[pixel [expr {$x + 100}] [expr {$y + 1}]]
+
+    # Square again when the window has decorations.
+    ::tk::wayland::decorations .t server
+    waitFor {[swayField wlcorners border] eq "normal"}
+    after 200
+    update
+    lassign [swayRect wlcorners] x y
+    lappend result [pixel $x $y]
+} -cleanup {
+    destroy .t
+    rename pixel {}
+    wm deiconify .
+} -result {{255 0 0} {255 0 0} {0 0 0} {0 0 0} {255 0 0} {255 0 0}}
 }
 
 #

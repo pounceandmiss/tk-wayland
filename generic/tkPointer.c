@@ -587,11 +587,24 @@ XDefineCursor(
     TCL_UNUSED(Cursor)) /* cursor */
 {
     TkWindow *winPtr = (TkWindow *) Tk_IdToWindow(display, w);
+    TkWindow *cursorWinPtr;
     ThreadSpecificData *tsdPtr = (ThreadSpecificData *)
 	    Tcl_GetThreadData(&dataKey, sizeof(ThreadSpecificData));
 
-    if (tsdPtr->cursorWinPtr == winPtr) {
-	UpdateCursor(winPtr);
+    /*
+     * The window under the pointer inherits the cursor of those of its
+     * ancestors in its toplevel which have none.
+     */
+
+    for (cursorWinPtr = tsdPtr->cursorWinPtr; cursorWinPtr != NULL;
+	    cursorWinPtr = cursorWinPtr->parentPtr) {
+	if (cursorWinPtr == winPtr) {
+	    UpdateCursor(tsdPtr->cursorWinPtr);
+	    break;
+	}
+	if (cursorWinPtr->flags & TK_TOP_HIERARCHY) {
+	    break;
+	}
     }
     LastKnownRequestProcessed(display)++;
     return Success;
