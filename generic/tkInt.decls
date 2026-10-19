@@ -616,6 +616,12 @@ declare 189 {
     int TkFontEmojiContinuation(int ch, int inEmoji)
 }
 
+# Touches, given by the ports to the gesture recognizer (tkTouch.c)
+declare 190 {
+    void TkTouchEvent(int type, Tk_Window tkwin, int id, double x, double y,
+	    unsigned long time, unsigned int modState)
+}
+
 
 ##############################################################################
 

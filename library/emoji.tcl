@@ -1181,6 +1181,7 @@ proc ::tk::emoji::Build {} {
     bind $c <ButtonPress-1> [namespace code {Click %x %y 0}]
     bind $c <Shift-ButtonPress-1> [namespace code {Click %x %y 1}]
     bind $c <MouseWheel> [namespace code {Wheel %D}]
+    bind $c <TouchpadScroll> {tk::TouchpadScrollUnits %W %D %# y}
     bind $c <Button-4> [namespace code {Wheel 1}]
     bind $c <Button-5> [namespace code {Wheel -1}]
     bind $c <Key-Left> [namespace code {Move left}]

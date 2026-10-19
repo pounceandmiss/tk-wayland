@@ -1,0 +1,649 @@
+# This file is a Tcl script to test the gesture recognizer of touchscreens
+# (tkTouch.c) and the "tk touch" command. The touches are given with the
+# testtouch command.
+#
+# Copyright © 2026 The Tk developers.
+#
+# See the file "license.terms" for information on usage and redistribution
+# of this file, and for a DISCLAIMER OF ALL WARRANTIES.
+
+package require tcltest 2.2
+namespace import ::tcltest::*
+tcltest::configure {*}$argv
+tcltest::loadTestedCommands
+
+# Clicks are made with Tk_UpdatePointer, which the X11 port does not use.
+testConstraint touchClicks [expr {[tk windowingsystem] ni {x11}}]
+testConstraint testtouch [llength [info commands testtouch]]
+
+# The root coordinates of a point of a window.
+proc rootPoint {w x y} {
+    list [expr {[winfo rootx $w] + $x}] [expr {[winfo rooty $w] + $y}]
+}
+
+# A drag of a finger from a point of a window, by dx and dy, in steps of 10
+# ms; the finger is lifted after a pause, so that it does not fling, unless
+# fling is true.
+proc drag {w x y dx dy {fling 0}} {
+    lassign [rootPoint $w $x $y] rx ry
+    set t [clock milliseconds]
+    testtouch begin 1 $rx $ry $t
+    for {set i 1} {$i <= 10} {incr i} {
+	testtouch move 1 [expr {$rx + $dx * $i / 10.0}] \
+		[expr {$ry + $dy * $i / 10.0}] [incr t 10]
+    }
+    if {!$fling} {
+	incr t 200
+    }
+    testtouch end 1 0 0 $t
+    update
+}
+
+# A tap, or a long press.
+proc tap {w x y {hold 0}} {
+    lassign [rootPoint $w $x $y] rx ry
+    testtouch begin 1 $rx $ry
+    if {$hold} {
+	after $hold {set ::held 1}
+	vwait ::held
+    }
+    testtouch end 1 0 0
+    update
+}
+
+proc fillText {w} {
+    for {set i 1} {$i <= 200} {incr i} {
+	$w insert end "line $i\n"
+    }
+}
+
+test touch-1.1 {tk touch mode: default} -body {
+    tk touch mode .
+} -result auto
+test touch-1.2 {tk touch mode: set} -setup {
+    frame .f
+} -body {
+    list [tk touch mode .f scroll] [tk touch mode .f] \
+	[tk touch mode .f mouse] [tk touch mode .f auto] [tk touch mode .f]
+} -cleanup {
+    destroy .f
+} -result {scroll scroll mouse auto auto}
+test touch-1.3 {tk touch mode: bad mode} -body {
+    tk touch mode . sideways
+} -returnCodes error -result {bad mode "sideways": must be auto, scroll, mouse, or raw}
+test touch-1.4 {tk touch mode: bad window} -body {
+    tk touch mode .nowindow
+} -returnCodes error -result {bad window path name ".nowindow"}
+test touch-1.5 {tk touch: bad option} -body {
+    tk touch size .
+} -returnCodes error -result {bad option "size": must be mode}
+test touch-1.6 {tk touch mode: forgotten when the window is destroyed} -body {
+    frame .f
+    tk touch mode .f mouse
+    destroy .f
+    frame .f
+    tk touch mode .f
+} -cleanup {
+    destroy .f
+} -result auto
+
+test touch-2.1 {dragging scrolls a text} -constraints testtouch -setup {
+    text .t -height 10
+    pack .t
+    fillText .t
+    update
+} -body {
+    drag .t 50 100 0 -60
+    expr {[lindex [.t yview] 0] > 0}
+} -cleanup {
+    destroy .t
+} -result 1
+test touch-2.2 {dragging down at the top does not scroll} -constraints {
+    testtouch
+} -setup {
+    text .t -height 10
+    pack .t
+    fillText .t
+    update
+} -body {
+    drag .t 50 50 0 60
+    lindex [.t yview] 0
+} -cleanup {
+    destroy .t
+} -result 0.0
+test touch-2.3 {dragging a label in a text scrolls the text} -constraints {
+    testtouch
+} -setup {
+    text .t -height 10
+    pack .t
+    fillText .t
+    label .t.l -text label
+    .t window create 2.0 -window .t.l
+    update
+} -body {
+    drag .t.l 5 5 0 -60
+    expr {[lindex [.t yview] 0] > 0}
+} -cleanup {
+    destroy .t
+} -result 1
+test touch-2.4 {a fling goes on after the finger is lifted} -constraints {
+    testtouch
+} -setup {
+    text .t -height 10
+    pack .t
+    fillText .t
+    update
+} -body {
+    drag .t 50 150 0 -100 1
+    set before [lindex [.t yview] 0]
+    after 300 {set ::flung 1}
+    vwait ::flung
+    expr {[lindex [.t yview] 0] > $before}
+} -cleanup {
+    destroy .t
+} -result 1
+test touch-2.5 {touching stops a fling} -constraints testtouch -setup {
+    text .t -height 10
+    pack .t
+    fillText .t
+    update
+} -body {
+    drag .t 50 150 0 -100 1
+    lassign [rootPoint .t 50 50] x y
+    testtouch begin 1 $x $y
+    update
+    set before [lindex [.t yview] 0]
+    after 100 {set ::flung 1}
+    vwait ::flung
+    testtouch cancel 1 0 0
+    expr {[lindex [.t yview] 0] == $before}
+} -cleanup {
+    destroy .t
+} -result 1
+test touch-2.6 {mouse mode: dragging a text selects} -constraints {
+    testtouch touchClicks
+} -setup {
+    text .t -height 10
+    pack .t
+    fillText .t
+    update
+    tk touch mode .t mouse
+} -body {
+    drag .t 5 5 80 0
+    list [lindex [.t yview] 0] [expr {[.t tag ranges sel] ne ""}]
+} -cleanup {
+    destroy .t
+} -result {0.0 1}
+
+test touch-2.7 {dragging scrolls a listbox by its lines} -constraints {
+    testtouch
+} -setup {
+    listbox .l -height 10
+    for {set i 0} {$i < 100} {incr i} {
+	.l insert end "item $i"
+    }
+    pack .l
+    update
+} -body {
+    set h [expr {[lindex [.l bbox 1] 1] - [lindex [.l bbox 0] 1]}]
+    drag .l 20 [expr {8 * $h}] 0 [expr {-5 * $h - 2}]
+    .l nearest 0
+} -cleanup {
+    destroy .l
+} -result 5
+test touch-2.8 {dragging scrolls a treeview by its rows} -constraints {
+    testtouch
+} -setup {
+    ttk::treeview .tv -show tree -height 10
+    for {set i 0} {$i < 100} {incr i} {
+	.tv insert {} end -id i$i -text "item $i"
+    }
+    pack .tv
+    update
+} -body {
+    set h [lindex [.tv bbox i0] 3]
+    drag .tv 20 [expr {8 * $h}] 0 [expr {-5 * $h - 2}]
+    .tv identify item 5 2
+} -cleanup {
+    destroy .tv
+} -result i5
+
+test touch-2.9 {the pointer leaves when dragging scrolls} -constraints {
+    testtouch touchClicks
+} -setup {
+    set ::events {}
+    frame .f -width 100 -height 30
+    text .t -height 10
+    pack .f .t
+    fillText .t
+    bind .f <Enter> {lappend ::events "enter %W"}
+    bind .f <Leave> {lappend ::events "leave %W"}
+    bind .t <Enter> {lappend ::events "enter %W"}
+    update
+} -body {
+    tap .f 5 5
+    drag .t 50 100 0 -60
+    set ::events
+} -cleanup {
+    destroy .f .t
+} -result {{enter .f} {leave .f}}
+test touch-2.10 {tk::ScrollByPixels follows the finger} -setup {
+    canvas .c -width 200 -height 100 -highlightthickness 0 -borderwidth 0 \
+	-scrollregion {0 0 1000 2000} -xscrollincrement 1 -yscrollincrement 1
+    pack .c
+    update
+} -body {
+    tk::ScrollByPixels .c -30 -50
+    list [.c canvasx 0] [.c canvasy 0]
+} -cleanup {
+    destroy .c
+} -result {30.0 50.0}
+
+test touch-3.1 {a tap clicks} -constraints {testtouch touchClicks} -setup {
+    listbox .l
+    .l insert end a b c d
+    pack .l
+    update
+} -body {
+    lassign [.l bbox 2] x y
+    tap .l [expr {$x + 2}] [expr {$y + 2}]
+    .l curselection
+} -cleanup {
+    destroy .l
+} -result 2
+test touch-3.2 {a tap on a button invokes it} -constraints {
+    testtouch touchClicks
+} -setup {
+    set ::invoked 0
+    button .b -text button -command {incr ::invoked}
+    pack .b
+    update
+} -body {
+    tap .b 5 5
+    set ::invoked
+} -cleanup {
+    destroy .b
+} -result 1
+test touch-3.3 {a tap on a scrolling widget is delivered when lifted} -constraints {
+    testtouch touchClicks
+} -setup {
+    set ::clicks {}
+    text .t -height 10
+    pack .t
+    bind .t <ButtonPress-1> {lappend ::clicks press}
+    bind .t <ButtonRelease-1> {lappend ::clicks release}
+    update
+} -body {
+    lassign [rootPoint .t 20 20] x y
+    testtouch begin 1 $x $y
+    update
+    set before $::clicks
+    testtouch end 1 0 0
+    update
+    list $before $::clicks
+} -cleanup {
+    destroy .t
+} -result {{} {press release}}
+test touch-3.4 {a long press is a click of the third button} -constraints {
+    testtouch touchClicks
+} -setup {
+    set ::clicks {}
+    text .t -height 10
+    pack .t
+    bind .t <ButtonPress> {lappend ::clicks %b}
+    update
+} -body {
+    tap .t 20 20 700
+    set ::clicks
+} -cleanup {
+    destroy .t
+} -result 3
+test touch-3.5 {a long press, then a drag, drags the first button} -constraints {
+    testtouch touchClicks
+} -setup {
+    text .t -height 10
+    pack .t
+    fillText .t
+    update
+} -body {
+    lassign [rootPoint .t 5 5] x y
+    testtouch begin 1 $x $y
+    after 700 {set ::held 1}
+    vwait ::held
+    testtouch move 1 [expr {$x + 80}] $y
+    testtouch end 1 0 0
+    update
+    list [lindex [.t yview] 0] [expr {[.t tag ranges sel] ne ""}]
+} -cleanup {
+    destroy .t
+} -result {0.0 1}
+
+test touch-4.1 {pinching} -constraints testtouch -setup {
+    set ::pinch {}
+    canvas .c -width 200 -height 200
+    pack .c
+    bind .c <<Pinch>> {lappend ::pinch [format %%.2f %d] %x %y}
+    update
+} -body {
+    lassign [rootPoint .c 80 100] x1 y
+    lassign [rootPoint .c 120 100] x2 y
+    testtouch begin 1 $x1 $y
+    testtouch begin 2 $x2 $y
+    testtouch move 2 [expr {$x2 + 40}] $y
+    testtouch end 2 0 0
+    testtouch end 1 0 0
+    update
+    set ::pinch
+} -cleanup {
+    destroy .c
+} -result {2.00 120 100}
+
+test touch-4.2 {pinching a window in the mouse mode} -constraints {
+    testtouch touchClicks
+} -setup {
+    set ::events {}
+    canvas .c -width 200 -height 200
+    pack .c
+    tk touch mode .c mouse
+    bind .c <ButtonPress-1> {lappend ::events press}
+    bind .c <ButtonRelease-1> {lappend ::events release}
+    bind .c <<Pinch>> {lappend ::events [format %%.2f %d]}
+    update
+} -body {
+    lassign [rootPoint .c 80 100] x1 y
+    lassign [rootPoint .c 120 100] x2 y
+    testtouch begin 1 $x1 $y
+    testtouch begin 2 $x2 $y
+    testtouch move 2 [expr {$x2 + 40}] $y
+    testtouch end 2 0 0
+    testtouch end 1 0 0
+    update
+    set ::events
+} -cleanup {
+    destroy .c
+} -result {press release 2.00}
+
+# Raw touches.
+
+proc rawSetup {} {
+    set ::events {}
+    canvas .c -width 200 -height 200
+    canvas .d -width 200 -height 100
+    pack .c .d
+    tk touch mode .c raw
+    foreach w {.c .d} {
+	foreach e {TouchBegin TouchMove TouchEnd TouchCancel} {
+	    bind $w <<$e>> [list lappend ::events "%W $e %d %x %y"]
+	}
+	bind $w <ButtonPress> {lappend ::events "%W press %b"}
+	bind $w <ButtonRelease> {lappend ::events "%W release %b"}
+    }
+    update
+}
+
+test touch-6.1 {raw mode: the events of two fingers} -constraints {
+    testtouch
+} -setup rawSetup -body {
+    lassign [rootPoint .c 10 20] x y
+    testtouch begin 3 $x $y
+    testtouch begin 7 [expr {$x + 50}] $y
+    testtouch move 3 [expr {$x + 5}] [expr {$y + 5}]
+    testtouch end 7 0 0
+    testtouch move 3 [expr {$x + 6}] [expr {$y + 6}]
+    testtouch end 3 0 0
+    update
+    join $::events \n
+} -cleanup {
+    destroy .c .d
+} -result {.c TouchBegin 3 10 20
+.c TouchBegin 7 60 20
+.c TouchMove 3 15 25
+.c TouchEnd 7 60 20
+.c TouchMove 3 16 26
+.c TouchEnd 3 16 26}
+test touch-6.2 {raw mode: the events go to the window first touched} -constraints {
+    testtouch
+} -setup rawSetup -body {
+    lassign [rootPoint .c 10 190] x y
+    testtouch begin 1 $x $y
+    testtouch move 1 $x [expr {$y + 50}]
+    testtouch end 1 0 0
+    update
+    lmap e $::events {lrange $e 0 1}
+} -cleanup {
+    destroy .c .d
+} -result {{.c TouchBegin} {.c TouchMove} {.c TouchEnd}}
+test touch-6.3 {raw mode: from an ancestor} -constraints testtouch -setup {
+    rawSetup
+    frame .c.f -width 50 -height 50 -background red
+    place .c.f -x 0 -y 0
+    bind .c.f <<TouchBegin>> {lappend ::events "%W TouchBegin %d"}
+    update
+} -body {
+    lassign [rootPoint .c.f 5 5] x y
+    testtouch begin 1 $x $y
+    testtouch cancel 1 0 0
+    update
+    lmap e $::events {lrange $e 0 2}
+} -cleanup {
+    destroy .c .d
+} -result {{.c.f TouchBegin 1}}
+test touch-6.4 {raw mode: other windows still have gestures} -constraints {
+    testtouch touchClicks
+} -setup rawSetup -body {
+    lassign [rootPoint .c 10 20] x y
+    lassign [rootPoint .d 10 20] x2 y2
+    testtouch begin 1 $x $y
+    testtouch begin 2 $x2 $y2
+    testtouch end 2 0 0
+    testtouch end 1 0 0
+    update
+    lmap e $::events {lrange $e 0 2}
+} -cleanup {
+    destroy .c .d
+} -result {{.c TouchBegin 1} {.d press 1} {.d release 1} {.c TouchEnd 1}}
+test touch-6.5 {raw mode: the window is destroyed during a touch} -constraints {
+    testtouch
+} -setup rawSetup -body {
+    lassign [rootPoint .c 10 20] x y
+    testtouch begin 1 $x $y
+    update
+    destroy .c
+    testtouch move 1 [expr {$x + 1}] $y
+    testtouch end 1 0 0
+    update
+    lmap e $::events {lrange $e 0 2}
+} -cleanup {
+    destroy .c .d
+} -result {{.c TouchBegin 1}}
+test touch-6.6 {raw mode: cancel} -constraints testtouch -setup rawSetup -body {
+    lassign [rootPoint .c 10 20] x y
+    testtouch begin 1 $x $y
+    testtouch cancel 1 0 0
+    update
+    lmap e $::events {lrange $e 0 2}
+} -cleanup {
+    destroy .c .d
+} -result {{.c TouchBegin 1} {.c TouchCancel 1}}
+
+# The adaptations of touch.tcl, last, since they change the styles and the
+# bindings of the application.
+
+proc toolbarActions {} {
+    if {![winfo ismapped .__tk_editToolbar]} {
+	return {}
+    }
+    lmap b [pack slaves .__tk_editToolbar] {winfo name $b}
+}
+proc handlesShown {} {
+    list [winfo ismapped .__tk_selection_start] \
+	[winfo ismapped .__tk_selection_end]
+}
+proc hideSelection {} {
+    ::tk::touch::HideSelection
+    update
+}
+# The point of a handle, in root coordinates.
+proc handleTip {w which} {
+    lrange [lindex [::tk::touch::Ends $w] [expr {$which eq "end"}]] 0 1
+}
+
+test touch-5.1 {touch adaptation: larger targets} -body {
+    ::tk::touch::Adapt
+    button .b
+    list [ttk::style configure TButton -padding] [.b cget -pady] \
+	[expr {[ttk::style configure Treeview -rowheight]
+	       > [font metrics TkDefaultFont -linespace]}]
+} -cleanup {
+    destroy .b
+} -result {{9p 6p} 6p 1}
+test touch-5.2 {touch adaptation: kept when the theme changes} -setup {
+    set theme [ttk::style theme use]
+} -body {
+    ttk::setTheme clam
+    update
+    ttk::style configure TButton -padding
+} -cleanup {
+    ttk::setTheme $theme
+    update
+} -result {9p 6p}
+test touch-5.3 {long press: selects the word, with handles and toolbar} -setup {
+    clipboard clear
+    clipboard append something
+    entry .e
+    .e insert end "hello touch world"
+    pack .e
+    update
+} -body {
+    ::tk::touch::LongPress .e [lindex [.e bbox 8] 0] 5
+    update
+    list [.e get] [.e index sel.first] [.e index sel.last] [handlesShown] \
+	[toolbarActions]
+} -cleanup {
+    hideSelection
+    destroy .e
+} -result {{hello touch world} 6 11 {1 1} {cut copy paste selectall}}
+test touch-5.4 {long press: keeps the selection the point is in} -setup {
+    entry .e
+    .e insert end "hello touch world"
+    .e selection range 0 11
+    pack .e
+    update
+} -body {
+    ::tk::touch::LongPress .e [lindex [.e bbox 2] 0] 5
+    list [.e index sel.first] [.e index sel.last]
+} -cleanup {
+    hideSelection
+    destroy .e
+} -result {0 11}
+test touch-5.5 {long press: a disabled text can only be copied} -setup {
+    text .t
+    .t insert end "hello touch world"
+    .t configure -state disabled
+    pack .t
+    update
+} -body {
+    lassign [.t bbox 1.8] x y
+    ::tk::touch::LongPress .t $x $y
+    update
+    list [.t get sel.first sel.last] [toolbarActions]
+} -cleanup {
+    hideSelection
+    destroy .t
+} -result {touch {copy selectall}}
+test touch-5.6 {long press: copy, then paste where there is no word} -setup {
+    entry .e
+    .e insert end "hello touch world"
+    entry .e2
+    pack .e .e2
+    update
+} -body {
+    ::tk::touch::LongPress .e [lindex [.e bbox 8] 0] 5
+    ::tk::touch::Action copy
+    update
+    set after [list [.e selection present] [toolbarActions]]
+    ::tk::touch::LongPress .e2 2 5
+    update
+    set actions [toolbarActions]
+    ::tk::touch::Action paste
+    update
+    list $after $actions [.e2 get] [toolbarActions]
+} -cleanup {
+    hideSelection
+    destroy .e .e2
+} -result {{0 {}} paste touch {}}
+test touch-5.7 {dragging the end handle} -setup {
+    entry .e -width 30
+    .e insert end "hello touch world"
+    pack .e
+    update
+} -body {
+    ::tk::touch::LongPress .e [lindex [.e bbox 2] 0] 5
+    lassign [handleTip .e end] x y
+    ::tk::touch::HandlePress end $x $y
+    ::tk::touch::HandleMove end \
+	[expr {[winfo rootx .e] + [lindex [.e bbox 14] 0] + 1}] $y
+    ::tk::touch::HandleRelease
+    update
+    list [.e index sel.first] [.e index sel.last] \
+	[lrange [toolbarActions] 0 1]
+} -cleanup {
+    hideSelection
+    destroy .e
+} -result {0 14 {cut copy}}
+test touch-5.8 {dragging the start handle past the end} -setup {
+    entry .e -width 30
+    .e insert end "hello touch world"
+    pack .e
+    update
+} -body {
+    ::tk::touch::LongPress .e [lindex [.e bbox 8] 0] 5
+    lassign [handleTip .e start] x y
+    ::tk::touch::HandlePress start $x $y
+    ::tk::touch::HandleMove start \
+	[expr {[winfo rootx .e] + [lindex [.e bbox 14] 0] + 1}] $y
+    list [.e index sel.first] [.e index sel.last] $::tk::touch::Priv(drag)
+} -cleanup {
+    ::tk::touch::HandleRelease
+    hideSelection
+    destroy .e
+} -result {11 14 end}
+test touch-5.9 {handles hidden when the focus moves} -setup {
+    entry .e
+    .e insert end "hello touch world"
+    button .b
+    pack .e .b
+    update
+} -body {
+    ::tk::touch::LongPress .e [lindex [.e bbox 8] 0] 5
+    update
+    set before [handlesShown]
+    focus .b
+    after 300 {set ::moved 1}
+    vwait ::moved
+    list $before [handlesShown] [toolbarActions]
+} -cleanup {
+    hideSelection
+    destroy .e .b
+} -result {{1 1} {0 0} {}}
+test touch-5.10 {handles on a long press} -constraints {
+    testtouch touchClicks
+} -setup {
+    entry .e
+    .e insert end "hello touch world"
+    pack .e
+    update
+} -body {
+    tap .e [lindex [.e bbox 8] 0] 5 700
+    list [.e index sel.first] [handlesShown]
+} -cleanup {
+    hideSelection
+    destroy .e
+} -result {6 {1 1}}
+
+cleanupTests
+return
+
+# Local Variables:
+# mode: tcl
+# End:

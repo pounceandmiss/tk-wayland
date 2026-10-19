@@ -605,16 +605,111 @@ proc ::tk::PreciseScrollDeltas {dxdy} {
     return [list $deltaX $deltaY]
 }
 
+## ::tk::TouchpadScrollUnits $w $dxdy $serial ?$axes?
+##
+## Scroll a widget which scrolls by units (lines of a listbox, rows of a
+## treeview, characters of an entry) with a TouchpadScroll event. The
+## deltas, in pixels, are accumulated, and the widget is scrolled by a unit
+## for every unit of pixels, so that it follows the finger on touchscreens.
+## On Aqua, whose trackpads send small deltas 60 times per second, every
+## fifth event scrolls by its deltas.
+
+proc ::tk::TouchpadScrollUnits {w dxdy serial {axes xy}} {
+    variable Priv
+    lassign [PreciseScrollDeltas $dxdy] deltaX deltaY
+    if {[tk windowingsystem] eq "aqua"} {
+	if {$serial % 5 == 0} {
+	    if {$deltaX != 0 && [string match *x* $axes]} {
+		$w xview scroll [expr {-$deltaX}] units
+	    }
+	    if {$deltaY != 0 && [string match *y* $axes]} {
+		$w yview scroll [expr {-$deltaY}] units
+	    }
+	}
+	return
+    }
+    if {![info exists Priv(touchpadWindow)] || $Priv(touchpadWindow) ne $w} {
+	set Priv(touchpadWindow) $w
+	set Priv(touchpadRest) {0 0}
+    }
+    set rest(x) [expr {[lindex $Priv(touchpadRest) 0] + $deltaX}]
+    set rest(y) [expr {[lindex $Priv(touchpadRest) 1] + $deltaY}]
+    foreach axis {x y} {
+	if {$rest($axis) == 0 || ![string match *$axis* $axes]} {
+	    set rest($axis) 0
+	    continue
+	}
+	set size [ScrollUnitSize $w $axis]
+	set n [expr {int(double($rest($axis)) / $size)}]
+	if {$n != 0} {
+	    $w ${axis}view scroll [expr {-$n}] units
+	    set rest($axis) [expr {$rest($axis) - $n * $size}]
+	}
+    }
+    set Priv(touchpadRest) [list $rest(x) $rest(y)]
+}
+
+## ::tk::ScrollUnitSize $w $axis
+##
+## The size, in pixels, of a unit by which a widget scrolls: the height of a
+## line or row, the width of a character, or the scroll increment of a
+## canvas.
+
+proc ::tk::ScrollUnitSize {w axis} {
+    if {[winfo class $w] eq "Canvas"} {
+	set increment [winfo pixels $w [$w cget -${axis}scrollincrement]]
+	if {$increment > 0} {
+	    return $increment
+	}
+	set size [expr {$axis eq "y" ? [winfo height $w] : [winfo width $w]}]
+	return [expr {max(1, $size / 10)}]
+    }
+    if {$axis eq "y"} {
+	set y [expr {[winfo height $w] / 2}]
+	switch -- [winfo class $w] {
+	    Listbox {
+		# The distance between two lines, which are further apart
+		# than the height of their text.
+
+		set i [$w nearest $y]
+		set bbox [$w bbox $i]
+		set next [$w bbox [expr {$i + 1}]]
+		if {[llength $bbox] == 4 && [llength $next] == 4} {
+		    return [expr {max(1, [lindex $next 1] - [lindex $bbox 1])}]
+		}
+	    }
+	    Treeview {
+		set bbox [$w bbox [$w identify item 5 $y]]
+	    }
+	    default {
+		set bbox {}
+	    }
+	}
+	if {[llength $bbox] == 4 && [lindex $bbox 3] > 0} {
+	    return [lindex $bbox 3]
+	}
+    }
+    if {[catch {$w cget -font} font] || $font eq ""} {
+	set font TkDefaultFont
+    }
+    if {$axis eq "y"} {
+	return [font metrics $font -linespace]
+    }
+    return [expr {max(1, [font measure $font 0])}]
+}
+
 ## Helper for smooth scrolling of widgets that support xview moveto and
 ## yview moveto.
 
 proc ::tk::ScrollByPixels {w deltaX deltaY} {
-    set fracX [lindex [$w xview] 0]
-    set fracY [lindex [$w yview] 0]
+    # The views are fractions of the whole content, of which the window
+    # shows the fraction between the two ends of the view.
+    lassign [$w xview] fracX endX
+    lassign [$w yview] fracY endY
     set width [expr {1.0 * [winfo width $w]}]
     set height [expr {1.0 * [winfo height $w]}]
-    $w xview moveto [expr {$fracX - $deltaX / $width}]
-    $w yview moveto [expr {$fracY - $deltaY / $height}]
+    $w xview moveto [expr {$fracX - $deltaX * ($endX - $fracX) / $width}]
+    $w yview moveto [expr {$fracY - $deltaY * ($endY - $fracY) / $height}]
 }
 
 # ::tk::TabToWindow --

@@ -1220,6 +1220,18 @@ MODULE_SCOPE void	TkDeleteExitHandler(Tcl_ExitProc *proc,
 			    void *clientData);
 MODULE_SCOPE unsigned long TkGetMS(void);
 MODULE_SCOPE unsigned long TkpGetEventTime(void);
+
+/*
+ * Touches, given by the ports which have touch input to the gesture
+ * recognizer of tkTouch.c.
+ */
+
+#define TK_TOUCH_BEGIN		0
+#define TK_TOUCH_MOVE		1
+#define TK_TOUCH_END		2
+#define TK_TOUCH_CANCEL		3
+
+MODULE_SCOPE Tcl_ObjCmdProc2 TkTouchObjCmd;
 MODULE_SCOPE Tcl_ExitProc	TkFinalize;
 MODULE_SCOPE Tcl_ExitProc	TkFinalizeThread;
 MODULE_SCOPE void	TkpBuildRegionFromAlphaData(Region region,

@@ -160,6 +160,7 @@ static Tcl_ObjCmdProc2 TestcolorObjCmd;
 static Tcl_ObjCmdProc2 TestcursorObjCmd;
 static Tcl_ObjCmdProc2 TestdeleteappsObjCmd;
 static Tcl_ObjCmdProc2 TestemojiObjCmd;
+static Tcl_ObjCmdProc2 TesttouchObjCmd;
 static Tcl_ObjCmdProc2 TestfontObjCmd;
 static Tcl_ObjCmdProc2 TestmakeexistObjCmd;
 #if !(defined(_WIN32) || defined(MAC_OSX_TK) || defined(__CYGWIN__))
@@ -253,6 +254,8 @@ Tktest_Init(
     Tcl_CreateObjCommand2(interp, "testsetlocale", TestsetlocaleObjCmd, NULL,
 	    NULL);
     Tcl_CreateObjCommand2(interp, "testtext", TkpTesttextCmd,
+	    Tk_MainWindow(interp), NULL);
+    Tcl_CreateObjCommand2(interp, "testtouch", TesttouchObjCmd,
 	    Tk_MainWindow(interp), NULL);
     Tcl_CreateObjCommand2(interp, "testphotostringmatch",
 	    TestPhotoStringMatchCmd, Tk_MainWindow(interp),
@@ -1276,6 +1279,66 @@ TrivialEventProc(
     }
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * TesttouchObjCmd --
+ *
+ *	This function implements the "testtouch" command, which gives a touch
+ *	to the gesture recognizer of tkTouch.c, as a port with touch input
+ *	does:
+ *	    testtouch begin|move|end|cancel id rootX rootY ?time?
+ *	The window touched is the one at the position.
+ *
+ * Results:
+ *	A standard Tcl result.
+ *
+ * Side effects:
+ *	Events are generated for the gestures recognized.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static int
+TesttouchObjCmd(
+    void *clientData,		/* Main window of application. */
+    Tcl_Interp *interp,		/* Current interpreter. */
+    Tcl_Size objc,		/* Number of arguments. */
+    Tcl_Obj *const objv[])	/* Argument objects. */
+{
+    static const char *const types[] = {
+	"begin", "move", "end", "cancel", NULL
+    };
+    int type, id;
+    double x, y;
+    Tcl_WideInt time;
+    Tk_Window tkwin;
+
+    if (objc < 5 || objc > 6) {
+	Tcl_WrongNumArgs(interp, 1, objv, "type id rootX rootY ?time?");
+	return TCL_ERROR;
+    }
+    if (Tcl_GetIndexFromObj(interp, objv[1], types, "type", 0, &type)
+	    != TCL_OK || Tcl_GetIntFromObj(interp, objv[2], &id) != TCL_OK
+	    || Tcl_GetDoubleFromObj(interp, objv[3], &x) != TCL_OK
+	    || Tcl_GetDoubleFromObj(interp, objv[4], &y) != TCL_OK) {
+	return TCL_ERROR;
+    }
+    if (objc == 6) {
+	if (Tcl_GetWideIntFromObj(interp, objv[5], &time) != TCL_OK) {
+	    return TCL_ERROR;
+	}
+    } else {
+	Tcl_Time now;
+
+	Tcl_GetTime(&now);
+	time = (Tcl_WideInt)now.sec * 1000 + now.usec / 1000;
+    }
+    tkwin = Tk_CoordsToWindow((int)x, (int)y, (Tk_Window)clientData);
+    TkTouchEvent(type, tkwin, id, x, y, (unsigned long)time, 0);
+    return TCL_OK;
+}
+
 /*
  *----------------------------------------------------------------------
  *

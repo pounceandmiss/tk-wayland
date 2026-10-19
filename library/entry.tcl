@@ -332,12 +332,7 @@ bind Entry <Shift-Option-MouseWheel> {
     tk::EntryScrollByUnits %W x %D -12.0
 }
 bind Entry <TouchpadScroll> {
-    if {%# %% 5 == 0} {
-	lassign [tk::PreciseScrollDeltas %D] tk::Priv(deltaX) tk::Priv(deltaY)
-	if {$tk::Priv(deltaX) != 0} {
-	    %W xview scroll [expr {-$tk::Priv(deltaX)}] units
-	}
-    }
+    tk::TouchpadScrollUnits %W %D %# x
 }
 
 # ::tk::EntryClosestGap --

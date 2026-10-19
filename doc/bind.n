@@ -227,11 +227,12 @@ tilt wheels on some mice.  Horizontal scrolling can also be emulated
 by holding Shift and scrolling vertically.
 .RE
 .IP "\fBTouchpadScroll\fR" 5
-On some platforms (currently Windows and macOS) there is support for
-high-resolution scrolling devices, such as touchpads.  This is
-provided via \fBTouchpadScroll\fR events.  These events store two
-16 bit delta values in the integer provided by the \fB%D\fR
-substitution.  The \fIX\fR delta is in the high order 16 bits and the
+On some platforms (currently Windows, macOS and Wayland) there is support
+for high-resolution scrolling devices, such as touchpads.  This is
+provided via \fBTouchpadScroll\fR events.  On touchscreens, dragging a
+window generates them too (see \fBtk touch\fR in \fBtk\fR(n)).  These
+events store two 16 bit delta values in the integer provided by the
+\fB%D\fR substitution.  The \fIX\fR delta is in the high order 16 bits and the
 \fIY\fR delta is in the low order 16 bits.  These values can be
 unpacked by using the tk::PreciseScrollDeltas utility procedure.  For
 example:

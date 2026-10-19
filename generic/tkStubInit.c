@@ -401,6 +401,7 @@ static const TkIntStubs tkIntStubs = {
     TkDebugPhotoStringMatchDef, /* 187 */
     TkFontEmojiPresentation, /* 188 */
     TkFontEmojiContinuation, /* 189 */
+    TkTouchEvent, /* 190 */
 };
 
 static const TkIntPlatStubs tkIntPlatStubs = {

@@ -402,6 +402,13 @@ changes. It is intended for use with context-sensitive help systems.
 This is sent to a text widget when the contents of the widget are
 changed.
 .TP
+\fB<<Pinch>>\fR
+.
+This is sent to a window when two fingers pinch it on a touchscreen (see
+\fBtk touch\fR in \fBtk\fR(n)). The user_data field (%d) is the factor by
+which the distance between the fingers changed since the previous one, and
+the position (%x, %y) is the middle of the fingers.
+.TP
 \fB<<Selection>>\fR
 .
 This is sent to a text widget when the selection in the widget is
@@ -421,6 +428,14 @@ value "FontChanged".  For other system wide changes, this event will
 be sent to all widgets, and the user_data field will indicate the
 cause of the change.  NOTE: all tk and ttk widgets already handle this
 event internally.
+.TP
+\fB<<TouchBegin>>\fR, \fB<<TouchMove>>\fR, \fB<<TouchEnd>>\fR, \fB<<TouchCancel>>\fR
+.
+These are sent to a window in the \fBraw\fR touch mode (see \fBtk touch\fR
+in \fBtk\fR(n)) when a finger touches it, moves, is lifted, or when the
+system takes the touch away. The user_data field (%d) identifies the finger,
+and the position (%x, %y, %X, %Y) is that of the finger. The events of a
+finger go to the window it first touched, wherever it moves.
 .TP
 \fB<<TraverseIn>>\fR
 .

@@ -72,6 +72,7 @@ static const TkEnsemble tkCmdMap[] = {
     {"caret",		CaretCmd, NULL },
     {"inactive",	InactiveCmd, NULL },
     {"scaling",		ScalingCmd, NULL },
+    {"touch",		TkTouchObjCmd, NULL },
     {"useinputmethods",	UseinputmethodsCmd, NULL },
     {"windowingsystem",	WindowingsystemCmd, NULL },
     {NULL, NULL, NULL}

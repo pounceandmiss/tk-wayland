@@ -171,6 +171,46 @@ feature is only significant on X.  If XIM support is not available, this
 will always return 0.  If the \fIwindow\fR argument is omitted, it defaults
 to the main window.  If the \fIboolean\fR argument is omitted, the current
 state is returned.  This is turned on by default for the main display.
+.\" METHOD: touch
+.TP
+\fBtk touch mode \fIwindow\fR ?\fBauto\fR|\fBscroll\fR|\fBmouse\fR|\fBraw\fR?
+.
+Sets and queries how touching \fIwindow\fR on a touchscreen is handled, on
+the windowing systems which have touch input. Tk turns the touches into the
+events widgets know: a tap is a click of the first button; dragging scrolls,
+with \fBTouchpadScroll\fR events,
+and goes on for a while when the finger is lifted while moving; a long press
+is a click of the third button, or, if the finger then moves, a drag with the
+first button; two fingers scroll, and pinching generates \fB<<Pinch>>\fR
+virtual events, whose data (\fB%d\fR in bindings) is the factor by which the
+distance between the fingers changed since the previous one, at the middle of
+the fingers. When the mode is \fBscroll\fR, dragging in the window scrolls,
+and a tap is delivered when the finger is lifted; when it is \fBmouse\fR, the
+finger is a mouse with the first button pressed as soon as it touches the
+window. When it is \fBraw\fR, there are no gestures nor mouse events: each
+finger which touches the window sends it a \fB<<TouchBegin>>\fR virtual
+event, then \fB<<TouchMove>>\fR events, and a \fB<<TouchEnd>>\fR event when it
+is lifted (or \fB<<TouchCancel>>\fR if the system took the touch), wherever
+it moves; their data (\fB%d\fR in bindings) identifies the finger, and they
+have its position (\fB%x\fR, \fB%y\fR, \fB%X\fR, \fB%Y\fR). The fingers are
+independent of each other, and of the gestures of other windows. With
+\fBauto\fR, the default, the mode is \fBscroll\fR for the widgets
+which scroll (canvases, entries, listboxes, texts and treeviews), and
+\fBmouse\fR for those which need the button at once (comboboxes, menus,
+panedwindows, scales, scrollbars, sizegrips and spinboxes); for other
+windows, it is that of the
+nearest ancestor which has one, or else \fBmouse\fR. A canvas in which
+dragging draws, for instance, should have the mode \fBmouse\fR. The mode is
+returned.
+.RS
+.PP
+Applications on touchscreens can also adapt the widgets to fingers with
+\fB::tk::touch::Adapt\fR: the widgets get larger targets (more padding,
+taller rows and menu entries), and a long press in an entry, a text, a
+spinbox or a combobox selects the word there, and shows the selection with
+two handles, which can be dragged to move its ends, and a toolbar to cut,
+copy, paste and select all.
+.RE
 .\" METHOD: windowingsystem
 .TP
 \fBtk windowingsystem\fR
@@ -182,7 +222,7 @@ Returns the current Tk windowing system, one of
 attribtable(n), busy(n), fontchooser(n), print(n), send(n), sysnotify(n),
 systray(n), winfo(n)
 .SH KEYWORDS
-application name, attribute, print, send, sysnotify, systray
+application name, attribute, print, send, sysnotify, systray, touch
 '\" Local Variables:
 '\" mode: nroff
 '\" End:

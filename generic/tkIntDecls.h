@@ -546,6 +546,10 @@ EXTERN bool		TkDebugPhotoStringMatchDef(Tcl_Interp *inter,
 EXTERN int		TkFontEmojiPresentation(int ch, int next);
 /* 189 */
 EXTERN int		TkFontEmojiContinuation(int ch, int inEmoji);
+/* 190 */
+EXTERN void		TkTouchEvent(int type, Tk_Window tkwin, int id,
+				double x, double y, unsigned long time,
+				unsigned int modState);
 
 typedef struct TkIntStubs {
     int magic;
@@ -741,6 +745,7 @@ typedef struct TkIntStubs {
     bool (*tkDebugPhotoStringMatchDef) (Tcl_Interp *inter, Tcl_Obj *data, Tcl_Obj *formatString, int *widthPtr, int *heightPtr); /* 187 */
     int (*tkFontEmojiPresentation) (int ch, int next); /* 188 */
     int (*tkFontEmojiContinuation) (int ch, int inEmoji); /* 189 */
+    void (*tkTouchEvent) (int type, Tk_Window tkwin, int id, double x, double y, unsigned long time, unsigned int modState); /* 190 */
 } TkIntStubs;
 
 extern const TkIntStubs *tkIntStubsPtr;
@@ -1108,6 +1113,8 @@ extern const TkIntStubs *tkIntStubsPtr;
 	(tkIntStubsPtr->tkFontEmojiPresentation) /* 188 */
 #define TkFontEmojiContinuation \
 	(tkIntStubsPtr->tkFontEmojiContinuation) /* 189 */
+#define TkTouchEvent \
+	(tkIntStubsPtr->tkTouchEvent) /* 190 */
 
 #endif /* defined(USE_TK_STUBS) */
 

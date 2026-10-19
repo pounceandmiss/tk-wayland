@@ -391,6 +391,7 @@ TK_OBJS = \
 	tkPack.$(OBJEXT) \
 	tkPkgConfig.$(OBJEXT) \
 	tkPlace.$(OBJEXT) \
+	tkTouch.$(OBJEXT) \
 	tkPointer.$(OBJEXT) \
 	tkRectOval.$(OBJEXT) \
 	tkScale.$(OBJEXT) \
