@@ -447,6 +447,11 @@ TkXeDestroySurface(
     if (tkXeDisplay->keyboardSurface == surfPtr) {
 	tkXeDisplay->keyboardSurface = NULL;
     }
+    for (i = 0; i < TKWL_MAX_TOUCHES; i++) {
+	if (tkXeDisplay->touches[i].surfPtr == surfPtr) {
+	    tkXeDisplay->touches[i].surfPtr = NULL;
+	}
+    }
     if (surfPtr->presentPending) {
 	Tcl_CancelIdleCall(PresentIdle, surfPtr);
     }

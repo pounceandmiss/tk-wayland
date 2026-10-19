@@ -1,9 +1,9 @@
 /*
  * tkTouch.c --
  *
- *	Touchscreens. The ports which have touch input give the touches to
- *	TkTouchEvent, which recognizes gestures and turns them into the events
- *	widgets know:
+ *	Touchscreens. The ports which have touch input (Wayland) give the
+ *	touches to TkTouchEvent, which recognizes gestures and turns them
+ *	into the events widgets know:
  *
  *	- A tap is a click of the first button.
  *	- Dragging scrolls: it generates TouchpadScroll events, which the

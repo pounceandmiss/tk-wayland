@@ -57,7 +57,9 @@ resolutions are handled with the buffer scale.
 - Activation (`xdg-activation-v1`) for `focus -force`, `raise`,
   deiconify, and the startup token of launchers.
 - Input methods (`text-input-v3`), shown with the IME marked text virtual
-  events used on Aqua.
+  events used on Aqua. Text input is enabled while Tk wants the on-screen
+  keyboard (`tk keyboard`, `../generic/tkKeyboard.c`), with the type of the
+  text as content type; compositors show their on-screen keyboard then.
 
 ## Commands for Wayland
 

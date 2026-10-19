@@ -3,10 +3,13 @@
  *
  *	Input methods, with the text input protocol (text-input-unstable-v3).
  *
- *	Text input is enabled while the focus of Tk is in a widget which
- *	shows an insertion cursor (which calls Tk_SetCaretPos), and the
- *	position of that cursor is given to the compositor, for the windows
- *	of the input method. The text being composed is shown with the
+ *	Text input is enabled while Tk wants the on-screen keyboard
+ *	(tkKeyboard.c: when the focus is in a widget which shows an insertion
+ *	cursor and can be edited, or with "tk keyboard show"), with the type
+ *	of the text as content type, and the position of the insertion
+ *	cursor is given to the compositor, for the windows of the input
+ *	method. Compositors show their on-screen keyboard while text input is
+ *	enabled. The text being composed is shown with the
  *	virtual events <<TkStartIMEMarkedText>>, <<TkEndIMEMarkedText>> and
  *	<<TkClearIMEMarkedText>>, as on Aqua, and committed text is delivered
  *	as a KeyPress event carrying it, as with XIM on X11.
@@ -26,12 +29,27 @@ static struct zwp_text_input_v3 *textInput = NULL;
 static struct wl_surface *enteredSurface = NULL;
 				/* The surface the text input is in. */
 static bool enabled = false;
+static Window enabledWindow = None;
+				/* The window text input is enabled for. */
+static bool keyboardWanted = false;
+				/* Tk wants the keyboard. */
+static int keyboardType = TK_KEYBOARD_TEXT;
+				/* The type of its text. */
+static int sentType = -1;	/* The type sent with the content type. */
 static int caretX = -1, caretY = -1, caretHeight = -1;
 				/* Last cursor rectangle sent. */
+static Window caretWindow = None;
+static int caretWinX, caretWinY, caretWinHeight;
+				/* The insertion cursor of the focus window:
+				 * text widgets also set the caret of the
+				 * display when they do not have the focus. */
 
 /*
  * The state sent by the input method until the "done" event.
  */
+
+static void		KeyboardProc(Tk_Window tkwin, int show, int type);
+static void		SetContentType(int type);
 
 static char *pendingPreedit = NULL;
 static char *pendingCommit = NULL;
@@ -68,6 +86,7 @@ TextInputEnter(
 {
     enteredSurface = surface;
     enabled = false;
+    enabledWindow = None;
     TkWlTextInputUpdate();
 }
 
@@ -84,6 +103,7 @@ TextInputLeave(
 	zwp_text_input_v3_disable(textInput);
 	zwp_text_input_v3_commit(textInput);
 	enabled = false;
+	enabledWindow = None;
     }
 }
 
@@ -358,7 +378,115 @@ TkWlTextInputInit(void)
 	textInput = zwp_text_input_manager_v3_get_text_input(textInputManager,
 		tkXeDisplay->seat);
 	zwp_text_input_v3_add_listener(textInput, &textInputListener, NULL);
+	TkSetKeyboardProc(KeyboardProc);
     }
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * KeyboardProc --
+ *
+ *	Called by tkKeyboard.c to show or hide the on-screen keyboard: text
+ *	input is enabled or disabled.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Requests are sent to the compositor.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static void
+KeyboardProc(
+    TCL_UNUSED(Tk_Window),
+    int show,			/* Whether to show the keyboard. */
+    int type)			/* TK_KEYBOARD_*. */
+{
+    keyboardWanted = (show != 0);
+    keyboardType = type;
+    TkWlTextInputUpdate();
+    TkXeFlush();
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * SetContentType --
+ *
+ *	Tell the compositor the type of the text, as the content type.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	A request is sent.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static void
+SetContentType(
+    int type)			/* TK_KEYBOARD_*. */
+{
+    uint32_t hint = ZWP_TEXT_INPUT_V3_CONTENT_HINT_NONE;
+    uint32_t purpose = ZWP_TEXT_INPUT_V3_CONTENT_PURPOSE_NORMAL;
+
+    switch (type) {
+    case TK_KEYBOARD_NUMBER:
+	purpose = ZWP_TEXT_INPUT_V3_CONTENT_PURPOSE_NUMBER;
+	break;
+    case TK_KEYBOARD_PHONE:
+	purpose = ZWP_TEXT_INPUT_V3_CONTENT_PURPOSE_PHONE;
+	break;
+    case TK_KEYBOARD_EMAIL:
+	purpose = ZWP_TEXT_INPUT_V3_CONTENT_PURPOSE_EMAIL;
+	break;
+    case TK_KEYBOARD_URL:
+	purpose = ZWP_TEXT_INPUT_V3_CONTENT_PURPOSE_URL;
+	break;
+    case TK_KEYBOARD_PASSWORD:
+	purpose = ZWP_TEXT_INPUT_V3_CONTENT_PURPOSE_PASSWORD;
+	hint = ZWP_TEXT_INPUT_V3_CONTENT_HINT_HIDDEN_TEXT
+		| ZWP_TEXT_INPUT_V3_CONTENT_HINT_SENSITIVE_DATA;
+	break;
+    }
+    zwp_text_input_v3_set_content_type(textInput, hint, purpose);
+    sentType = type;
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWlTextInputSetCaret --
+ *
+ *	Record the position of the insertion cursor of a window, if it has
+ *	the focus: called by Tk_SetCaretPos.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The position is sent to the compositor by TkWlTextInputUpdate.
+ *
+ *----------------------------------------------------------------------
+ */
+
+void
+TkWlTextInputSetCaret(
+    TkWindow *winPtr,		/* The window setting its insertion cursor. */
+    int x, int y,		/* Its position in the window. */
+    int height)			/* Its height. */
+{
+    if (winPtr != winPtr->dispPtr->focusPtr) {
+	return;
+    }
+    caretWindow = winPtr->window;
+    caretWinX = x;
+    caretWinY = y;
+    caretWinHeight = height;
 }
 
 /*
@@ -375,7 +503,10 @@ TkWlTextInputInit(void)
  * Side effects:
  *	Requests are sent to the compositor when the state of text input or
  *	the position of the insertion cursor changed; text being composed in
- *	a window which lost the focus is abandoned.
+ *	a window which lost the focus is abandoned. Text input is enabled
+ *	again, without being disabled, when the focus moves to another window
+ *	which wants it, so that the input method starts over in another text
+ *	field without hiding an on-screen keyboard.
  *
  *----------------------------------------------------------------------
  */
@@ -385,7 +516,6 @@ TkWlTextInputUpdate(void)
 {
     TkDisplay *dispPtr = TkGetDisplayList();
     TkWindow *focusPtr = dispPtr ? dispPtr->focusPtr : NULL;
-    TkWindow *caretPtr = dispPtr ? dispPtr->caret.winPtr : NULL;
     TkXeWindow *wlWinPtr = NULL;
     TkXeWindow *topPtr = NULL;
     bool want;
@@ -401,7 +531,7 @@ TkWlTextInputUpdate(void)
 
 	composeWindow = None;
     }
-    if (focusPtr && focusPtr == caretPtr && focusPtr->window != None
+    if (keyboardWanted && focusPtr && focusPtr->window != None
 	    && !(focusPtr->flags & TK_ALREADY_DEAD)) {
 	wlWinPtr = TkXeGetWindow(focusPtr->window);
 	topPtr = wlWinPtr ? TkXeTopWindow(wlWinPtr) : NULL;
@@ -409,32 +539,38 @@ TkWlTextInputUpdate(void)
     want = topPtr && topPtr->surface
 	    && topPtr->surface->surface == enteredSurface;
 
-    if (want != enabled) {
-	enabled = want;
-	if (!want) {
+    if (!want) {
+	if (enabled) {
 	    zwp_text_input_v3_disable(textInput);
 	    zwp_text_input_v3_commit(textInput);
-	    return;
+	    enabled = false;
+	    enabledWindow = None;
 	}
-	zwp_text_input_v3_enable(textInput);
-	zwp_text_input_v3_set_content_type(textInput,
-		ZWP_TEXT_INPUT_V3_CONTENT_HINT_NONE,
-		ZWP_TEXT_INPUT_V3_CONTENT_PURPOSE_NORMAL);
-	caretX = caretY = caretHeight = -1;
+	return;
     }
-    if (enabled) {
+    if (!enabled || enabledWindow != focusPtr->window) {
+	enabled = true;
+	enabledWindow = focusPtr->window;
+	zwp_text_input_v3_enable(textInput);
+	SetContentType(keyboardType);
+	caretX = caretY = caretHeight = -1;
+	zwp_text_input_v3_commit(textInput);
+    } else if (sentType != keyboardType) {
+	SetContentType(keyboardType);
+	zwp_text_input_v3_commit(textInput);
+    }
+    if (focusPtr->window == caretWindow) {
 	int x, y;
 
 	TkXeWindowOrigin(wlWinPtr, &x, &y);
-	x += dispPtr->caret.x;
-	y += dispPtr->caret.y;
-	if (x != caretX || y != caretY
-		|| dispPtr->caret.height != caretHeight) {
+	x += caretWinX;
+	y += caretWinY;
+	if (x != caretX || y != caretY || caretWinHeight != caretHeight) {
 	    zwp_text_input_v3_set_cursor_rectangle(textInput, x, y, 1,
-		    dispPtr->caret.height);
+		    caretWinHeight);
 	    caretX = x;
 	    caretY = y;
-	    caretHeight = dispPtr->caret.height;
+	    caretHeight = caretWinHeight;
 	    zwp_text_input_v3_commit(textInput);
 	}
     }

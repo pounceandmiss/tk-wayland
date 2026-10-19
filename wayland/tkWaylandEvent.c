@@ -686,6 +686,244 @@ static const struct wl_pointer_listener pointerListener = {
 /*
  *----------------------------------------------------------------------
  *
+ * Touch events --
+ *
+ *	The fingers on a touchscreen are given to the gesture recognizer of
+ *	tkTouch.c, which turns them into clicks, scrolling and pinches.
+ *
+ *----------------------------------------------------------------------
+ */
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TouchSlot --
+ *
+ *	Find the slot of a touch point, or a free one.
+ *
+ * Results:
+ *	The index of the slot, or -1.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static int
+TouchSlot(
+    int32_t id)			/* Id of the touch point, or -1 for a free
+				 * slot. */
+{
+    int i;
+
+    for (i = 0; i < TKWL_MAX_TOUCHES; i++) {
+	if (tkXeDisplay->touches[i].id == id) {
+	    return i;
+	}
+    }
+    return -1;
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Touch --
+ *
+ *	Give a touch at a point of a surface to the gesture recognizer.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	See TkTouchEvent.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static void
+Touch(
+    int type,			/* TK_TOUCH_BEGIN etc. */
+    TkXeSurface *surfPtr,	/* The surface touched, or NULL. */
+    int32_t id,			/* Id of the touch point. */
+    double x, double y,		/* Position in the surface. */
+    uint32_t time)		/* Time of the event. */
+{
+    Tk_Window tkwin = NULL;
+    double rootX = x, rootY = y;
+
+    if (surfPtr) {
+	tkwin = WindowAtPointer(surfPtr, (int)floor(x), (int)floor(y));
+	rootX += surfPtr->winPtr->x;
+	rootY += surfPtr->winPtr->y;
+    }
+    TkTouchEvent(type, tkwin, id, rootX, rootY, time, tkXeDisplay->modState);
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TouchDown, TouchUp, TouchMotion --
+ *
+ *	A finger touches the screen, is lifted, or moves.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The touch is given to the gesture recognizer.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static void
+TouchDown(
+    TCL_UNUSED(void *),
+    TCL_UNUSED(struct wl_touch *),
+    uint32_t serial,
+    uint32_t time,
+    struct wl_surface *surface,
+    int32_t id,
+    wl_fixed_t x,
+    wl_fixed_t y)
+{
+    TkXeSurface *surfPtr = surface ? TkWlSurfaceFromWl(surface) : NULL;
+    int slot = TouchSlot(-1);
+
+    tkXeDisplay->lastSerial = serial;
+    tkXeDisplay->lastTime = time;
+    if (slot < 0) {
+	return;
+    }
+    tkXeDisplay->touches[slot].id = id;
+    tkXeDisplay->touches[slot].surfPtr = surfPtr;
+    Touch(TK_TOUCH_BEGIN, surfPtr, id, wl_fixed_to_double(x),
+	    wl_fixed_to_double(y), time);
+}
+
+static void
+TouchUp(
+    TCL_UNUSED(void *),
+    TCL_UNUSED(struct wl_touch *),
+    uint32_t serial,
+    uint32_t time,
+    int32_t id)
+{
+    int slot = TouchSlot(id);
+
+    tkXeDisplay->lastSerial = serial;
+    tkXeDisplay->lastTime = time;
+    if (slot < 0) {
+	return;
+    }
+    tkXeDisplay->touches[slot].id = -1;
+    tkXeDisplay->touches[slot].surfPtr = NULL;
+
+    /*
+     * The finger is lifted where it last moved, which tkTouch.c knows.
+     */
+
+    TkTouchEvent(TK_TOUCH_END, NULL, id, 0.0, 0.0, time,
+	    tkXeDisplay->modState);
+}
+
+static void
+TouchMotion(
+    TCL_UNUSED(void *),
+    TCL_UNUSED(struct wl_touch *),
+    uint32_t time,
+    int32_t id,
+    wl_fixed_t x,
+    wl_fixed_t y)
+{
+    int slot = TouchSlot(id);
+
+    tkXeDisplay->lastTime = time;
+    if (slot < 0) {
+	return;
+    }
+    Touch(TK_TOUCH_MOVE, tkXeDisplay->touches[slot].surfPtr, id,
+	    wl_fixed_to_double(x), wl_fixed_to_double(y), time);
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TouchFrame, TouchCancel, TouchShape, TouchOrientation --
+ *
+ *	The end of a frame of touch events, which are handled one by one;
+ *	the compositor took the touches for a gesture of its own; the shape
+ *	and orientation of a touch, which are not used.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	TouchCancel cancels the touches.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static void
+TouchFrame(
+    TCL_UNUSED(void *),
+    TCL_UNUSED(struct wl_touch *))
+{
+}
+
+static void
+TouchCancel(
+    TCL_UNUSED(void *),
+    TCL_UNUSED(struct wl_touch *))
+{
+    int i;
+
+    for (i = 0; i < TKWL_MAX_TOUCHES; i++) {
+	if (tkXeDisplay->touches[i].id >= 0) {
+	    TkTouchEvent(TK_TOUCH_CANCEL, NULL, tkXeDisplay->touches[i].id,
+		    0.0, 0.0, tkXeDisplay->lastTime, tkXeDisplay->modState);
+	    tkXeDisplay->touches[i].id = -1;
+	    tkXeDisplay->touches[i].surfPtr = NULL;
+	}
+    }
+}
+
+#ifdef WL_TOUCH_SHAPE_SINCE_VERSION
+static void
+TouchShape(
+    TCL_UNUSED(void *),
+    TCL_UNUSED(struct wl_touch *),
+    TCL_UNUSED(int32_t),
+    TCL_UNUSED(wl_fixed_t),
+    TCL_UNUSED(wl_fixed_t))
+{
+}
+
+static void
+TouchOrientation(
+    TCL_UNUSED(void *),
+    TCL_UNUSED(struct wl_touch *),
+    TCL_UNUSED(int32_t),
+    TCL_UNUSED(wl_fixed_t))
+{
+}
+#endif
+
+static const struct wl_touch_listener touchListener = {
+    TouchDown,
+    TouchUp,
+    TouchMotion,
+    TouchFrame,
+    TouchCancel,
+#ifdef WL_TOUCH_SHAPE_SINCE_VERSION
+    TouchShape,
+    TouchOrientation
+#endif
+};
+
+/*
+ *----------------------------------------------------------------------
+ *
  * Keyboard events --
  *
  *	Keycodes are evdev codes plus 8, as with XKB. The keysym and the
@@ -1222,6 +1460,14 @@ SeatCapabilities(
 	wl_keyboard_release(tkXeDisplay->keyboard);
 	tkXeDisplay->keyboard = NULL;
     }
+    if ((caps & WL_SEAT_CAPABILITY_TOUCH) && !tkXeDisplay->touch) {
+	tkXeDisplay->touch = wl_seat_get_touch(seat);
+	wl_touch_add_listener(tkXeDisplay->touch, &touchListener, NULL);
+    } else if (!(caps & WL_SEAT_CAPABILITY_TOUCH) && tkXeDisplay->touch) {
+	TouchCancel(NULL, tkXeDisplay->touch);
+	wl_touch_release(tkXeDisplay->touch);
+	tkXeDisplay->touch = NULL;
+    }
 }
 
 static void
@@ -1477,6 +1723,7 @@ TkpOpenDisplay(
     struct wl_display *wlDisplay;
     const char *locale;
     TkWlOutput *outPtr;
+    int i;
 
     if (tkXeDisplay) {
 	/*
@@ -1503,6 +1750,9 @@ TkpOpenDisplay(
     tkXeDisplay = (TkXeDisplay *)Tcl_Alloc(sizeof(TkXeDisplay));
     memset(tkXeDisplay, 0, sizeof(TkXeDisplay));
     tkXeDisplay->wlDisplay = wlDisplay;
+    for (i = 0; i < TKWL_MAX_TOUCHES; i++) {
+	tkXeDisplay->touches[i].id = -1;
+    }
     tkXeDisplay->repeatRate = 25;
     tkXeDisplay->repeatDelay = 600;
 

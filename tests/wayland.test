@@ -15,6 +15,10 @@
 #   such as wayland/tools/vpointer.c), whose command is
 #   given in the environment variable TK_WAYLAND_VPOINTER, followed by the
 #   size of the layout.
+# - swayInputMethod: in addition, an input method printing "activate" and
+#   "deactivate" when the compositor activates or deactivates it (such as
+#   wayland/tools/vinputmethod.c), whose command is given in the
+#   environment variable TK_WAYLAND_INPUT_METHOD.
 #
 # Copyright © 2026 The Tk developers.
 
@@ -41,6 +45,8 @@ testConstraint swayPointer [expr {[testConstraint waylandInput]
 	&& [info exists env(SWAYSOCK)] && [llength [auto_execok swaymsg]]
 	&& [llength [auto_execok grim]]
 	&& [info exists env(TK_WAYLAND_VPOINTER)]}]
+testConstraint swayInputMethod [expr {[testConstraint swayPointer]
+	&& [info exists env(TK_WAYLAND_INPUT_METHOD)]}]
 
 # Ensure a pristine initial window state
 resetWindows
@@ -1332,6 +1338,85 @@ test wayland-14.12 {rounded corners are transparent} -constraints {
     rename pixel {}
     wm deiconify .
 } -result {{255 0 0} {255 0 0} {0 0 0} {0 0 0} {255 0 0} {255 0 0}}
+test wayland-15.1 {tk::ScrollByPixels scrolls by pixels of the content} -setup {
+    toplevel .t
+    canvas .t.c -width 200 -height 100 -scrollregion {0 0 600 400} \
+	-borderwidth 0 -highlightthickness 0 \
+	-xscrollincrement 1 -yscrollincrement 1
+    pack .t.c
+    update
+} -body {
+    # The content is 3 times as wide and 4 times as high as the window.
+    tk::ScrollByPixels .t.c -30 -40
+    set result [list [.t.c canvasx 0] [.t.c canvasy 0]]
+    tk::ScrollByPixels .t.c 10 25
+    lappend result [.t.c canvasx 0] [.t.c canvasy 0]
+} -cleanup {
+    destroy .t
+} -result {30.0 40.0 20.0 15.0}
+test wayland-15.2 {scrolling with fingers follows the fingers} -constraints {
+    swayPointer
+} -setup {
+    toplevel .t
+    wm title .t wlfscroll
+    canvas .t.c -width 300 -height 200 -scrollregion {0 0 900 800} \
+	-borderwidth 0 -highlightthickness 0 -yscrollincrement 1
+    pack .t.c
+    bind .t.c <TouchpadScroll> {
+	lassign [tk::PreciseScrollDeltas %D] deltaX deltaY
+	tk::ScrollByPixels %W $deltaX $deltaY
+    }
+    waitShown .t
+} -body {
+    # Come from outside the window, so that it gets the pointer.
+    lassign [swayRect wlfscroll] x y
+    bind .t.c <Enter> {set ::wlEntered 1}
+    set ::wlEntered 0
+    pointer "move [expr {$x - 20}] [expr {$y - 20}]"
+    pointer "move [expr {$x + 150}] [expr {$y + 100}]"
+    waitFor {$::wlEntered} 1000
+    foreach i {1 2 3 4 5} {
+	pointer "fscroll 10"
+    }
+    waitFor {[.t.c canvasy 0] >= 50} 1000
+    .t.c canvasy 0
+} -cleanup {
+    destroy .t
+    unset -nocomplain ::wlEntered
+} -result 50.0
+test wayland-15.3 {the on-screen keyboard stays up between text widgets} -constraints {
+    swayInputMethod
+} -setup {
+    set im [open |$::env(TK_WAYLAND_INPUT_METHOD) r+]
+    fconfigure $im -blocking 0 -buffering line
+    set ::wlim {}
+    fileevent $im readable [list apply {{im} {
+	while {[gets $im line] >= 0} {
+	    lappend ::wlim $line
+	}
+    }} $im]
+    waitFor {"ready" in $::wlim}
+    toplevel .t
+    text .t.a -width 20 -height 3
+    text .t.b -width 20 -height 3
+    entry .t.e
+    button .t.x -text Button
+    pack .t.a .t.b .t.e .t.x
+    waitShown .t
+} -body {
+    foreach w {.t.a .t.b .t.a .t.e .t.a .t.x .t.b} {
+	focus -force $w
+	update
+	after 400
+	update
+	lappend ::wlim ($w)
+    }
+    lrange $::wlim [lsearch $::wlim ready]+1 end
+} -cleanup {
+    destroy .t
+    close $im
+    unset -nocomplain ::wlim
+} -result {activate (.t.a) (.t.b) (.t.a) (.t.e) (.t.a) (.t.x) deactivate activate (.t.b)}
 }
 
 #

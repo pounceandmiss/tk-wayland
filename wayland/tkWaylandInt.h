@@ -57,6 +57,12 @@ typedef struct TkWlBuffer {
 #define TKWL_NUM_BUFFERS 3
 
 /*
+ * The number of fingers followed on a touchscreen.
+ */
+
+#define TKWL_MAX_TOUCHES 10
+
+/*
  * The surface of a child of the root window.
  */
 
@@ -172,6 +178,7 @@ struct TkXeDisplay {
     struct wl_seat *seat;
     struct wl_pointer *pointer;
     struct wl_keyboard *keyboard;
+    struct wl_touch *touch;
     struct libdecor *decor;
     TkWlOutput *outputs;
     TkXeSurface *surfaces;
@@ -183,6 +190,11 @@ struct TkXeDisplay {
 
     TkXeSurface *pointerSurface;
 				/* Surface with the pointer, or NULL. */
+    struct {
+	int32_t id;		/* Id of the touch point, or -1. */
+	TkXeSurface *surfPtr;	/* The surface it touched, or NULL. */
+    } touches[TKWL_MAX_TOUCHES];
+				/* The fingers on the screen. */
     uint32_t pointerSerial;	/* Serial of the last pointer enter. */
     double pointerX, pointerY;	/* Position in the surface. */
     unsigned int buttonState;	/* Button1Mask etc. */
@@ -247,6 +259,8 @@ MODULE_SCOPE bool	TkWlTextInputBind(struct wl_registry *registry,
 			    uint32_t name, const char *interface);
 MODULE_SCOPE void	TkWlTextInputInit(void);
 MODULE_SCOPE void	TkWlTextInputUpdate(void);
+MODULE_SCOPE void	TkWlTextInputSetCaret(TkWindow *winPtr, int x, int y,
+			    int height);
 
 /*
  * The ::tk::wayland commands (tkWaylandCmds.c).

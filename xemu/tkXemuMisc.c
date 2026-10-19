@@ -26,8 +26,8 @@
  *	None.
  *
  * Side effects:
- *	The position is stored in the display, for input methods, and given to
- *	the on-screen keyboard if the window has the focus.
+ *	The position is stored in the display, and given to the text input
+ *	(Wayland) and to the on-screen keyboard if the window has the focus.
  *
  *----------------------------------------------------------------------
  */
@@ -46,6 +46,9 @@ Tk_SetCaretPos(
     dispPtr->caret.x = x;
     dispPtr->caret.y = y;
     dispPtr->caret.height = height;
+#ifdef TK_USE_WAYLAND
+    TkWlTextInputSetCaret(winPtr, x, y, height);
+#endif
 }
 
 /*

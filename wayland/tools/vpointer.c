@@ -9,6 +9,8 @@
  *	    press N		press button N (1 left, 2 middle, 3 right)
  *	    release N		release button N
  *	    scroll DY		scroll vertically by DY (positive: down)
+ *	    fscroll DY		scroll vertically by DY pixels with fingers
+ *				(as on a touchpad)
  *
  *	Usage: vpointer WIDTH HEIGHT (the size of the layout).
  *
@@ -104,6 +106,11 @@ main(int argc, char **argv)
 	} else if (sscanf(line, "release %d", &n) == 1 && n >= 1 && n <= 3) {
 	    zwlr_virtual_pointer_v1_button(pointer, Now(), buttons[n],
 		    WL_POINTER_BUTTON_STATE_RELEASED);
+	} else if (sscanf(line, "fscroll %d", &n) == 1) {
+	    zwlr_virtual_pointer_v1_axis_source(pointer,
+		    WL_POINTER_AXIS_SOURCE_FINGER);
+	    zwlr_virtual_pointer_v1_axis(pointer, Now(),
+		    WL_POINTER_AXIS_VERTICAL_SCROLL, wl_fixed_from_int(n));
 	} else if (sscanf(line, "scroll %d", &n) == 1) {
 	    zwlr_virtual_pointer_v1_axis_source(pointer,
 		    WL_POINTER_AXIS_SOURCE_WHEEL);
