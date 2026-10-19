@@ -19,13 +19,15 @@
  *
  * Tk_SetCaretPos --
  *
- *	Record the position of the insertion cursor, for input methods.
+ *	Record the position of the insertion cursor, for input methods and
+ *	the on-screen keyboard.
  *
  * Results:
  *	None.
  *
  * Side effects:
- *	The position is stored in the display, for input methods.
+ *	The position is stored in the display, for input methods, and given to
+ *	the on-screen keyboard if the window has the focus.
  *
  *----------------------------------------------------------------------
  */
@@ -39,6 +41,7 @@ Tk_SetCaretPos(
     TkWindow *winPtr = (TkWindow *)tkwin;
     TkDisplay *dispPtr = winPtr->dispPtr;
 
+    TkKeyboardSetCaret(winPtr);
     dispPtr->caret.winPtr = winPtr;
     dispPtr->caret.x = x;
     dispPtr->caret.y = y;

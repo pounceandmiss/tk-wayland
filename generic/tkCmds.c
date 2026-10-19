@@ -71,6 +71,7 @@ static const TkEnsemble tkCmdMap[] = {
     {"busy",		Tk_BusyObjCmd, NULL },
     {"caret",		CaretCmd, NULL },
     {"inactive",	InactiveCmd, NULL },
+    {"keyboard",	TkKeyboardObjCmd, NULL },
     {"scaling",		ScalingCmd, NULL },
     {"touch",		TkTouchObjCmd, NULL },
     {"useinputmethods",	UseinputmethodsCmd, NULL },

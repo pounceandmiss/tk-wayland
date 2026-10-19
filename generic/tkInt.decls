@@ -622,6 +622,14 @@ declare 190 {
 	    unsigned long time, unsigned int modState)
 }
 
+# On-screen keyboards (tkKeyboard.c)
+declare 191 {
+    TkKeyboardProc *TkSetKeyboardProc(TkKeyboardProc *proc)
+}
+declare 192 {
+    void TkKeyboardChanged(Tk_Window tkwin, int shown)
+}
+
 
 ##############################################################################
 

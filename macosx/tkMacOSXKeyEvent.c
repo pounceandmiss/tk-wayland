@@ -877,6 +877,8 @@ Tk_SetCaretPos(
     TkCaret *caretPtr = &(winPtr->dispPtr->caret);
     NSWindow *w = TkMacOSXGetNSWindowForDrawable(Tk_WindowId(tkwin));
 
+    TkKeyboardSetCaret(winPtr);
+
     /*
      * Register this widget as being capable of text input, so we know we
      * should process (appropriate) key events for this window with the

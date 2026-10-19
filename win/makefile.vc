@@ -256,6 +256,7 @@ TKOBJS = \
 	$(TMP_DIR)\tkPkgConfig.obj \
 	$(TMP_DIR)\tkPlace.obj \
 	$(TMP_DIR)\tkTouch.obj \
+	$(TMP_DIR)\tkKeyboard.obj \
 	$(TMP_DIR)\tkPointer.obj \
 	$(TMP_DIR)\tkRectOval.obj \
 	$(TMP_DIR)\tkScale.obj \

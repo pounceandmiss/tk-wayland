@@ -98,6 +98,7 @@ Tk_SetCaretPos(
     TkWindow *winPtr = (TkWindow *) tkwin;
     TkDisplay *dispPtr = winPtr->dispPtr;
 
+    TkKeyboardSetCaret(winPtr);
     if ((dispPtr->caret.winPtr == winPtr)
 	    && (dispPtr->caret.x == x)
 	    && (dispPtr->caret.y == y)

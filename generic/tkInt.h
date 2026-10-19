@@ -1126,6 +1126,22 @@ void Tcl_Panic(const char *, ...) __attribute__((analyzer_noreturn));
 #define GENERATED_FOCUS_EVENT_MAGIC	((Bool) 0x547321ac)
 
 /*
+ * On-screen keyboards. The ports which have one register a procedure, called
+ * by tkKeyboard.c to show it (with the type of the text, which may change its
+ * layout) or hide it, and tell when it was shown or hidden.
+ */
+
+#define TK_KEYBOARD_TEXT	0
+#define TK_KEYBOARD_NUMBER	1
+#define TK_KEYBOARD_PHONE	2
+#define TK_KEYBOARD_EMAIL	3
+#define TK_KEYBOARD_URL		4
+#define TK_KEYBOARD_PASSWORD	5
+#define TK_KEYBOARD_NONE	6
+
+typedef void (TkKeyboardProc) (Tk_Window tkwin, int show, int type);
+
+/*
  * Exported internals.
  */
 
@@ -1232,6 +1248,8 @@ MODULE_SCOPE unsigned long TkpGetEventTime(void);
 #define TK_TOUCH_CANCEL		3
 
 MODULE_SCOPE Tcl_ObjCmdProc2 TkTouchObjCmd;
+MODULE_SCOPE Tcl_ObjCmdProc2 TkKeyboardObjCmd;
+MODULE_SCOPE void	TkKeyboardSetCaret(TkWindow *winPtr);
 MODULE_SCOPE Tcl_ExitProc	TkFinalize;
 MODULE_SCOPE Tcl_ExitProc	TkFinalizeThread;
 MODULE_SCOPE void	TkpBuildRegionFromAlphaData(Region region,

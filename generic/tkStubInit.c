@@ -402,6 +402,8 @@ static const TkIntStubs tkIntStubs = {
     TkFontEmojiPresentation, /* 188 */
     TkFontEmojiContinuation, /* 189 */
     TkTouchEvent, /* 190 */
+    TkSetKeyboardProc, /* 191 */
+    TkKeyboardChanged, /* 192 */
 };
 
 static const TkIntPlatStubs tkIntPlatStubs = {

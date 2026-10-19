@@ -1778,6 +1778,8 @@ Tk_SetCaretPos(
     TkCaret *caretPtr = &(((TkWindow *) tkwin)->dispPtr->caret);
     Window win;
 
+    TkKeyboardSetCaret((TkWindow *) tkwin);
+
     /*
      * Prevent processing anything if the values haven't changed. Windows only
      * has one display, so we can do this with statics.

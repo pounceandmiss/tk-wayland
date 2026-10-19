@@ -550,6 +550,10 @@ EXTERN int		TkFontEmojiContinuation(int ch, int inEmoji);
 EXTERN void		TkTouchEvent(int type, Tk_Window tkwin, int id,
 				double x, double y, unsigned long time,
 				unsigned int modState);
+/* 191 */
+EXTERN TkKeyboardProc *	 TkSetKeyboardProc(TkKeyboardProc *proc);
+/* 192 */
+EXTERN void		TkKeyboardChanged(Tk_Window tkwin, int shown);
 
 typedef struct TkIntStubs {
     int magic;
@@ -746,6 +750,8 @@ typedef struct TkIntStubs {
     int (*tkFontEmojiPresentation) (int ch, int next); /* 188 */
     int (*tkFontEmojiContinuation) (int ch, int inEmoji); /* 189 */
     void (*tkTouchEvent) (int type, Tk_Window tkwin, int id, double x, double y, unsigned long time, unsigned int modState); /* 190 */
+    TkKeyboardProc * (*tkSetKeyboardProc) (TkKeyboardProc *proc); /* 191 */
+    void (*tkKeyboardChanged) (Tk_Window tkwin, int shown); /* 192 */
 } TkIntStubs;
 
 extern const TkIntStubs *tkIntStubsPtr;
@@ -1115,6 +1121,10 @@ extern const TkIntStubs *tkIntStubsPtr;
 	(tkIntStubsPtr->tkFontEmojiContinuation) /* 189 */
 #define TkTouchEvent \
 	(tkIntStubsPtr->tkTouchEvent) /* 190 */
+#define TkSetKeyboardProc \
+	(tkIntStubsPtr->tkSetKeyboardProc) /* 191 */
+#define TkKeyboardChanged \
+	(tkIntStubsPtr->tkKeyboardChanged) /* 192 */
 
 #endif /* defined(USE_TK_STUBS) */
 

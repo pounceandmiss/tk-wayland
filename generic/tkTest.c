@@ -161,6 +161,7 @@ static Tcl_ObjCmdProc2 TestcursorObjCmd;
 static Tcl_ObjCmdProc2 TestdeleteappsObjCmd;
 static Tcl_ObjCmdProc2 TestemojiObjCmd;
 static Tcl_ObjCmdProc2 TesttouchObjCmd;
+static Tcl_ObjCmdProc2 TestkeyboardObjCmd;
 static Tcl_ObjCmdProc2 TestfontObjCmd;
 static Tcl_ObjCmdProc2 TestmakeexistObjCmd;
 #if !(defined(_WIN32) || defined(MAC_OSX_TK) || defined(__CYGWIN__))
@@ -256,6 +257,8 @@ Tktest_Init(
     Tcl_CreateObjCommand2(interp, "testtext", TkpTesttextCmd,
 	    Tk_MainWindow(interp), NULL);
     Tcl_CreateObjCommand2(interp, "testtouch", TesttouchObjCmd,
+	    Tk_MainWindow(interp), NULL);
+    Tcl_CreateObjCommand2(interp, "testkeyboard", TestkeyboardObjCmd,
 	    Tk_MainWindow(interp), NULL);
     Tcl_CreateObjCommand2(interp, "testphotostringmatch",
 	    TestPhotoStringMatchCmd, Tk_MainWindow(interp),
@@ -1336,6 +1339,113 @@ TesttouchObjCmd(
     }
     tkwin = Tk_CoordsToWindow((int)x, (int)y, (Tk_Window)clientData);
     TkTouchEvent(type, tkwin, id, x, y, (unsigned long)time, 0);
+    return TCL_OK;
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TestkeyboardObjCmd --
+ *
+ *	This function implements the "testkeyboard" command, which plays the
+ *	on-screen keyboard of a port for tkKeyboard.c:
+ *	    testkeyboard install	Install a keyboard which appends "show
+ *					type" or "hide" to ::testkeyboard
+ *					when it is shown or hidden.
+ *	    testkeyboard remove		Put back the keyboard of the port.
+ *	    testkeyboard changed shown	Tell that the keyboard was shown or
+ *					hidden.
+ *
+ * Results:
+ *	A standard Tcl result.
+ *
+ * Side effects:
+ *	As above.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static Tcl_Interp *keyboardInterp = NULL;
+static TkKeyboardProc *portKeyboardProc = NULL;
+static int keyboardInstalled = 0;
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TestKeyboardProc --
+ *
+ *	The keyboard procedure installed by "testkeyboard install".
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	"show type" or "hide" is appended to ::testkeyboard.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static void
+TestKeyboardProc(
+    TCL_UNUSED(Tk_Window),
+    int show,			/* Whether to show the keyboard. */
+    int type)			/* TK_KEYBOARD_*. */
+{
+    static const char *const types[] = {
+	"text", "number", "phone", "email", "url", "password", "none"
+    };
+    char buf[32];
+
+    snprintf(buf, sizeof(buf), "show %s", types[type]);
+    if (keyboardInterp) {
+	Tcl_SetVar2(keyboardInterp, "testkeyboard", NULL, show ? buf : "hide",
+		TCL_GLOBAL_ONLY | TCL_APPEND_VALUE | TCL_LIST_ELEMENT);
+    }
+}
+
+static int
+TestkeyboardObjCmd(
+    void *clientData,		/* Main window of application. */
+    Tcl_Interp *interp,		/* Current interpreter. */
+    Tcl_Size objc,		/* Number of arguments. */
+    Tcl_Obj *const objv[])	/* Argument objects. */
+{
+    static const char *const options[] = {
+	"changed", "install", "remove", NULL
+    };
+    int index, shown;
+
+    if (objc < 2) {
+	Tcl_WrongNumArgs(interp, 1, objv, "option ?arg?");
+	return TCL_ERROR;
+    }
+    if (Tcl_GetIndexFromObj(interp, objv[1], options, "option", 0, &index)
+	    != TCL_OK) {
+	return TCL_ERROR;
+    }
+    switch (index) {
+    case 0:
+	if (objc != 3
+		|| Tcl_GetBooleanFromObj(interp, objv[2], &shown) != TCL_OK) {
+	    Tcl_WrongNumArgs(interp, 2, objv, "shown");
+	    return TCL_ERROR;
+	}
+	TkKeyboardChanged((Tk_Window)clientData, shown);
+	break;
+    case 1:
+	keyboardInterp = interp;
+	if (!keyboardInstalled) {
+	    portKeyboardProc = TkSetKeyboardProc(TestKeyboardProc);
+	    keyboardInstalled = 1;
+	}
+	break;
+    case 2:
+	if (keyboardInstalled) {
+	    TkSetKeyboardProc(portKeyboardProc);
+	    keyboardInstalled = 0;
+	}
+	break;
+    }
     return TCL_OK;
 }
 

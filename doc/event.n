@@ -387,6 +387,16 @@ invoke the widget.
 This can be sent to some widgets (e.g. button, listbox, menu) as an
 alternative to <space>.
 .TP
+\fB<<KeyboardHidden>>\fR
+.
+This is sent to the window which has the focus when the on-screen keyboard
+was hidden, by Tk or by the user (see \fBtk keyboard\fR in \fBtk\fR(n)).
+.TP
+\fB<<KeyboardShown>>\fR
+.
+This is sent to the window which has the focus when the on-screen keyboard
+was shown.
+.TP
 \fB<<ListboxSelect>>\fR
 .
 This is sent to a listbox when the set of selected item(s) in the

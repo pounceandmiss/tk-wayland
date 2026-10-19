@@ -1,0 +1,245 @@
+# This file is a Tcl script to test the on-screen keyboard: the "tk keyboard"
+# command, and the policy of tkKeyboard.c, which shows the keyboard when the
+# focus is in a widget which takes text. The keyboard of the port is played by
+# the testkeyboard command, which records what it is asked in ::testkeyboard.
+#
+# Copyright © 2026 The Tk developers.
+#
+# See the file "license.terms" for information on usage and redistribution
+# of this file, and for a DISCLAIMER OF ALL WARRANTIES.
+
+package require tcltest 2.2
+namespace import ::tcltest::*
+tcltest::configure {*}$argv
+tcltest::loadTestedCommands
+
+testConstraint testkeyboard [llength [info commands testkeyboard]]
+
+# Let the keyboard be decided (before Tcl waits for events, and after the
+# delay of hiding).
+proc settle {} {
+    update
+    after 250 {set ::settled 1}
+    vwait ::settled
+    update
+}
+
+# Give the focus to a window, and let the keyboard be decided.
+proc focusOn {w} {
+    focus -force $w
+    settle
+}
+
+proc setupKeyboard {} {
+    testkeyboard install
+    tk keyboard mode auto
+    entry .e
+    entry .e2
+    button .b -text button
+    pack .e .e2 .b
+    focusOn .b
+    set ::testkeyboard {}
+}
+proc cleanupKeyboard {} {
+    destroy .e .e2 .b .m
+    tk keyboard mode auto
+    testkeyboard remove
+    unset -nocomplain ::testkeyboard
+}
+
+test keyboard-1.1 {tk keyboard: mode} -body {
+    list [tk keyboard mode] [tk keyboard mode manual] [tk keyboard mode] \
+	[tk keyboard mode auto]
+} -result {auto manual manual auto}
+test keyboard-1.2 {tk keyboard: bad mode} -body {
+    tk keyboard mode sometimes
+} -returnCodes error -result {bad mode "sometimes": must be auto or manual}
+test keyboard-1.3 {tk keyboard: bad option} -body {
+    tk keyboard open
+} -returnCodes error -result {bad option "open": must be hide, mode, show, or type}
+test keyboard-1.4 {tk keyboard: -displayof} -body {
+    tk keyboard -displayof .
+} -match glob -result {*}
+test keyboard-1.5 {tk keyboard type: default} -setup {
+    entry .e
+    entry .p -show *
+} -body {
+    list [tk keyboard type .e] [tk keyboard type .p]
+} -cleanup {
+    destroy .e .p
+} -result {text password}
+test keyboard-1.6 {tk keyboard type: set} -setup {
+    entry .e
+} -body {
+    list [tk keyboard type .e number] [tk keyboard type .e]
+} -cleanup {
+    destroy .e
+} -result {number number}
+test keyboard-1.7 {tk keyboard type: forgotten when destroyed} -body {
+    entry .e
+    tk keyboard type .e phone
+    destroy .e
+    entry .e
+    tk keyboard type .e
+} -cleanup {
+    destroy .e
+} -result text
+test keyboard-1.8 {tk keyboard type: bad type} -setup {
+    entry .e
+} -body {
+    tk keyboard type .e braille
+} -cleanup {
+    destroy .e
+} -returnCodes error -result {bad type "braille": must be text, number, phone, email, url, password, or none}
+
+test keyboard-2.1 {shown when the focus is in an entry} -constraints {
+    testkeyboard
+} -setup setupKeyboard -body {
+    focusOn .e
+    set ::testkeyboard
+} -cleanup cleanupKeyboard -result {{show text}}
+test keyboard-2.2 {hidden when the focus leaves it} -constraints {
+    testkeyboard
+} -setup setupKeyboard -body {
+    focusOn .e
+    focusOn .b
+    set ::testkeyboard
+} -cleanup cleanupKeyboard -result {{show text} hide}
+test keyboard-2.3 {kept when the focus moves to another entry} -constraints {
+    testkeyboard
+} -setup setupKeyboard -body {
+    focusOn .e
+    focusOn .e2
+    set ::testkeyboard
+} -cleanup cleanupKeyboard -result {{show text}}
+test keyboard-2.4 {not shown for a disabled entry} -constraints {
+    testkeyboard
+} -setup setupKeyboard -body {
+    .e configure -state disabled
+    focusOn .e
+    set ::testkeyboard
+} -cleanup cleanupKeyboard -result {}
+test keyboard-2.5 {the type of a password entry} -constraints {
+    testkeyboard
+} -setup setupKeyboard -body {
+    .e configure -show *
+    focusOn .e
+    set ::testkeyboard
+} -cleanup cleanupKeyboard -result {{show password}}
+test keyboard-2.6 {never shown for the type none} -constraints {
+    testkeyboard
+} -setup setupKeyboard -body {
+    tk keyboard type .e none
+    focusOn .e
+    set ::testkeyboard
+} -cleanup cleanupKeyboard -result {}
+test keyboard-2.7 {shown again with a new type} -constraints {
+    testkeyboard
+} -setup setupKeyboard -body {
+    tk keyboard type .e2 number
+    focusOn .e
+    focusOn .e2
+    set ::testkeyboard
+} -cleanup cleanupKeyboard -result {{show text} {show number}}
+test keyboard-2.8 {kept when the focus is in a menu} -constraints {
+    testkeyboard
+} -setup setupKeyboard -body {
+    menu .m -tearoff 0
+    .m add command -label item
+    focusOn .e
+    tk_popup .m [winfo rootx .e] [winfo rooty .e]
+    settle
+    set before $::testkeyboard
+    tk::MenuUnpost .m
+    focusOn .e
+    list $before $::testkeyboard
+} -cleanup cleanupKeyboard -result {{{show text}} {{show text}}}
+test keyboard-2.9 {manual mode} -constraints testkeyboard -setup {
+    setupKeyboard
+    tk keyboard mode manual
+} -body {
+    focusOn .e
+    set before $::testkeyboard
+    tk keyboard show
+    tk keyboard hide
+    list $before $::testkeyboard
+} -cleanup cleanupKeyboard -result {{} {{show text} hide}}
+test keyboard-2.10 {hidden by the application, until the focus moves} -constraints {
+    testkeyboard
+} -setup setupKeyboard -body {
+    focusOn .e
+    tk keyboard hide
+    settle
+    set before $::testkeyboard
+    focusOn .e2
+    list $before $::testkeyboard
+} -cleanup cleanupKeyboard -result {{{show text} hide} {{show text} hide {show text}}}
+
+test keyboard-3.1 {the state, and events, from the port} -constraints {
+    testkeyboard
+} -setup {
+    setupKeyboard
+    set ::events {}
+    bind .e <<KeyboardShown>> {lappend ::events shown %W}
+    bind .e <<KeyboardHidden>> {lappend ::events hidden %W}
+} -body {
+    focusOn .e
+    testkeyboard changed 1
+    update
+    set state [tk keyboard]
+    testkeyboard changed 0
+    update
+    list $state [tk keyboard] $::events
+} -cleanup cleanupKeyboard -result {shown hidden {shown .e hidden .e}}
+test keyboard-3.2 {hidden by the user, shown again when the focus moves} -constraints {
+    testkeyboard
+} -setup setupKeyboard -body {
+    focusOn .e
+    testkeyboard changed 1
+    testkeyboard changed 0
+    settle
+    set before $::testkeyboard
+    focusOn .e2
+    list $before $::testkeyboard
+} -cleanup cleanupKeyboard -result {{{show text}} {{show text} {show text}}}
+test keyboard-3.3 {kept while another widget sets its caret} -constraints {
+    testkeyboard
+} -setup {
+    setupKeyboard
+    text .t -height 2
+    pack .t
+} -body {
+    # A text widget sets the caret when it draws its insertion cursor, also
+    # without the focus: it does not take the keyboard from the entry.
+
+    focusOn .e
+    tk caret .t -x 2 -y 2 -height 10
+    settle
+    tk caret .t -x 4 -y 2 -height 10
+    settle
+    set ::testkeyboard
+} -cleanup {
+    destroy .t
+    cleanupKeyboard
+} -result {{show text}}
+
+test keyboard-3.4 {hidden by the user, shown again by a click in the focus} -constraints {
+    testkeyboard
+} -setup setupKeyboard -body {
+    focusOn .e
+    testkeyboard changed 1
+    testkeyboard changed 0
+    settle
+    set before $::testkeyboard
+    event generate .e <ButtonPress-1> -x 2 -y 2
+    event generate .e <ButtonRelease-1> -x 2 -y 2
+    settle
+    list $before $::testkeyboard
+} -cleanup cleanupKeyboard -result {{{show text}} {{show text} {show text}}}
+
+cleanupTests
+return
+
+# Local Variables:
+# mode: tcl
+# End:

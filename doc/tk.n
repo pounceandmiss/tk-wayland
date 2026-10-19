@@ -100,6 +100,35 @@ the timer is reset and an empty string is returned.  Resetting the
 inactivity time is forbidden in safe interpreters and will throw an
 error if tried.
 .RE
+.\" METHOD: keyboard
+.TP
+\fBtk keyboard \fR?\fB\-displayof \fIwindow\fR?
+.TP
+\fBtk keyboard show\fR|\fBhide \fR?\fB\-displayof \fIwindow\fR?
+.TP
+\fBtk keyboard mode \fR?\fB\-displayof \fIwindow\fR? ?\fBauto\fR|\fBmanual\fR?
+.TP
+\fBtk keyboard type \fIwindow\fR ?\fItype\fR?
+.
+Controls the on-screen keyboard, on the windowing systems which have one.
+Without a subcommand, returns \fBshown\fR or \fBhidden\fR:
+what the windowing system said, or else what Tk asked for. \fBshow\fR and
+\fBhide\fR show and hide the keyboard. In the \fBauto\fR mode, the default,
+the keyboard follows the focus: it is shown when the focus moves to a widget
+which shows an insertion cursor and can be edited (in the normal state, or
+neither disabled nor readonly for themed widgets), and hidden when it moves
+to another window, except a menu or a window of an override-redirect
+toplevel, which leave it as it is; what \fBshow\fR or \fBhide\fR did lasts
+until the focus moves. In the \fBmanual\fR mode, only \fBshow\fR and
+\fBhide\fR move the keyboard. \fBmode\fR sets the mode, if given, and returns
+it. \fBtype\fR sets the type of the text of a window, if given, which may
+change the layout of the keyboard, and returns it: one of \fBtext\fR,
+\fBnumber\fR, \fBphone\fR, \fBemail\fR, \fBurl\fR, \fBpassword\fR, or
+\fBnone\fR, for which the keyboard is never shown. The default is
+\fBpassword\fR for entries whose \fB\-show\fR option is not empty, and
+\fBtext\fR otherwise. When the windowing system tells that the keyboard was
+shown or hidden, the window with the focus gets a \fB<<KeyboardShown>>\fR or
+\fB<<KeyboardHidden>>\fR virtual event.
 .\" METHOD: fileicon
 .TP
 \fBtk fileicon \fIfile size\fR
@@ -222,7 +251,7 @@ Returns the current Tk windowing system, one of
 attribtable(n), busy(n), fontchooser(n), print(n), send(n), sysnotify(n),
 systray(n), winfo(n)
 .SH KEYWORDS
-application name, attribute, print, send, sysnotify, systray, touch
+application name, attribute, keyboard, print, send, sysnotify, systray, touch
 '\" Local Variables:
 '\" mode: nroff
 '\" End:
