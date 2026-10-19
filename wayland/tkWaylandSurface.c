@@ -605,6 +605,12 @@ TkXeResizeBacking(
 	cairo_paint(cr);
 	cairo_destroy(cr);
 	cairo_surface_destroy(surfPtr->backing);
+
+	/*
+	 * Only the part of the old image was kept: the rest must be drawn.
+	 */
+
+	TkXeLimitExposed(winPtr, surfPtr->width, surfPtr->height);
     }
     surfPtr->backing = backing;
     surfPtr->width = width;

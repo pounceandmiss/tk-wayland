@@ -1383,6 +1383,117 @@ QueueGraphicsExposures(
 /*
  *----------------------------------------------------------------------
  *
+ * PixelStart --
+ *
+ *	The first pixel whose center is at or after an edge, in pixels.
+ *
+ * Results:
+ *	The index of the pixel.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static int
+PixelStart(
+    double edge)		/* An edge, in pixels. */
+{
+    return (int)ceil(edge - 0.5);
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * CopyPixels --
+ *
+ *	Copy an area between images of the same fractional scale, pixel by
+ *	pixel. The pixels of the destination are those whose centers are in
+ *	the area, and so are those of the source; when the area falls
+ *	between pixels differently in both, they may differ by one at an
+ *	edge, and the edge of the source is repeated. Sampling the source at
+ *	the position of each destination pixel instead may take a pixel
+ *	whose center is outside the area, which was not drawn (black lines
+ *	at the edges of what a canvas redraws through a pixmap).
+ *
+ * Results:
+ *	False if the format of the source is not handled.
+ *
+ * Side effects:
+ *	Draws in the destination.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static bool
+CopyPixels(
+    TkXeDrawContext *ctxPtr,	/* The destination. */
+    cairo_surface_t *srcSurface,/* The source image. */
+    int srcX, int srcY,		/* The area in the source image. */
+    unsigned int width, unsigned int height,
+    int dstX, int dstY,		/* Its place in the destination drawable. */
+    double scale)		/* The scale of both images. */
+{
+    cairo_format_t format = cairo_image_surface_get_format(srcSurface);
+    int stride = cairo_image_surface_get_stride(srcSurface);
+    int bpp, sx0, sy0, sx1, sy1, dx0, dy0, dx1, dy1;
+    unsigned char *data;
+    cairo_surface_t *part;
+
+    if (format == CAIRO_FORMAT_A8) {
+	bpp = 1;
+    } else if (format == CAIRO_FORMAT_RGB24 || format == CAIRO_FORMAT_ARGB32) {
+	bpp = 4;
+    } else {
+	return false;
+    }
+    sx0 = PixelStart(srcX * scale);
+    sy0 = PixelStart(srcY * scale);
+    sx1 = PixelStart((srcX + (int)width) * scale);
+    sy1 = PixelStart((srcY + (int)height) * scale);
+    sx0 = (sx0 < 0) ? 0 : sx0;
+    sy0 = (sy0 < 0) ? 0 : sy0;
+    if (sx1 > cairo_image_surface_get_width(srcSurface)) {
+	sx1 = cairo_image_surface_get_width(srcSurface);
+    }
+    if (sy1 > cairo_image_surface_get_height(srcSurface)) {
+	sy1 = cairo_image_surface_get_height(srcSurface);
+    }
+    dx0 = PixelStart((ctxPtr->x + dstX) * scale);
+    dy0 = PixelStart((ctxPtr->y + dstY) * scale);
+    dx1 = PixelStart((ctxPtr->x + dstX + (int)width) * scale);
+    dy1 = PixelStart((ctxPtr->y + dstY + (int)height) * scale);
+    if (sx1 <= sx0 || sy1 <= sy0 || dx1 <= dx0 || dy1 <= dy0) {
+	return true;
+    }
+
+    /*
+     * The pixels of the source, without copying them, drawn in pixels.
+     */
+
+    cairo_surface_flush(srcSurface);
+    data = cairo_image_surface_get_data(srcSurface)
+	    + (size_t)sy0 * stride + (size_t)sx0 * bpp;
+    part = cairo_image_surface_create_for_data(data, format, sx1 - sx0,
+	    sy1 - sy0, stride);
+    cairo_save(ctxPtr->cr);
+    cairo_identity_matrix(ctxPtr->cr);
+    cairo_scale(ctxPtr->cr, 1.0 / scale, 1.0 / scale);
+    cairo_set_source_surface(ctxPtr->cr, part, dx0, dy0);
+    cairo_pattern_set_filter(cairo_get_source(ctxPtr->cr),
+	    CAIRO_FILTER_NEAREST);
+    cairo_pattern_set_extend(cairo_get_source(ctxPtr->cr), CAIRO_EXTEND_PAD);
+    cairo_rectangle(ctxPtr->cr, dx0, dy0, dx1 - dx0, dy1 - dy0);
+    cairo_fill(ctxPtr->cr);
+    cairo_restore(ctxPtr->cr);
+    cairo_surface_destroy(part);
+    return true;
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
  * XCopyArea --
  *
  *	Copy an area between drawables. If the source is a window and parts of
@@ -1461,10 +1572,16 @@ XCopyArea(
 	} else {
 	    double srcScale, dstScale, dummy;
 
-	    cairo_set_source_surface(ctx.cr, srcSurface, dstX - srcX - sx,
-		    dstY - srcY - sy);
 	    cairo_surface_get_device_scale(srcSurface, &srcScale, &dummy);
 	    cairo_surface_get_device_scale(ctx.target, &dstScale, &dummy);
+	    if (srcScale == dstScale && srcScale != floor(srcScale)
+		    && CopyPixels(&ctx, srcSurface, sx + srcX, sy + srcY,
+			width, height, dstX, dstY, srcScale)) {
+		TkXeEndDraw(&ctx, dstX, dstY, (int)width, (int)height);
+		goto exposures;
+	    }
+	    cairo_set_source_surface(ctx.cr, srcSurface, dstX - srcX - sx,
+		    dstY - srcY - sy);
 	    if (srcScale == dstScale) {
 		/*
 		 * A copy of pixels: with a fractional scale the position may
@@ -1484,6 +1601,8 @@ XCopyArea(
 	    cairo_surface_destroy(copy);
 	}
     }
+
+  exposures:
     if (gc->graphics_exposures) {
 	QueueGraphicsExposures(display, dst, srcWinPtr, srcX, srcY, width,
 		height, dstX, dstY, 62 /* X_CopyArea */, false);

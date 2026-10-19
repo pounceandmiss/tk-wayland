@@ -1461,7 +1461,7 @@ WAYLAND_PROTOCOL_idle-inhibit-unstable-v1 = \
 # Shared files which include tkXemuInt.h, and with it tkWaylandInt.h on
 # Wayland, need the protocol headers (the variable is empty for the other
 # windowing systems).
-tkPointer.o: $(@TK_WINDOWINGSYSTEM@_PROTOCOL_HDRS)
+tkCanvas.o tkPointer.o: $(@TK_WINDOWINGSYSTEM@_PROTOCOL_HDRS)
 
 %-client-protocol.h:
 	$(WAYLAND_SCANNER) client-header \

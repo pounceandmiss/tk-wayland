@@ -835,6 +835,41 @@ TkXeForgetExposed(
 /*
  *----------------------------------------------------------------------
  *
+ * TkXeLimitExposed --
+ *
+ *	Forget what was drawn in a window and its descendants outside a
+ *	rectangle of their surface: called when the backing image of the
+ *	surface is replaced, with the part of the old image which was kept,
+ *	so that the rest gets Expose events. (The image may have been made
+ *	smaller, then larger again, before the exposures were computed.)
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The exposed regions of the windows are reduced.
+ *
+ *----------------------------------------------------------------------
+ */
+
+void
+TkXeLimitExposed(
+    TkXeWindow *winPtr,		/* The window. */
+    int width, int height)	/* The rectangle at the origin of the
+				 * surface, in its coordinates. */
+{
+    TkXeWindow *childPtr;
+
+    pixman_region32_intersect_rect(&winPtr->exposed, &winPtr->exposed, 0, 0,
+	    (unsigned)width, (unsigned)height);
+    for (childPtr = winPtr->firstChild; childPtr; childPtr = childPtr->above) {
+	TkXeLimitExposed(childPtr, width, height);
+    }
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
  * TkXeWindowAtPoint --
  *
  *	Find the deepest mapped descendant of a window which contains a point,

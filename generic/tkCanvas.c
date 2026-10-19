@@ -23,6 +23,9 @@
 #ifdef _WIN32
 #include "tkWinInt.h"
 #endif
+#ifdef TK_USE_XEMU
+#include "tkXemuInt.h"
+#endif
 
 /*
  * See tkCanvas.h for key data structures used to implement canvases.
@@ -3008,7 +3011,10 @@ DisplayCanvas(
     Tk_Window tkwin = canvasPtr->tkwin;
     Tk_Item *itemPtr;
     Pixmap pixmap;
-    int screenX1, screenX2, screenY1, screenY2, width, height;
+    int screenX1, screenX2, screenY1, screenY2, width, height, margin;
+#ifdef TK_USE_XEMU
+    TkXeSurface *surfPtr;
+#endif
     int borderWidth, highlightWidth;
     bool repickAgain = false;	/* A new current item is needed again after
 				 * the current one was chosen. */
@@ -3059,26 +3065,37 @@ DisplayCanvas(
 
     /*
      * Compute the intersection between the area that needs redrawing and the
-     * area that's visible on the screen.
+     * area that's visible on the screen. Where a pixel of the canvas is a
+     * fraction of the pixels of the screen (Wayland), an edge drawn in the
+     * pixmap may fall on a pixel of the screen just outside the area, and
+     * would be left behind when the item moves: the area is then one pixel
+     * larger on each side.
      */
 
+    margin = 0;
+#ifdef TK_USE_XEMU
+    surfPtr = TkXeGetSurface(Tk_WindowId(tkwin));
+    if (surfPtr != NULL && !TkXeIntegralScale(surfPtr)) {
+	margin = 1;
+    }
+#endif
     if ((canvasPtr->redrawX1 < canvasPtr->redrawX2)
 	    && (canvasPtr->redrawY1 < canvasPtr->redrawY2)) {
 	screenX1 = canvasPtr->xOrigin + canvasPtr->inset;
 	screenY1 = canvasPtr->yOrigin + canvasPtr->inset;
 	screenX2 = canvasPtr->xOrigin + Tk_Width(tkwin) - canvasPtr->inset;
 	screenY2 = canvasPtr->yOrigin + Tk_Height(tkwin) - canvasPtr->inset;
-	if (canvasPtr->redrawX1 > screenX1) {
-	    screenX1 = canvasPtr->redrawX1;
+	if (canvasPtr->redrawX1 - margin > screenX1) {
+	    screenX1 = canvasPtr->redrawX1 - margin;
 	}
-	if (canvasPtr->redrawY1 > screenY1) {
-	    screenY1 = canvasPtr->redrawY1;
+	if (canvasPtr->redrawY1 - margin > screenY1) {
+	    screenY1 = canvasPtr->redrawY1 - margin;
 	}
-	if (canvasPtr->redrawX2 < screenX2) {
-	    screenX2 = canvasPtr->redrawX2;
+	if (canvasPtr->redrawX2 + margin < screenX2) {
+	    screenX2 = canvasPtr->redrawX2 + margin;
 	}
-	if (canvasPtr->redrawY2 < screenY2) {
-	    screenY2 = canvasPtr->redrawY2;
+	if (canvasPtr->redrawY2 + margin < screenY2) {
+	    screenY2 = canvasPtr->redrawY2 + margin;
 	}
 	if ((screenX1 >= screenX2) || (screenY1 >= screenY2)) {
 	    goto borders;
