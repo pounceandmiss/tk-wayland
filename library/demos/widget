@@ -371,6 +371,14 @@ addFormattedText {
     @@demo ttkbut	The simple Themed Tk widgets
 }
 
+addFormattedText {
+    @@subtitle	Touchscreens
+    @@new
+    @@demo touch	Gestures, the on-screen keyboard and selection
+    @@new
+    @@demo multitouch	Finger painting with many fingers
+}
+
 if {[tk windowingsystem] eq "aqua"} {
     addFormattedText {
 	@@subtitle Mac-Specific Widgets and Window Styles
