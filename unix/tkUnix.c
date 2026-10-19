@@ -93,7 +93,7 @@ TkGetDefaultScreenName(
     return screenName;
 }
 
-#ifndef TK_USE_WAYLAND
+#ifndef TK_USE_XEMU
 /*
  *----------------------------------------------------------------------
  *
@@ -127,7 +127,7 @@ Tk_UpdatePointer(
    */
 }
 
-#endif /* TK_USE_WAYLAND */
+#endif /* TK_USE_XEMU */
 
 /*
  *----------------------------------------------------------------------

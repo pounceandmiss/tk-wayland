@@ -1,11 +1,12 @@
 /*
- * tkWaylandFont.c --
+ * tkXemuFont.c --
  *
- *	The font package of the Wayland port. Fonts are matched with
- *	fontconfig and drawn with Cairo. Like the Xft implementation of the
- *	X11 port (tkUnixRFont.c), which this follows, a Tk font is a sorted
- *	list of faces, and every character is drawn with the first face which
- *	has it.
+ *	The font package of the X server emulation, without bidirectional
+ *	text (see tkXemuXft.c for the ports which have HarfBuzz). Fonts are
+ *	matched with fontconfig and drawn with Cairo. Like the Xft
+ *	implementation of the X11 port (tkUnixRFont.c), which this follows, a
+ *	Tk font is a sorted list of faces, and every character is drawn with
+ *	the first face which has it.
  *
  * Copyright © 2002-2003 Keith Packard
  * Copyright © 2026 The Tk developers.
@@ -14,8 +15,8 @@
  * this file, and for a DISCLAIMER OF ALL WARRANTIES.
  */
 
-#include "tkWaylandInt.h"
-#include "tkWaylandDraw.h"
+#include "tkXemuInt.h"
+#include "tkXemuDraw.h"
 #include "tkFont.h"
 #include <fontconfig/fontconfig.h>
 #include <fontconfig/fcfreetype.h>
@@ -468,7 +469,7 @@ TkpGetNativeFont(
     if (!strcmp(name, "fixed")) {
 	pattern = FcNameParse((const FcChar8 *)"monospace:size=10");
     } else {
-	pattern = TkWlXlfdParse(name);
+	pattern = TkXeXlfdParse(name);
     }
     if (pattern == NULL) {
 	return NULL;
@@ -853,12 +854,12 @@ DrawString(
     double x, double y,
     double angle)
 {
-    TkWlDrawContext ctx;
+    TkXeDrawContext ctx;
     cairo_glyph_t glyphs[NUM_GLYPHS];
     WlFace *currentFace = NULL;
     int n = 0, advance = 0, ascent = fontPtr->font.fm.ascent;
     int descent = fontPtr->font.fm.descent;
-    bool drawing = TkWlBeginDraw(drawable, gc, &ctx);
+    bool drawing = TkXeBeginDraw(drawable, gc, &ctx);
 
     if (drawing) {
 	cairo_save(ctx.cr);
@@ -901,12 +902,12 @@ DrawString(
 	}
 	cairo_restore(ctx.cr);
 	if (angle == 0.0) {
-	    TkWlEndDraw(&ctx, (int)x - ascent, (int)y - ascent - 1,
+	    TkXeEndDraw(&ctx, (int)x - ascent, (int)y - ascent - 1,
 		    advance + 2 * ascent, ascent + descent + 2);
 	} else {
 	    int r = advance + ascent + descent;
 
-	    TkWlEndDraw(&ctx, (int)x - r - 1, (int)y - r - 1, 2 * r + 2,
+	    TkXeEndDraw(&ctx, (int)x - r - 1, (int)y - r - 1, 2 * r + 2,
 		    2 * r + 2);
 	}
     }
@@ -942,7 +943,7 @@ Tk_DrawChars(
     WlFont *fontPtr = (WlFont *)tkfont;
     int width;
 
-    TkWlNextRequest(display);
+    TkXeNextRequest(display);
     width = DrawString(drawable, gc, fontPtr, source, numBytes, x, y, 0.0);
     if (fontPtr->font.fa.underline != 0) {
 	XFillRectangle(display, drawable, gc, x,
@@ -988,7 +989,7 @@ TkDrawAngledChars(
     double width, sinA = sin(angle * M_PI / 180.0);
     double cosA = cos(angle * M_PI / 180.0);
 
-    TkWlNextRequest(display);
+    TkXeNextRequest(display);
     width = DrawString(drawable, gc, fontPtr, source, numBytes, x, y, angle);
     if (fontPtr->font.fa.underline || fontPtr->font.fa.overstrike) {
 	double barHeight = fontPtr->font.underlineHeight;

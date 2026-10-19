@@ -534,7 +534,7 @@ XDrawPoints(
     return res;
 }
 
-#if !defined(MAC_OSX_TK) && !defined(TK_USE_WAYLAND)
+#if !defined(MAC_OSX_TK) && !defined(TK_USE_XEMU)
 int
 XDrawSegments(
     TCL_UNUSED(Display *),
@@ -574,7 +574,7 @@ XListProperties(
     return (Atom *) 0;
 }
 
-#ifndef TK_USE_WAYLAND
+#ifndef TK_USE_XEMU
 int
 XMapRaised(
     TCL_UNUSED(Display *),
@@ -582,7 +582,7 @@ XMapRaised(
 {
     return Success;
 }
-#endif /* TK_USE_WAYLAND */
+#endif /* TK_USE_XEMU */
 
 int
 XQueryTextExtents(
@@ -598,7 +598,7 @@ XQueryTextExtents(
     return Success;
 }
 
-#ifndef TK_USE_WAYLAND
+#ifndef TK_USE_XEMU
 int
 XReparentWindow(
     TCL_UNUSED(Display *),
@@ -609,9 +609,9 @@ XReparentWindow(
 {
     return BadWindow;
 }
-#endif /* TK_USE_WAYLAND */
+#endif /* TK_USE_XEMU */
 
-#ifndef TK_USE_WAYLAND
+#ifndef TK_USE_XEMU
 int
 XUndefineCursor(
     TCL_UNUSED(Display *),
@@ -619,7 +619,7 @@ XUndefineCursor(
 {
     return Success;
 }
-#endif /* TK_USE_WAYLAND */
+#endif /* TK_USE_XEMU */
 
 XVaNestedList
 XVaCreateNestedList(
@@ -648,7 +648,7 @@ XSetICFocus(
 {
 }
 
-#ifndef TK_USE_WAYLAND
+#ifndef TK_USE_XEMU
 Window
 XCreateWindow(
     TCL_UNUSED(Display *),
@@ -666,9 +666,9 @@ XCreateWindow(
 {
 	return 0;
 }
-#endif /* TK_USE_WAYLAND */
+#endif /* TK_USE_XEMU */
 
-#ifndef TK_USE_WAYLAND
+#ifndef TK_USE_XEMU
 Region
 XPolygonRegion(
     TCL_UNUSED(XPoint *),
@@ -677,7 +677,7 @@ XPolygonRegion(
 {
     return 0;
 }
-#endif /* TK_USE_WAYLAND */
+#endif /* TK_USE_XEMU */
 
 void
 XDestroyIC(
@@ -685,7 +685,7 @@ XDestroyIC(
 {
 }
 
-#ifndef TK_USE_WAYLAND
+#ifndef TK_USE_XEMU
 Cursor
 XCreatePixmapCursor(
     TCL_UNUSED(Display *),
@@ -698,9 +698,9 @@ XCreatePixmapCursor(
 {
     return (Cursor) NULL;
 }
-#endif /* TK_USE_WAYLAND */
+#endif /* TK_USE_XEMU */
 
-#ifndef TK_USE_WAYLAND
+#ifndef TK_USE_XEMU
 Cursor
 XCreateGlyphCursor(
     TCL_UNUSED(Display *),
@@ -713,7 +713,7 @@ XCreateGlyphCursor(
 {
     return (Cursor) NULL;
 }
-#endif /* TK_USE_WAYLAND */
+#endif /* TK_USE_XEMU */
 
 XFontSet
 XCreateFontSet(

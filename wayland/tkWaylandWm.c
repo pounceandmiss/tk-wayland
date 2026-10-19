@@ -29,9 +29,9 @@ static void		FrameCommit(struct libdecor_frame *frame, void *data);
 static void		FrameDismissPopup(struct libdecor_frame *frame,
 			    const char *seatName, void *data);
 
-static void		DestroyRole(TkWlSurface *surfPtr);
+static void		DestroyRole(TkXeSurface *surfPtr);
 static void		MapToplevel(void *clientData);
-static void		MapPopup(TkWlSurface *surfPtr);
+static void		MapPopup(TkXeSurface *surfPtr);
 
 static struct libdecor_frame_interface frameInterface = {
     FrameConfigure,
@@ -97,362 +97,6 @@ InitAtoms(
 /*
  *----------------------------------------------------------------------
  *
- * Xlib functions which set the hints for the window manager --
- *
- *	As in Xlib, they only set properties.
- *
- *----------------------------------------------------------------------
- */
-
-/*
- *----------------------------------------------------------------------
- *
- * XAllocSizeHints --
- *
- *	Allocate an XSizeHints structure, as Xlib does.
- *
- * Results:
- *	The structure, cleared, which the caller frees with XFree.
- *
- * Side effects:
- *	Allocates memory.
- *
- *----------------------------------------------------------------------
- */
-
-XSizeHints *
-XAllocSizeHints(void)
-{
-    XSizeHints *hints = (XSizeHints *)Tcl_Alloc(sizeof(XSizeHints));
-
-    memset(hints, 0, sizeof(XSizeHints));
-    return hints;
-}
-
-/*
- *----------------------------------------------------------------------
- *
- * XAllocClassHint --
- *
- *	Allocate an XClassHint structure, as Xlib does.
- *
- * Results:
- *	The structure, cleared, which the caller frees with XFree.
- *
- * Side effects:
- *	Allocates memory.
- *
- *----------------------------------------------------------------------
- */
-
-XClassHint *
-XAllocClassHint(void)
-{
-    XClassHint *hints = (XClassHint *)Tcl_Alloc(sizeof(XClassHint));
-
-    memset(hints, 0, sizeof(XClassHint));
-    return hints;
-}
-
-/*
- *----------------------------------------------------------------------
- *
- * XStoreName --
- *
- *	Set the name of a window: its WM_NAME property.
- *
- * Results:
- *	The result of XChangeProperty.
- *
- * Side effects:
- *	Changes the property, which the window manager applies as the title of
- *	the toplevel.
- *
- *----------------------------------------------------------------------
- */
-
-int
-XStoreName(
-    Display *display,
-    Window w,
-    const char *name)
-{
-    return XChangeProperty(display, w, XA_WM_NAME, XA_STRING, 8,
-	    PropModeReplace, (const unsigned char *)name, (int)strlen(name));
-}
-
-/*
- * The layout of the WM_NORMAL_HINTS property, in longs.
- */
-
-enum {
-    SH_FLAGS, SH_X, SH_Y, SH_WIDTH, SH_HEIGHT, SH_MIN_WIDTH, SH_MIN_HEIGHT,
-    SH_MAX_WIDTH, SH_MAX_HEIGHT, SH_WIDTH_INC, SH_HEIGHT_INC,
-    SH_MIN_ASPECT_X, SH_MIN_ASPECT_Y, SH_MAX_ASPECT_X, SH_MAX_ASPECT_Y,
-    SH_BASE_WIDTH, SH_BASE_HEIGHT, SH_WIN_GRAVITY, SH_NUM
-};
-
-/*
- *----------------------------------------------------------------------
- *
- * XSetWMNormalHints --
- *
- *	Set the size hints of a window: its WM_NORMAL_HINTS property, in the
- *	layout of the protocol.
- *
- * Results:
- *	None.
- *
- * Side effects:
- *	Changes the property, which the window manager applies as the minimum
- *	and maximum sizes of the toplevel.
- *
- *----------------------------------------------------------------------
- */
-
-void
-XSetWMNormalHints(
-    Display *display,
-    Window w,
-    XSizeHints *hints)
-{
-    long data[SH_NUM];
-
-    data[SH_FLAGS] = hints->flags;
-    data[SH_X] = hints->x;
-    data[SH_Y] = hints->y;
-    data[SH_WIDTH] = hints->width;
-    data[SH_HEIGHT] = hints->height;
-    data[SH_MIN_WIDTH] = hints->min_width;
-    data[SH_MIN_HEIGHT] = hints->min_height;
-    data[SH_MAX_WIDTH] = hints->max_width;
-    data[SH_MAX_HEIGHT] = hints->max_height;
-    data[SH_WIDTH_INC] = hints->width_inc;
-    data[SH_HEIGHT_INC] = hints->height_inc;
-    data[SH_MIN_ASPECT_X] = hints->min_aspect.x;
-    data[SH_MIN_ASPECT_Y] = hints->min_aspect.y;
-    data[SH_MAX_ASPECT_X] = hints->max_aspect.x;
-    data[SH_MAX_ASPECT_Y] = hints->max_aspect.y;
-    data[SH_BASE_WIDTH] = hints->base_width;
-    data[SH_BASE_HEIGHT] = hints->base_height;
-    data[SH_WIN_GRAVITY] = hints->win_gravity;
-    XChangeProperty(display, w, XA_WM_NORMAL_HINTS, XA_WM_SIZE_HINTS, 32,
-	    PropModeReplace, (unsigned char *)data, SH_NUM);
-}
-
-/*
- *----------------------------------------------------------------------
- *
- * XSetWMHints --
- *
- *	Set the WM_HINTS property of a window.
- *
- * Results:
- *	The result of XChangeProperty.
- *
- * Side effects:
- *	Changes the property, whose initial state the window manager uses when
- *	the window is mapped.
- *
- *----------------------------------------------------------------------
- */
-
-int
-XSetWMHints(
-    Display *display,
-    Window w,
-    XWMHints *hints)
-{
-    long data[9];
-
-    data[0] = hints->flags;
-    data[1] = hints->input;
-    data[2] = hints->initial_state;
-    data[3] = (long)hints->icon_pixmap;
-    data[4] = (long)hints->icon_window;
-    data[5] = hints->icon_x;
-    data[6] = hints->icon_y;
-    data[7] = (long)hints->icon_mask;
-    data[8] = (long)hints->window_group;
-    return XChangeProperty(display, w, XA_WM_HINTS, XA_WM_HINTS, 32,
-	    PropModeReplace, (unsigned char *)data, 9);
-}
-
-/*
- *----------------------------------------------------------------------
- *
- * XSetClassHint --
- *
- *	Set the name and class of a window: its WM_CLASS property, where they
- *	are separated by a null byte.
- *
- * Results:
- *	The result of XChangeProperty.
- *
- * Side effects:
- *	Changes the property, which the window manager applies as the app_id
- *	of the toplevel.
- *
- *----------------------------------------------------------------------
- */
-
-int
-XSetClassHint(
-    Display *display,
-    Window w,
-    XClassHint *hints)
-{
-    size_t nameLen = hints->res_name ? strlen(hints->res_name) : 0;
-    size_t classLen = hints->res_class ? strlen(hints->res_class) : 0;
-    char *data = (char *)Tcl_Alloc(nameLen + classLen + 2);
-    int result;
-
-    memcpy(data, hints->res_name ? hints->res_name : "", nameLen + 1);
-    memcpy(data + nameLen + 1, hints->res_class ? hints->res_class : "",
-	    classLen + 1);
-    result = XChangeProperty(display, w, XA_WM_CLASS, XA_STRING, 8,
-	    PropModeReplace, (unsigned char *)data,
-	    (int)(nameLen + classLen + 2));
-    Tcl_Free(data);
-    return result;
-}
-
-/*
- *----------------------------------------------------------------------
- *
- * XSetTransientForHint --
- *
- *	Set the WM_TRANSIENT_FOR property of a window.
- *
- * Results:
- *	The result of XChangeProperty.
- *
- * Side effects:
- *	Changes the property, which the window manager applies as the parent
- *	of the toplevel.
- *
- *----------------------------------------------------------------------
- */
-
-int
-XSetTransientForHint(
-    Display *display,
-    Window w,
-    Window container)
-{
-    long data = (long)container;
-
-    return XChangeProperty(display, w, XA_WM_TRANSIENT_FOR, XA_WINDOW, 32,
-	    PropModeReplace, (unsigned char *)&data, 1);
-}
-
-/*
- *----------------------------------------------------------------------
- *
- * XSetWMColormapWindows --
- *
- *	Set the colormap windows of a toplevel: there is only one colormap, so
- *	there is nothing to do.
- *
- * Results:
- *	1 (success).
- *
- * Side effects:
- *	None.
- *
- *----------------------------------------------------------------------
- */
-
-Status
-XSetWMColormapWindows(
-    TCL_UNUSED(Display *),
-    TCL_UNUSED(Window),
-    TCL_UNUSED(Window *),
-    TCL_UNUSED(int))
-{
-    return 1;
-}
-
-/*
- *----------------------------------------------------------------------
- *
- * XReconfigureWMWindow --
- *
- *	Reconfigure a toplevel, which X window managers are asked to do.
- *	Raising a toplevel above the others ("raise") asks the compositor to
- *	activate it.
- *
- * Results:
- *	True if the window was reconfigured.
- *
- * Side effects:
- *	Configures the window, and may request its activation.
- *
- *----------------------------------------------------------------------
- */
-
-Status
-XReconfigureWMWindow(
-    Display *display,
-    Window w,
-    TCL_UNUSED(int),
-    unsigned int mask,
-    XWindowChanges *changes)
-{
-    TkWlWindow *winPtr = TkWlGetWindow(w);
-
-    /*
-     * Raising a toplevel above the others ("raise") asks the compositor to
-     * activate it.
-     */
-
-    if (winPtr && winPtr->surface && winPtr->mapped
-	    && (mask & CWStackMode) && !(mask & CWSibling)
-	    && changes->stack_mode == Above) {
-	TkWlWmActivate(winPtr->surface);
-    }
-    return XConfigureWindow(display, w, mask, changes) == Success;
-}
-
-/*
- *----------------------------------------------------------------------
- *
- * XIconifyWindow --
- *
- *	Ask the window manager to iconify a toplevel, with a WM_CHANGE_STATE
- *	client message to the root window, as Xlib does.
- *
- * Results:
- *	The result of XSendEvent.
- *
- * Side effects:
- *	The window manager minimizes the toplevel (see TkWlWmClientMessage).
- *
- *----------------------------------------------------------------------
- */
-
-Status
-XIconifyWindow(
-    Display *display,
-    Window w,
-    int screen)
-{
-    XEvent event;
-
-    InitAtoms(display);
-    memset(&event, 0, sizeof(XEvent));
-    event.xclient.type = ClientMessage;
-    event.xclient.window = w;
-    event.xclient.message_type = atoms.WM_CHANGE_STATE;
-    event.xclient.format = 32;
-    event.xclient.data.l[0] = IconicState;
-    return XSendEvent(display, RootWindow(display, screen), False,
-	    SubstructureRedirectMask | SubstructureNotifyMask, &event);
-}
-
-/*
- *----------------------------------------------------------------------
- *
  * ResizeSyncDone --
  *
  *	Called when the compositor answers the sync request sent after the
@@ -474,7 +118,7 @@ ResizeSyncDone(
     struct wl_callback *callback,
     TCL_UNUSED(uint32_t))
 {
-    TkWlSurface *surfPtr = (TkWlSurface *)data;
+    TkXeSurface *surfPtr = (TkXeSurface *)data;
 
     wl_callback_destroy(callback);
     surfPtr->resizeSync = NULL;
@@ -512,11 +156,11 @@ static const struct wl_callback_listener resizeSyncListener = {
 
 static long *
 GetLongs(
-    TkWlWindow *winPtr,
+    TkXeWindow *winPtr,
     Atom property,
     unsigned long minItems)
 {
-    TkWlProperty *propPtr = TkWlGetProperty(winPtr, property);
+    TkXeProperty *propPtr = TkXeGetProperty(winPtr, property);
 
     if (propPtr == NULL || propPtr->format != 32
 	    || propPtr->nitems < minItems) {
@@ -589,13 +233,13 @@ TruncatedString(
 
 static void
 ApplyTitle(
-    TkWlSurface *surfPtr)
+    TkXeSurface *surfPtr)
 {
-    TkWlProperty *propPtr = TkWlGetProperty(surfPtr->winPtr,
+    TkXeProperty *propPtr = TkXeGetProperty(surfPtr->winPtr,
 	    atoms._NET_WM_NAME);
 
     if (propPtr == NULL || propPtr->format != 8) {
-	propPtr = TkWlGetProperty(surfPtr->winPtr, XA_WM_NAME);
+	propPtr = TkXeGetProperty(surfPtr->winPtr, XA_WM_NAME);
     }
     if (propPtr && propPtr->format == 8) {
 	char *title = TruncatedString((const char *)propPtr->data,
@@ -626,9 +270,9 @@ ApplyTitle(
 
 static void
 ApplyClass(
-    TkWlSurface *surfPtr)
+    TkXeSurface *surfPtr)
 {
-    TkWlProperty *propPtr = TkWlGetProperty(surfPtr->winPtr, XA_WM_CLASS);
+    TkXeProperty *propPtr = TkXeGetProperty(surfPtr->winPtr, XA_WM_CLASS);
     const char *explicitId = TkWlCmdsAppId(surfPtr);
 
     if (explicitId) {
@@ -673,7 +317,7 @@ ApplyClass(
 
 static void
 ApplySizeHints(
-    TkWlSurface *surfPtr)
+    TkXeSurface *surfPtr)
 {
     long *hints = GetLongs(surfPtr->winPtr, XA_WM_NORMAL_HINTS, SH_NUM);
     int minWidth = 0, minHeight = 0, maxWidth = 0, maxHeight = 0;
@@ -718,11 +362,11 @@ ApplySizeHints(
 
 static void
 ApplyTransient(
-    TkWlSurface *surfPtr)
+    TkXeSurface *surfPtr)
 {
     long *container = GetLongs(surfPtr->winPtr, XA_WM_TRANSIENT_FOR, 1);
-    TkWlSurface *parentPtr = container
-	    ? TkWlGetSurface((Window)container[0]) : NULL;
+    TkXeSurface *parentPtr = container
+	    ? TkXeGetSurface((Window)container[0]) : NULL;
 
     libdecor_frame_set_parent(surfPtr->frame,
 	    (parentPtr && parentPtr->frame) ? parentPtr->frame : NULL);
@@ -787,7 +431,7 @@ IconBuffer(
 		    | ((p & 0xFF) * a / 255);
 	}
     }
-    pool = wl_shm_create_pool(tkWlDisplay->shm, fd, (int32_t)size);
+    pool = wl_shm_create_pool(tkXeDisplay->shm, fd, (int32_t)size);
     buffer = wl_shm_pool_create_buffer(pool, 0, side, side, side * 4,
 	    WL_SHM_FORMAT_ARGB8888);
     wl_shm_pool_destroy(pool);
@@ -817,9 +461,9 @@ IconBuffer(
 
 static void
 ApplyIcon(
-    TkWlSurface *surfPtr)
+    TkXeSurface *surfPtr)
 {
-    TkWlProperty *propPtr = TkWlGetProperty(surfPtr->winPtr,
+    TkXeProperty *propPtr = TkXeGetProperty(surfPtr->winPtr,
 	    atoms._NET_WM_ICON);
     struct xdg_toplevel *toplevel;
     struct xdg_toplevel_icon_v1 *icon;
@@ -833,18 +477,18 @@ ApplyIcon(
     unsigned long n = 0;
     const long *data;
 
-    if (tkWlDisplay->iconManager == NULL || surfPtr->frame == NULL
+    if (tkXeDisplay->iconManager == NULL || surfPtr->frame == NULL
 	    || (toplevel = libdecor_frame_get_xdg_toplevel(surfPtr->frame))
 		== NULL) {
 	return;
     }
     if (propPtr == NULL || propPtr->format != 32) {
-	xdg_toplevel_icon_manager_v1_set_icon(tkWlDisplay->iconManager,
+	xdg_toplevel_icon_manager_v1_set_icon(tkXeDisplay->iconManager,
 		toplevel, NULL);
 	return;
     }
     data = (const long *)(void *)propPtr->data;
-    icon = xdg_toplevel_icon_manager_v1_create_icon(tkWlDisplay->iconManager);
+    icon = xdg_toplevel_icon_manager_v1_create_icon(tkXeDisplay->iconManager);
     while (n + 2 <= propPtr->nitems && numBuffers < 16) {
 	int width = (int)data[n], height = (int)data[n + 1];
 	int side = (width > height) ? width : height;
@@ -870,7 +514,7 @@ ApplyIcon(
 	}
 	n += 2 + (unsigned long)width * height;
     }
-    xdg_toplevel_icon_manager_v1_set_icon(tkWlDisplay->iconManager, toplevel,
+    xdg_toplevel_icon_manager_v1_set_icon(tkXeDisplay->iconManager, toplevel,
 	    numBuffers ? icon : NULL);
 
     /*
@@ -904,9 +548,9 @@ ApplyIcon(
 
 static void
 ApplyNetWmState(
-    TkWlSurface *surfPtr)
+    TkXeSurface *surfPtr)
 {
-    TkWlProperty *propPtr = TkWlGetProperty(surfPtr->winPtr,
+    TkXeProperty *propPtr = TkXeGetProperty(surfPtr->winPtr,
 	    atoms._NET_WM_STATE);
     bool maximized = false, fullscreen = false;
     unsigned long i;
@@ -950,14 +594,14 @@ ApplyNetWmState(
 
 static void
 SetNetWmState(
-    TkWlSurface *surfPtr,
+    TkXeSurface *surfPtr,
     bool maximized,
     bool fullscreen)
 {
-    TkWlWindow *winPtr = surfPtr->winPtr;
+    TkXeWindow *winPtr = surfPtr->winPtr;
     long states[3];
     int n = 0;
-    TkWlProperty *propPtr = TkWlGetProperty(winPtr, atoms._NET_WM_STATE);
+    TkXeProperty *propPtr = TkXeGetProperty(winPtr, atoms._NET_WM_STATE);
 
     if (maximized) {
 	states[n++] = (long)atoms._NET_WM_STATE_MAXIMIZED_VERT;
@@ -998,7 +642,7 @@ MinimizeSyncDone(
     struct wl_callback *callback,
     TCL_UNUSED(uint32_t))
 {
-    TkWlSurface *surfPtr = (TkWlSurface *)data;
+    TkXeSurface *surfPtr = (TkXeSurface *)data;
 
     wl_callback_destroy(callback);
     surfPtr->minimizeSync = NULL;
@@ -1029,7 +673,7 @@ static const struct wl_callback_listener minimizeSyncListener = {
 
 static void
 Minimize(
-    TkWlSurface *surfPtr)
+    TkXeSurface *surfPtr)
 {
     if (!surfPtr->committed) {
 	surfPtr->minimizePending = true;
@@ -1047,7 +691,7 @@ Minimize(
     if (surfPtr->minimizeSync) {
 	wl_callback_destroy(surfPtr->minimizeSync);
     }
-    surfPtr->minimizeSync = wl_display_sync(tkWlDisplay->wlDisplay);
+    surfPtr->minimizeSync = wl_display_sync(tkXeDisplay->wlDisplay);
     wl_callback_add_listener(surfPtr->minimizeSync, &minimizeSyncListener,
 	    surfPtr);
     XUnmapWindow(surfPtr->winPtr->display, surfPtr->winPtr->id);
@@ -1074,7 +718,7 @@ Minimize(
 
 void
 TkWlWmSurfaceCommitted(
-    TkWlSurface *surfPtr)
+    TkXeSurface *surfPtr)
 {
     if (surfPtr->minimizePending && surfPtr->frame) {
 	surfPtr->minimizePending = false;
@@ -1091,7 +735,7 @@ TkWlWmSurfaceCommitted(
 	if (surfPtr->resizeSync) {
 	    wl_callback_destroy(surfPtr->resizeSync);
 	}
-	surfPtr->resizeSync = wl_display_sync(tkWlDisplay->wlDisplay);
+	surfPtr->resizeSync = wl_display_sync(tkXeDisplay->wlDisplay);
 	wl_callback_add_listener(surfPtr->resizeSync, &resizeSyncListener,
 		surfPtr);
     }
@@ -1100,7 +744,7 @@ TkWlWmSurfaceCommitted(
 /*
  *----------------------------------------------------------------------
  *
- * TkWlWmMapSurface --
+ * TkXeWmMapSurface --
  *
  *	Called when a child of the root window is mapped: give it the role of
  *	a decorated toplevel, unless it is override-redirect.
@@ -1116,10 +760,10 @@ TkWlWmSurfaceCommitted(
  */
 
 void
-TkWlWmMapSurface(
-    TkWlSurface *surfPtr)
+TkXeWmMapSurface(
+    TkXeSurface *surfPtr)
 {
-    TkWlWindow *winPtr = surfPtr->winPtr;
+    TkXeWindow *winPtr = surfPtr->winPtr;
 
     InitAtoms(winPtr->display);
     if (surfPtr->iconic) {
@@ -1128,13 +772,13 @@ TkWlWmMapSurface(
 	 */
 
 	surfPtr->iconic = false;
-	TkWlWmActivate(surfPtr);
+	TkXeWmActivate(surfPtr);
 	return;
     }
     if (surfPtr->frame || surfPtr->xdgSurface) {
 	return;
     }
-    if (winPtr->overrideRedirect || tkWlDisplay->decor == NULL) {
+    if (winPtr->overrideRedirect || tkXeDisplay->decor == NULL) {
 	MapPopup(surfPtr);
 	return;
     }
@@ -1172,8 +816,8 @@ static void
 MapToplevel(
     void *clientData)
 {
-    TkWlSurface *surfPtr = (TkWlSurface *)clientData;
-    TkWlWindow *winPtr = surfPtr->winPtr;
+    TkXeSurface *surfPtr = (TkXeSurface *)clientData;
+    TkXeWindow *winPtr = surfPtr->winPtr;
     long *hints;
 
     surfPtr->rolePending = false;
@@ -1183,7 +827,7 @@ MapToplevel(
     TkWlSurfaceSetRole(surfPtr, TKWL_ROLE_TOPLEVEL);
     surfPtr->configured = false;
     surfPtr->committed = false;
-    surfPtr->frame = libdecor_decorate(tkWlDisplay->decor, surfPtr->surface,
+    surfPtr->frame = libdecor_decorate(tkXeDisplay->decor, surfPtr->surface,
 	    &frameInterface, surfPtr);
     ApplyTitle(surfPtr);
     ApplyClass(surfPtr);
@@ -1199,8 +843,8 @@ MapToplevel(
      * it an activation token is activated with it.
      */
 
-    if (tkWlDisplay->activation && getenv("XDG_ACTIVATION_TOKEN")) {
-	xdg_activation_v1_activate(tkWlDisplay->activation,
+    if (tkXeDisplay->activation && getenv("XDG_ACTIVATION_TOKEN")) {
+	xdg_activation_v1_activate(tkXeDisplay->activation,
 		getenv("XDG_ACTIVATION_TOKEN"), surfPtr->surface);
 	unsetenv("XDG_ACTIVATION_TOKEN");
     }
@@ -1208,7 +852,7 @@ MapToplevel(
     if (hints && (hints[0] & StateHint) && hints[2] == IconicState) {
 	Minimize(surfPtr);
     }
-    wl_display_flush(tkWlDisplay->wlDisplay);
+    wl_display_flush(tkXeDisplay->wlDisplay);
 }
 
 /*
@@ -1230,7 +874,7 @@ MapToplevel(
 
 void
 TkWlWmUnmapSurface(
-    TkWlSurface *surfPtr)
+    TkXeSurface *surfPtr)
 {
     DestroyRole(surfPtr);
 }
@@ -1253,7 +897,7 @@ TkWlWmUnmapSurface(
 
 void
 TkWlSurfaceSetFrame(
-    TkWlSurface *surfPtr,
+    TkXeSurface *surfPtr,
     struct libdecor_frame *frame)
 {
     if (surfPtr->frame) {
@@ -1283,7 +927,7 @@ TkWlSurfaceSetFrame(
 
 static void
 ClampSize(
-    TkWlSurface *surfPtr,
+    TkXeSurface *surfPtr,
     int *widthPtr, int *heightPtr)
 {
     int minWidth = 0, minHeight = 0;
@@ -1317,10 +961,10 @@ ClampSize(
 
 static void
 ResizeWindow(
-    TkWlSurface *surfPtr,
+    TkXeSurface *surfPtr,
     int width, int height)
 {
-    TkWlWindow *winPtr = surfPtr->winPtr;
+    TkXeWindow *winPtr = surfPtr->winPtr;
 
     if (width != winPtr->width || height != winPtr->height) {
 	surfPtr->inConfigure = true;
@@ -1333,7 +977,7 @@ ResizeWindow(
 /*
  *----------------------------------------------------------------------
  *
- * TkWlWmSurfaceResized --
+ * TkXeWmSurfaceResized --
  *
  *	Called when Tk resizes a child of the root window: the new size of the
  *	content has to be given to libdecor.
@@ -1349,8 +993,8 @@ ResizeWindow(
  */
 
 void
-TkWlWmSurfaceResized(
-    TkWlSurface *surfPtr)
+TkXeWmSurfaceResized(
+    TkXeSurface *surfPtr)
 {
     struct libdecor_state *state;
     int width = surfPtr->winPtr->width, height = surfPtr->winPtr->height;
@@ -1370,7 +1014,7 @@ TkWlWmSurfaceResized(
 /*
  *----------------------------------------------------------------------
  *
- * TkWlWmPropertyChanged --
+ * TkXeWmPropertyChanged --
  *
  *	Called when a property of a child of the root window changes: apply it
  *	to its toplevel.
@@ -1386,8 +1030,8 @@ TkWlWmSurfaceResized(
  */
 
 void
-TkWlWmPropertyChanged(
-    TkWlSurface *surfPtr,
+TkXeWmPropertyChanged(
+    TkXeSurface *surfPtr,
     Atom property)
 {
     InitAtoms(surfPtr->winPtr->display);
@@ -1417,7 +1061,7 @@ TkWlWmPropertyChanged(
 /*
  *----------------------------------------------------------------------
  *
- * TkWlWmClientMessage --
+ * TkXeWmClientMessage --
  *
  *	Handle a client message sent to the root window, which is for the
  *	window manager: WM_CHANGE_STATE (iconify), _NET_ACTIVE_WINDOW and
@@ -1434,17 +1078,17 @@ TkWlWmPropertyChanged(
  */
 
 bool
-TkWlWmClientMessage(
+TkXeWmClientMessage(
     XEvent *eventPtr)
 {
-    TkWlWindow *winPtr;
-    TkWlSurface *surfPtr;
+    TkXeWindow *winPtr;
+    TkXeSurface *surfPtr;
 
     if (eventPtr->type != ClientMessage) {
 	return false;
     }
     InitAtoms(eventPtr->xany.display);
-    winPtr = TkWlGetWindow(eventPtr->xclient.window);
+    winPtr = TkXeGetWindow(eventPtr->xclient.window);
     if (winPtr == NULL || (surfPtr = winPtr->surface) == NULL) {
 	return true;
     }
@@ -1459,7 +1103,7 @@ TkWlWmClientMessage(
 	    Minimize(surfPtr);
 	}
     } else if (eventPtr->xclient.message_type == atoms._NET_ACTIVE_WINDOW) {
-	TkWlWmActivate(surfPtr);
+	TkXeWmActivate(surfPtr);
     } else if (eventPtr->xclient.message_type == atoms._NET_WM_STATE) {
 	long action = eventPtr->xclient.data.l[0];
 	int i;
@@ -1472,7 +1116,7 @@ TkWlWmClientMessage(
 		break;
 	    }
 	    if (action == 2) {
-		TkWlProperty *propPtr = TkWlGetProperty(winPtr,
+		TkXeProperty *propPtr = TkXeGetProperty(winPtr,
 			atoms._NET_WM_STATE);
 		unsigned long j;
 
@@ -1525,13 +1169,13 @@ TokenDone(
     struct xdg_activation_token_v1 *token,
     const char *tokenString)
 {
-    TkWlSurface *surfPtr = TkWlGetSurface((Window)(uintptr_t)data);
+    TkXeSurface *surfPtr = TkXeGetSurface((Window)(uintptr_t)data);
 
     if (surfPtr && surfPtr->winPtr->mapped
 	    && (surfPtr->frame || surfPtr->xdgToplevel)) {
-	xdg_activation_v1_activate(tkWlDisplay->activation, tokenString,
+	xdg_activation_v1_activate(tkXeDisplay->activation, tokenString,
 		surfPtr->surface);
-	wl_display_flush(tkWlDisplay->wlDisplay);
+	wl_display_flush(tkXeDisplay->wlDisplay);
     }
     xdg_activation_token_v1_destroy(token);
 }
@@ -1543,7 +1187,7 @@ static const struct xdg_activation_token_v1_listener tokenListener = {
 /*
  *----------------------------------------------------------------------
  *
- * TkWlWmActivate --
+ * TkXeWmActivate --
  *
  *	Ask the compositor to activate (raise and focus) a toplevel, with an
  *	activation token for the input the application last received. The
@@ -1559,28 +1203,28 @@ static const struct xdg_activation_token_v1_listener tokenListener = {
  */
 
 void
-TkWlWmActivate(
-    TkWlSurface *surfPtr)
+TkXeWmActivate(
+    TkXeSurface *surfPtr)
 {
     struct xdg_activation_token_v1 *token;
 
-    if (tkWlDisplay->activation == NULL || surfPtr == NULL
-	    || surfPtr == tkWlDisplay->keyboardSurface) {
+    if (tkXeDisplay->activation == NULL || surfPtr == NULL
+	    || surfPtr == tkXeDisplay->keyboardSurface) {
 	return;
     }
-    token = xdg_activation_v1_get_activation_token(tkWlDisplay->activation);
+    token = xdg_activation_v1_get_activation_token(tkXeDisplay->activation);
     xdg_activation_token_v1_add_listener(token, &tokenListener,
 	    (void *)(uintptr_t)surfPtr->winPtr->id);
-    if (tkWlDisplay->seat && tkWlDisplay->lastSerial) {
-	xdg_activation_token_v1_set_serial(token, tkWlDisplay->lastSerial,
-		tkWlDisplay->seat);
+    if (tkXeDisplay->seat && tkXeDisplay->lastSerial) {
+	xdg_activation_token_v1_set_serial(token, tkXeDisplay->lastSerial,
+		tkXeDisplay->seat);
     }
-    if (tkWlDisplay->keyboardSurface) {
+    if (tkXeDisplay->keyboardSurface) {
 	xdg_activation_token_v1_set_surface(token,
-		tkWlDisplay->keyboardSurface->surface);
+		tkXeDisplay->keyboardSurface->surface);
     }
     xdg_activation_token_v1_commit(token);
-    wl_display_flush(tkWlDisplay->wlDisplay);
+    wl_display_flush(tkXeDisplay->wlDisplay);
 }
 
 /*
@@ -1623,7 +1267,7 @@ XdgSurfaceConfigure(
     uint32_t serial)
 {
     xdg_surface_ack_configure(xdgSurface, serial);
-    TkWlSurfaceConfigured((TkWlSurface *)data);
+    TkWlSurfaceConfigured((TkXeSurface *)data);
 }
 
 static const struct xdg_surface_listener xdgSurfaceListener = {
@@ -1682,8 +1326,8 @@ PopupDone(
     void *data,
     TCL_UNUSED(struct xdg_popup *))
 {
-    TkWlSurface *surfPtr = (TkWlSurface *)data;
-    unsigned int state = tkWlDisplay->modState;
+    TkXeSurface *surfPtr = (TkXeSurface *)data;
+    unsigned int state = tkXeDisplay->modState;
 
     if (!surfPtr->winPtr->mapped || TkpGetCapture() == NULL) {
 	return;
@@ -1783,7 +1427,7 @@ static const struct xdg_toplevel_listener toplevelListener = {
 
 static struct xdg_surface *
 RoleXdgSurface(
-    TkWlSurface *surfPtr)
+    TkXeSurface *surfPtr)
 {
     if (surfPtr->frame) {
 	return libdecor_frame_get_xdg_surface(surfPtr->frame);
@@ -1811,10 +1455,10 @@ RoleXdgSurface(
 
 static bool
 CanBeParent(
-    TkWlSurface *parentPtr,
-    TkWlSurface *surfPtr)
+    TkXeSurface *parentPtr,
+    TkXeSurface *surfPtr)
 {
-    TkWlSurface *p;
+    TkXeSurface *p;
 
     if (parentPtr == NULL || !parentPtr->winPtr->mapped
 	    || !parentPtr->presented || RoleXdgSurface(parentPtr) == NULL) {
@@ -1845,19 +1489,19 @@ CanBeParent(
  *----------------------------------------------------------------------
  */
 
-static TkWlSurface *
+static TkXeSurface *
 FindPopupParent(
-    TkWlSurface *surfPtr)
+    TkXeSurface *surfPtr)
 {
-    TkWlSurface *p;
+    TkXeSurface *p;
 
-    if (CanBeParent(tkWlDisplay->pointerSurface, surfPtr)) {
-	return tkWlDisplay->pointerSurface;
+    if (CanBeParent(tkXeDisplay->pointerSurface, surfPtr)) {
+	return tkXeDisplay->pointerSurface;
     }
-    if (CanBeParent(tkWlDisplay->keyboardSurface, surfPtr)) {
-	return tkWlDisplay->keyboardSurface;
+    if (CanBeParent(tkXeDisplay->keyboardSurface, surfPtr)) {
+	return tkXeDisplay->keyboardSurface;
     }
-    for (p = tkWlDisplay->surfaces; p; p = p->nextPtr) {
+    for (p = tkXeDisplay->surfaces; p; p = p->nextPtr) {
 	if (CanBeParent(p, surfPtr)) {
 	    return p;
 	}
@@ -1884,9 +1528,9 @@ FindPopupParent(
 
 static bool
 PopupGrabs(
-    TkWlWindow *winPtr)
+    TkXeWindow *winPtr)
 {
-    TkWlWindow *childPtr;
+    TkXeWindow *childPtr;
 
     for (childPtr = winPtr; childPtr; childPtr = childPtr->firstChild) {
 	Tk_Window tkwin = Tk_IdToWindow(winPtr->display, childPtr->id);
@@ -1922,28 +1566,28 @@ PopupGrabs(
 
 static void
 MapPopup(
-    TkWlSurface *surfPtr)
+    TkXeSurface *surfPtr)
 {
-    TkWlWindow *winPtr = surfPtr->winPtr;
-    TkWlSurface *parentPtr = FindPopupParent(surfPtr);
+    TkXeWindow *winPtr = surfPtr->winPtr;
+    TkXeSurface *parentPtr = FindPopupParent(surfPtr);
     int width = winPtr->width + 2 * winPtr->borderWidth;
     int height = winPtr->height + 2 * winPtr->borderWidth;
 
-    if (tkWlDisplay->wmBase == NULL) {
+    if (tkXeDisplay->wmBase == NULL) {
 	return;
     }
     TkWlSurfaceSetRole(surfPtr,
 	    parentPtr ? TKWL_ROLE_POPUP : TKWL_ROLE_TOPLEVEL);
     surfPtr->configured = false;
     surfPtr->committed = false;
-    surfPtr->xdgSurface = xdg_wm_base_get_xdg_surface(tkWlDisplay->wmBase,
+    surfPtr->xdgSurface = xdg_wm_base_get_xdg_surface(tkXeDisplay->wmBase,
 	    surfPtr->surface);
     xdg_surface_add_listener(surfPtr->xdgSurface, &xdgSurfaceListener,
 	    surfPtr);
     if (parentPtr) {
 	struct xdg_positioner *positioner =
-		xdg_wm_base_create_positioner(tkWlDisplay->wmBase);
-	TkWlWindow *parentWinPtr = parentPtr->winPtr;
+		xdg_wm_base_create_positioner(tkXeDisplay->wmBase);
+	TkXeWindow *parentWinPtr = parentPtr->winPtr;
 	int x = winPtr->x - parentWinPtr->x;
 	int y = winPtr->y - parentWinPtr->y;
 	int anchorX = x, anchorY = y;
@@ -1970,7 +1614,7 @@ MapPopup(
 	xdg_positioner_set_anchor(positioner, XDG_POSITIONER_ANCHOR_TOP_LEFT);
 	xdg_positioner_set_gravity(positioner,
 		XDG_POSITIONER_GRAVITY_BOTTOM_RIGHT);
-	if (!tkWlDisplay->weston) {
+	if (!tkXeDisplay->weston) {
 	    xdg_positioner_set_constraint_adjustment(positioner,
 		    XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_FLIP_X
 		    | XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_FLIP_Y
@@ -1982,9 +1626,9 @@ MapPopup(
 	xdg_positioner_destroy(positioner);
 	xdg_popup_add_listener(surfPtr->xdgPopup, &popupListener, surfPtr);
 	surfPtr->popupParent = parentPtr;
-	if (PopupGrabs(winPtr) && tkWlDisplay->seat) {
-	    xdg_popup_grab(surfPtr->xdgPopup, tkWlDisplay->seat,
-		    tkWlDisplay->lastSerial);
+	if (PopupGrabs(winPtr) && tkXeDisplay->seat) {
+	    xdg_popup_grab(surfPtr->xdgPopup, tkXeDisplay->seat,
+		    tkXeDisplay->lastSerial);
 	}
     } else {
 	surfPtr->xdgToplevel = xdg_surface_get_toplevel(surfPtr->xdgSurface);
@@ -1992,7 +1636,7 @@ MapPopup(
 		surfPtr);
     }
     wl_surface_commit(surfPtr->surface);
-    wl_display_flush(tkWlDisplay->wlDisplay);
+    wl_display_flush(tkXeDisplay->wlDisplay);
 }
 
 /*
@@ -2015,15 +1659,15 @@ MapPopup(
 
 static void
 DestroyRole(
-    TkWlSurface *surfPtr)
+    TkXeSurface *surfPtr)
 {
-    TkWlSurface *p;
+    TkXeSurface *p;
 
     if (surfPtr->rolePending) {
 	Tcl_CancelIdleCall(MapToplevel, surfPtr);
 	surfPtr->rolePending = false;
     }
-    for (p = tkWlDisplay->surfaces; p; p = p->nextPtr) {
+    for (p = tkXeDisplay->surfaces; p; p = p->nextPtr) {
 	if (p->popupParent == surfPtr) {
 	    DestroyRole(p);
 	    if (p->committed) {
@@ -2088,8 +1732,8 @@ FrameConfigure(
     struct libdecor_configuration *configuration,
     void *data)
 {
-    TkWlSurface *surfPtr = (TkWlSurface *)data;
-    TkWlWindow *winPtr = surfPtr->winPtr;
+    TkXeSurface *surfPtr = (TkXeSurface *)data;
+    TkXeWindow *winPtr = surfPtr->winPtr;
     enum libdecor_window_state windowState = LIBDECOR_WINDOW_STATE_NONE;
     struct libdecor_state *state;
     int width, height;
@@ -2214,8 +1858,8 @@ FrameClose(
     TCL_UNUSED(struct libdecor_frame *),
     void *data)
 {
-    TkWlSurface *surfPtr = (TkWlSurface *)data;
-    TkWlWindow *winPtr = surfPtr->winPtr;
+    TkXeSurface *surfPtr = (TkXeSurface *)data;
+    TkXeWindow *winPtr = surfPtr->winPtr;
     XEvent event;
 
     memset(&event, 0, sizeof(XEvent));
@@ -2225,8 +1869,8 @@ FrameClose(
     event.xclient.message_type = atoms.WM_PROTOCOLS;
     event.xclient.format = 32;
     event.xclient.data.l[0] = (long)atoms.WM_DELETE_WINDOW;
-    event.xclient.data.l[1] = (long)TkWlCurrentTime();
-    TkWlQueueEvent(&event);
+    event.xclient.data.l[1] = (long)TkXeCurrentTime();
+    TkXeQueueEvent(&event);
 }
 
 /*
@@ -2251,7 +1895,7 @@ FrameCommit(
     TCL_UNUSED(struct libdecor_frame *),
     void *data)
 {
-    TkWlSurface *surfPtr = (TkWlSurface *)data;
+    TkXeSurface *surfPtr = (TkXeSurface *)data;
 
     if (surfPtr->committed) {
 	wl_surface_commit(surfPtr->surface);

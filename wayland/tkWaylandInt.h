@@ -1,25 +1,17 @@
 /*
  * tkWaylandInt.h --
  *
- *	Declarations that are shared among the Wayland-specific parts of Tk
- *	but aren't used by the rest of Tk.
+ *	Declarations of the Wayland port, included by tkXemuInt.h when Tk is
+ *	built for Wayland.
  *
- *	The Wayland port emulates an X server inside the process:
- *
- *	- Every X window is a TkWlWindow in a window tree rooted at an
- *	  emulated root window. The children of the root window (the wrapper
- *	  windows of Tk's toplevels, and override-redirect windows) each get
- *	  a TkWlSurface, which owns a wl_surface and a backing image.
- *	- Drawing is done with Cairo into the backing image of the surface,
- *	  clipped to the visible region of the window, as the X server
- *	  clips to it. Damaged parts of the backing image are copied to a
- *	  wl_shm buffer and committed at idle time.
- *	- Expose events are generated, and window backgrounds painted, when
- *	  the window tree changes, as the X server does.
- *	- Pixmaps are Cairo image surfaces.
- *
- *	Window and Pixmap ids are never reused, so that events and requests
- *	for destroyed windows are ignored, as in X.
+ *	The Wayland port runs Tk on the emulated X server of ../xemu: the
+ *	surface of every child of the root window owns a wl_surface, an
+ *	xdg_toplevel (decorated by libdecor) or an xdg_popup, and its backing
+ *	image, whose damaged parts are copied to a wl_shm buffer and committed
+ *	at idle time (tkWaylandSurface.c). The hints of tkUnixWm.c are given
+ *	to the compositor (tkWaylandWm.c); input events come from the seat
+ *	(tkWaylandEvent.c, tkWaylandTextInput.c); the selections are exchanged
+ *	with other clients (tkWaylandSelect.c).
  *
  * Copyright © 2026 The Tk developers.
  *
@@ -30,115 +22,20 @@
 #ifndef _TKWAYLANDINT
 #define _TKWAYLANDINT
 
-#ifndef _TKINT
-#include "tkInt.h"
-#endif
-#include "tkUnixInt.h"
+#include "tkXemuInt.h"
 
-#include <stdbool.h>
 #include <wayland-client.h>
 #include <wayland-cursor.h>
 #include <xkbcommon/xkbcommon.h>
 #include <xkbcommon/xkbcommon-compose.h>
 #include <libdecor.h>
-#include <cairo.h>
-#include <pixman.h>
 #include "xdg-shell-client-protocol.h"
 #include "viewporter-client-protocol.h"
 #include "fractional-scale-v1-client-protocol.h"
 #include "xdg-activation-v1-client-protocol.h"
 #include "xdg-toplevel-icon-v1-client-protocol.h"
 
-/*
- * Kinds of drawables. Both structures start with the type.
- */
-
-#define TKWL_PIXMAP	1
-#define TKWL_WINDOW	2
-
-typedef struct TkWlPixmap {
-    int type;			/* TKWL_PIXMAP. */
-    Pixmap id;
-    int width, height;
-    int depth;			/* 1 (a bitmap, CAIRO_FORMAT_A8), 24
-				 * (CAIRO_FORMAT_RGB24) or 32
-				 * (CAIRO_FORMAT_ARGB32). */
-    cairo_surface_t *surface;
-} TkWlPixmap;
-
-/*
- * A property of a window. Only the windows of this process exist, so
- * properties are only stored.
- */
-
-typedef struct TkWlProperty {
-    Atom name;
-    Atom type;
-    int format;			/* 8, 16 or 32. */
-    unsigned long nitems;
-    unsigned char *data;	/* For format 32, an array of longs, as in
-				 * Xlib. */
-    struct TkWlProperty *nextPtr;
-} TkWlProperty;
-
-struct TkWlSurface;
-
-typedef struct TkWlWindow {
-    int type;			/* TKWL_WINDOW. */
-    Window id;
-    Display *display;
-    struct TkWlWindow *parent;	/* NULL for the root window. */
-    struct TkWlWindow *firstChild;
-				/* Bottom-most child in the stacking order. */
-    struct TkWlWindow *lastChild;
-				/* Top-most child in the stacking order. */
-    struct TkWlWindow *below;	/* Next sibling below this one. */
-    struct TkWlWindow *above;	/* Next sibling above this one. */
-    int x, y;			/* Position of the outer corner relative to
-				 * the inside of the parent. */
-    int width, height;		/* Inside size. */
-    int borderWidth;
-    bool mapped;
-    bool overrideRedirect;
-    bool inputOnly;
-    long eventMask;
-    int bitGravity;
-    int backgroundType;		/* One of the BG_* values below. */
-    unsigned long backgroundPixel;
-    Pixmap backgroundPixmap;
-    unsigned long borderPixel;
-    Cursor cursor;
-    Colormap colormap;
-    TkWlProperty *properties;
-    struct TkWlSurface *surface;
-				/* The surface of this window, if it is a
-				 * child of the root window. */
-    /*
-     * The state below is used to generate Expose events. The region is in
-     * the coordinates of the surface.
-     */
-
-    pixman_region32_t exposed;	/* Part of the window that was visible
-				 * when Expose events were last generated. */
-    int exposedX, exposedY;	/* Position of the inside of the window in
-				 * its surface at that time. */
-    int exposedWidth, exposedHeight;
-    int visibility;		/* VisibilityUnobscured etc., or -1 when the
-				 * window is not viewable. */
-
-    /*
-     * The visible region is cached until the window tree changes.
-     */
-
-    unsigned long clipGeneration;
-    bool clipInferiors;
-    pixman_region32_t clip;
-} TkWlWindow;
-
-#define BG_NONE		0
-#define BG_PIXEL	1
-#define BG_PIXMAP	2
-#define BG_PARENT	3
+#define TKXE_VENDOR	"Wayland"
 
 /*
  * A wl_shm buffer.
@@ -163,8 +60,8 @@ typedef struct TkWlBuffer {
  * The surface of a child of the root window.
  */
 
-typedef struct TkWlSurface {
-    TkWlWindow *winPtr;		/* The X window of this surface. */
+struct TkXeSurface {
+    TkXeWindow *winPtr;		/* The X window of this surface. */
     struct wl_surface *surface;
     struct libdecor_frame *frame;
 				/* The decorated xdg_toplevel, or NULL. */
@@ -173,7 +70,7 @@ typedef struct TkWlSurface {
 				 * undecorated toplevels. */
     struct xdg_popup *xdgPopup;
     struct xdg_toplevel *xdgToplevel;
-    struct TkWlSurface *popupParent;
+    struct TkXeSurface *popupParent;
 				/* The surface a popup is attached to. */
     bool configured;		/* The compositor has sent the first
 				 * configure event. */
@@ -236,8 +133,8 @@ typedef struct TkWlSurface {
     bool presentDeferred;	/* The present was already deferred once. */
     bool exposePending;		/* The window tree changed; Expose events
 				 * have to be generated. */
-    struct TkWlSurface *nextPtr;
-} TkWlSurface;
+    struct TkXeSurface *nextPtr;
+};
 
 /*
  * An output (monitor).
@@ -256,7 +153,7 @@ typedef struct TkWlOutput {
  * The connection to the compositor. There is only one per process.
  */
 
-typedef struct TkWlDisplay {
+struct TkXeDisplay {
     Display *display;		/* The emulated X display. */
     struct wl_display *wlDisplay;
     struct wl_registry *registry;
@@ -277,14 +174,14 @@ typedef struct TkWlDisplay {
     struct wl_keyboard *keyboard;
     struct libdecor *decor;
     TkWlOutput *outputs;
-    TkWlSurface *surfaces;
-    TkWlWindow *root;
+    TkXeSurface *surfaces;
+    TkXeWindow *root;
 
     /*
      * Pointer state.
      */
 
-    TkWlSurface *pointerSurface;
+    TkXeSurface *pointerSurface;
 				/* Surface with the pointer, or NULL. */
     uint32_t pointerSerial;	/* Serial of the last pointer enter. */
     double pointerX, pointerY;	/* Position in the surface. */
@@ -298,7 +195,7 @@ typedef struct TkWlDisplay {
      * Keyboard state.
      */
 
-    TkWlSurface *keyboardSurface;
+    TkXeSurface *keyboardSurface;
 				/* Surface with the keyboard focus. */
     struct xkb_context *xkbContext;
     struct xkb_keymap *keymap;
@@ -312,107 +209,32 @@ typedef struct TkWlDisplay {
 
     uint32_t lastSerial;	/* Serial of the last input event. */
     uint32_t lastTime;		/* Time of the last input event. */
-} TkWlDisplay;
-
-MODULE_SCOPE TkWlDisplay *tkWlDisplay;
+};
 
 /*
- * Conversion between ids and structures.
+ * Functions shared between the files of the Wayland port.
  */
 
-MODULE_SCOPE XID	TkWlNewId(void *ptr);
-MODULE_SCOPE void	TkWlFreeId(XID id);
-MODULE_SCOPE void *	TkWlLookupId(XID id);
-
-/*
- *----------------------------------------------------------------------
- *
- * TkWlGetWindow, TkWlGetPixmap --
- *
- *	Find the window or the pixmap which has an id.
- *
- * Results:
- *	The window or the pixmap, or NULL if the id is not that of a window
- *	(or of a pixmap).
- *
- * Side effects:
- *	None.
- *
- *----------------------------------------------------------------------
- */
-
-static inline TkWlWindow *
-TkWlGetWindow(
-    Window w)
-{
-    int *p = (int *)TkWlLookupId(w);
-
-    return (p && *p == TKWL_WINDOW) ? (TkWlWindow *)p : NULL;
-}
-
-static inline TkWlPixmap *
-TkWlGetPixmap(
-    Pixmap pixmap)
-{
-    int *p = (int *)TkWlLookupId(pixmap);
-
-    return (p && *p == TKWL_PIXMAP) ? (TkWlPixmap *)p : NULL;
-}
-
-/*
- * Functions shared between the files of the port.
- */
-
-/* tkWaylandWindow.c */
-MODULE_SCOPE TkWlWindow *TkWlCreateRootWindow(Display *display, int width,
-			    int height);
-MODULE_SCOPE void	TkWlTreeChanged(TkWlWindow *winPtr);
-MODULE_SCOPE TkWlWindow *TkWlTopWindow(TkWlWindow *winPtr);
-MODULE_SCOPE bool	TkWlIsViewable(TkWlWindow *winPtr);
-MODULE_SCOPE void	TkWlWindowOrigin(TkWlWindow *winPtr, int *xPtr,
-			    int *yPtr);
-MODULE_SCOPE void	TkWlVisibleRegion(TkWlWindow *winPtr,
-			    bool includeInferiors, pixman_region32_t *rgn);
-MODULE_SCOPE void	TkWlProcessExposures(TkWlSurface *surfPtr);
-MODULE_SCOPE void	TkWlAddDamage(TkWlSurface *surfPtr,
-			    pixman_region32_t *rgn);
-MODULE_SCOPE TkWlWindow *TkWlWindowAtPoint(TkWlWindow *winPtr, int x, int y);
-MODULE_SCOPE TkWlSurface *TkWlSurfaceFromWl(struct wl_surface *surface);
-MODULE_SCOPE void	TkWlQueueEvent(XEvent *eventPtr);
-MODULE_SCOPE void	TkWlSurfaceConfigured(TkWlSurface *surfPtr);
-MODULE_SCOPE void	TkWlSurfaceSetRole(TkWlSurface *surfPtr,
+/* tkWaylandSurface.c */
+MODULE_SCOPE TkXeSurface *TkWlSurfaceFromWl(struct wl_surface *surface);
+MODULE_SCOPE void	TkWlSurfaceSetRole(TkXeSurface *surfPtr,
 			    int roleType);
+MODULE_SCOPE void	TkWlSurfaceConfigured(TkXeSurface *surfPtr);
+MODULE_SCOPE void	TkWlUpdateScale(TkXeSurface *surfPtr);
+MODULE_SCOPE void	TkWlSurfaceSetCorners(TkXeSurface *surfPtr,
+			    double radius, bool square);
+MODULE_SCOPE void	TkWlSurfaceSetOpacity(TkXeSurface *surfPtr,
+			    double opacity);
 
 #define TKWL_ROLE_NONE		0
 #define TKWL_ROLE_TOPLEVEL	1
 #define TKWL_ROLE_POPUP		2
-MODULE_SCOPE TkWlProperty *TkWlGetProperty(TkWlWindow *winPtr, Atom name);
-MODULE_SCOPE void	TkWlFreeProperties(TkWlWindow *winPtr);
-MODULE_SCOPE TkWlSurface *TkWlGetSurface(Window w);
-MODULE_SCOPE void	TkWlUpdateScale(TkWlSurface *surfPtr);
-MODULE_SCOPE void	TkWlSurfaceSetCorners(TkWlSurface *surfPtr,
-			    double radius, bool square);
-MODULE_SCOPE void	TkWlSurfaceSetOpacity(TkWlSurface *surfPtr,
-			    double opacity);
-MODULE_SCOPE bool	TkWlIntegralScale(TkWlSurface *surfPtr);
 
-/* tkWaylandDraw.c */
-MODULE_SCOPE cairo_surface_t *TkWlPixmapSurface(Pixmap pixmap);
-MODULE_SCOPE void	TkWlPaintBackground(TkWlWindow *winPtr,
-			    pixman_region32_t *rgn);
-
-/* tkWaylandXlib.c */
-MODULE_SCOPE Display *	TkWlOpenXDisplay(const char *name, int fd, int width,
-			    int height, int mmWidth, int mmHeight);
-MODULE_SCOPE void	TkWlSetScreenSize(Display *display, int width,
-			    int height, int mmWidth, int mmHeight);
-MODULE_SCOPE pixman_region32_t *TkWlPixmanRegion(Region r);
-MODULE_SCOPE unsigned long TkWlNextRequest(Display *display);
-MODULE_SCOPE struct _FcPattern *TkWlXlfdParse(const char *name);
-
-/* tkWaylandEvent.c */
-MODULE_SCOPE Time	TkWlCurrentTime(void);
-MODULE_SCOPE void	TkWlUpdateCursor(void);
+/* tkWaylandWm.c */
+MODULE_SCOPE void	TkWlWmUnmapSurface(TkXeSurface *surfPtr);
+MODULE_SCOPE void	TkWlWmSurfaceCommitted(TkXeSurface *surfPtr);
+MODULE_SCOPE void	TkWlSurfaceSetFrame(TkXeSurface *surfPtr,
+			    struct libdecor_frame *frame);
 
 /* tkWaylandSelect.c */
 MODULE_SCOPE bool	TkWlSelectionBind(struct wl_registry *registry,
@@ -426,26 +248,14 @@ MODULE_SCOPE bool	TkWlTextInputBind(struct wl_registry *registry,
 MODULE_SCOPE void	TkWlTextInputInit(void);
 MODULE_SCOPE void	TkWlTextInputUpdate(void);
 
-/* tkWaylandWm.c */
-MODULE_SCOPE void	TkWlSurfaceSetFrame(TkWlSurface *surfPtr,
-			    struct libdecor_frame *frame);
-MODULE_SCOPE void	TkWlWmMapSurface(TkWlSurface *surfPtr);
-MODULE_SCOPE void	TkWlWmUnmapSurface(TkWlSurface *surfPtr);
-MODULE_SCOPE void	TkWlWmSurfaceResized(TkWlSurface *surfPtr);
-MODULE_SCOPE void	TkWlWmPropertyChanged(TkWlSurface *surfPtr,
-			    Atom property);
-MODULE_SCOPE bool	TkWlWmClientMessage(XEvent *eventPtr);
-MODULE_SCOPE void	TkWlWmActivate(TkWlSurface *surfPtr);
-MODULE_SCOPE void	TkWlWmSurfaceCommitted(TkWlSurface *surfPtr);
-
 /*
  * The ::tk::wayland commands (tkWaylandCmds.c).
  */
 
 MODULE_SCOPE bool	TkWlCmdsBind(struct wl_registry *registry,
 			    uint32_t name, const char *interface);
-MODULE_SCOPE const char *TkWlCmdsAppId(TkWlSurface *surfPtr);
-MODULE_SCOPE void	TkWlCmdsSurfaceMapped(TkWlSurface *surfPtr);
-MODULE_SCOPE void	TkWlCmdsSurfaceUnmapped(TkWlSurface *surfPtr);
+MODULE_SCOPE const char *TkWlCmdsAppId(TkXeSurface *surfPtr);
+MODULE_SCOPE void	TkWlCmdsSurfaceMapped(TkXeSurface *surfPtr);
+MODULE_SCOPE void	TkWlCmdsSurfaceUnmapped(TkXeSurface *surfPtr);
 
 #endif /* _TKWAYLANDINT */

@@ -582,17 +582,17 @@ TkWlSelectionBind(
 void
 TkWlSelectionInit(void)
 {
-    if (tkWlDisplay->seat == NULL) {
+    if (tkXeDisplay->seat == NULL) {
 	return;
     }
     if (dataDeviceManager && dataDevice == NULL) {
 	dataDevice = wl_data_device_manager_get_data_device(dataDeviceManager,
-		tkWlDisplay->seat);
+		tkXeDisplay->seat);
 	wl_data_device_add_listener(dataDevice, &dataDeviceListener, NULL);
     }
     if (primaryManager && primaryDevice == NULL) {
 	primaryDevice = zwp_primary_selection_device_manager_v1_get_device(
-		primaryManager, tkWlDisplay->seat);
+		primaryManager, tkXeDisplay->seat);
 	zwp_primary_selection_device_v1_add_listener(primaryDevice,
 		&primaryDeviceListener, NULL);
     }
@@ -661,7 +661,7 @@ SendData(
     const char *type,
     int fd)
 {
-    TkWindow *winPtr = (TkWindow *)Tk_IdToWindow(tkWlDisplay->display,
+    TkWindow *winPtr = (TkWindow *)Tk_IdToWindow(tkXeDisplay->display,
 	    srcPtr->owner);
     Tcl_DString ds;
     Tcl_InterpState state;
@@ -788,12 +788,12 @@ SourceCancelled(
 	}
 	memset(&event, 0, sizeof(XEvent));
 	event.xselectionclear.type = SelectionClear;
-	event.xselectionclear.display = tkWlDisplay->display;
+	event.xselectionclear.display = tkXeDisplay->display;
 	event.xselectionclear.window = srcPtr->owner;
 	event.xselectionclear.selection = srcPtr->selection;
-	event.xselectionclear.time = TkWlCurrentTime();
-	if (TkWlGetWindow(srcPtr->owner)) {
-	    TkWlQueueEvent(&event);
+	event.xselectionclear.time = TkXeCurrentTime();
+	if (TkXeGetWindow(srcPtr->owner)) {
+	    TkXeQueueEvent(&event);
 	}
     }
     FreeSource(srcPtr);
@@ -977,7 +977,7 @@ XSetSelectionOwner(
     TkSelHandler *selPtr;
     int i;
 
-    TkWlNextRequest(display);
+    TkXeNextRequest(display);
     if (selection == XA_PRIMARY) {
 	primary = true;
 	currentPtr = &primarySource;
@@ -1001,10 +1001,10 @@ XSetSelectionOwner(
     if (owner == None) {
 	if (primary) {
 	    zwp_primary_selection_device_v1_set_selection(primaryDevice, NULL,
-		    tkWlDisplay->lastSerial);
+		    tkXeDisplay->lastSerial);
 	} else {
 	    wl_data_device_set_selection(dataDevice, NULL,
-		    tkWlDisplay->lastSerial);
+		    tkXeDisplay->lastSerial);
 	}
 	return Success;
     }
@@ -1041,14 +1041,14 @@ XSetSelectionOwner(
     if (primary) {
 	zwp_primary_selection_device_v1_set_selection(primaryDevice,
 		(struct zwp_primary_selection_source_v1 *)srcPtr->source,
-		tkWlDisplay->lastSerial);
+		tkXeDisplay->lastSerial);
     } else {
 	wl_data_device_set_selection(dataDevice,
 		(struct wl_data_source *)srcPtr->source,
-		tkWlDisplay->lastSerial);
+		tkXeDisplay->lastSerial);
     }
     *currentPtr = srcPtr;
-    wl_display_flush(tkWlDisplay->wlDisplay);
+    wl_display_flush(tkXeDisplay->wlDisplay);
     return Success;
 }
 
@@ -1091,7 +1091,7 @@ ReceiveData(
 		fds[1]);
     }
     close(fds[1]);
-    wl_display_flush(tkWlDisplay->wlDisplay);
+    wl_display_flush(tkXeDisplay->wlDisplay);
 
     Tcl_GetTime(&start);
     while (true) {
@@ -1108,7 +1108,7 @@ ReceiveData(
 	}
 	pfd[0].fd = fds[0];
 	pfd[0].events = POLLIN;
-	pfd[1].fd = wl_display_get_fd(tkWlDisplay->wlDisplay);
+	pfd[1].fd = wl_display_get_fd(tkXeDisplay->wlDisplay);
 	pfd[1].events = POLLIN;
 	if (poll(pfd, 2, timeout) < 0) {
 	    if (errno == EINTR) {
@@ -1118,7 +1118,7 @@ ReceiveData(
 	    return TCL_ERROR;
 	}
 	if (pfd[1].revents & POLLIN) {
-	    wl_display_dispatch(tkWlDisplay->wlDisplay);
+	    wl_display_dispatch(tkXeDisplay->wlDisplay);
 	}
 	if (pfd[0].revents & (POLLIN | POLLHUP)) {
 	    ssize_t n = read(fds[0], buf, sizeof(buf));
@@ -1173,7 +1173,7 @@ TkSelGetSelection(
      * have just taken the selection.
      */
 
-    wl_display_roundtrip(tkWlDisplay->wlDisplay);
+    wl_display_roundtrip(tkXeDisplay->wlDisplay);
     if (selection == XA_PRIMARY) {
 	offerPtr = primaryOffer;
     } else if (selection == Tk_InternAtom(tkwin, "CLIPBOARD")) {

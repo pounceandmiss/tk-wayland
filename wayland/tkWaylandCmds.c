@@ -52,7 +52,7 @@ typedef struct {
     int cornerRadius;		/* In pixels. */
     bool inhibitIdle;
     struct zwp_idle_inhibitor_v1 *inhibitor;
-    TkWlSurface *inhibitedSurface;
+    TkXeSurface *inhibitedSurface;
 				/* The surface of the inhibitor. */
 } ToplevelInfo;
 
@@ -175,15 +175,15 @@ GetInfo(
  *----------------------------------------------------------------------
  */
 
-static TkWlSurface *
+static TkXeSurface *
 ToplevelSurface(
     TkWindow *winPtr)
 {
-    TkWlWindow *wlWinPtr;
+    TkXeWindow *wlWinPtr;
 
     if (winPtr->window == None
-	    || (wlWinPtr = TkWlGetWindow(winPtr->window)) == NULL
-	    || (wlWinPtr = TkWlTopWindow(wlWinPtr)) == NULL) {
+	    || (wlWinPtr = TkXeGetWindow(winPtr->window)) == NULL
+	    || (wlWinPtr = TkXeTopWindow(wlWinPtr)) == NULL) {
 	return NULL;
     }
     return wlWinPtr->surface;
@@ -208,9 +208,9 @@ ToplevelSurface(
 
 static TkWindow *
 SurfaceToplevel(
-    TkWlSurface *surfPtr)
+    TkXeSurface *surfPtr)
 {
-    TkWlWindow *wlWinPtr;
+    TkXeWindow *wlWinPtr;
 
     for (wlWinPtr = surfPtr->winPtr; wlWinPtr;
 	    wlWinPtr = wlWinPtr->firstChild) {
@@ -247,7 +247,7 @@ SurfaceToplevel(
 
 const char *
 TkWlCmdsAppId(
-    TkWlSurface *surfPtr)
+    TkXeSurface *surfPtr)
 {
     TkWindow *winPtr = SurfaceToplevel(surfPtr);
     ToplevelInfo *infoPtr = winPtr ? GetInfo(winPtr, false) : NULL;
@@ -277,7 +277,7 @@ static void
 UpdateInhibitor(
     ToplevelInfo *infoPtr)
 {
-    TkWlSurface *surfPtr = ToplevelSurface(infoPtr->winPtr);
+    TkXeSurface *surfPtr = ToplevelSurface(infoPtr->winPtr);
     bool want = infoPtr->inhibitIdle && surfPtr
 	    && (surfPtr->frame || surfPtr->xdgSurface);
 
@@ -315,7 +315,7 @@ static void
 ApplyCorners(
     ToplevelInfo *infoPtr)
 {
-    TkWlSurface *surfPtr = ToplevelSurface(infoPtr->winPtr);
+    TkXeSurface *surfPtr = ToplevelSurface(infoPtr->winPtr);
 
     if (surfPtr) {
 	TkWlSurfaceSetCorners(surfPtr,
@@ -345,7 +345,7 @@ ApplyCorners(
 
 void
 TkWlCmdsSurfaceMapped(
-    TkWlSurface *surfPtr)
+    TkXeSurface *surfPtr)
 {
     TkWindow *winPtr = SurfaceToplevel(surfPtr);
     ToplevelInfo *infoPtr = winPtr ? GetInfo(winPtr, false) : NULL;
@@ -378,7 +378,7 @@ TkWlCmdsSurfaceMapped(
 
 void
 TkWlCmdsSurfaceUnmapped(
-    TkWlSurface *surfPtr)
+    TkXeSurface *surfPtr)
 {
     TkWindow *winPtr = SurfaceToplevel(surfPtr);
     ToplevelInfo *infoPtr = winPtr ? GetInfo(winPtr, false) : NULL;
@@ -455,12 +455,12 @@ GetToplevel(
  *----------------------------------------------------------------------
  */
 
-static TkWlSurface *
+static TkXeSurface *
 MappedSurface(
     Tcl_Interp *interp,
     TkWindow *winPtr)
 {
-    TkWlSurface *surfPtr = ToplevelSurface(winPtr);
+    TkXeSurface *surfPtr = ToplevelSurface(winPtr);
 
     if (surfPtr == NULL || !surfPtr->configured
 	    || (surfPtr->frame == NULL && surfPtr->xdgToplevel == NULL)) {
@@ -499,7 +499,7 @@ AppIdCmd(
 {
     TkWindow *winPtr;
     ToplevelInfo *infoPtr;
-    TkWlSurface *surfPtr;
+    TkXeSurface *surfPtr;
 
     if (objc != 2 && objc != 3) {
 	Tcl_WrongNumArgs(interp, 1, objv, "window ?id?");
@@ -522,7 +522,7 @@ AppIdCmd(
 	}
 	surfPtr = ToplevelSurface(winPtr);
 	if (surfPtr) {
-	    TkWlWmPropertyChanged(surfPtr, XA_WM_CLASS);
+	    TkXeWmPropertyChanged(surfPtr, XA_WM_CLASS);
 	}
     }
     Tcl_SetObjResult(interp, Tcl_NewStringObj(
@@ -558,7 +558,7 @@ DecorationsCmd(
     static const char *const modes[] = {"server", "none", NULL};
     TkWindow *winPtr;
     ToplevelInfo *infoPtr;
-    TkWlSurface *surfPtr;
+    TkXeSurface *surfPtr;
     int mode;
 
     if (objc != 2 && objc != 3) {
@@ -669,7 +669,7 @@ StartMoveCmd(
     Tcl_Obj *const objv[])
 {
     TkWindow *winPtr;
-    TkWlSurface *surfPtr;
+    TkXeSurface *surfPtr;
 
     if (objc != 2) {
 	Tcl_WrongNumArgs(interp, 1, objv, "window");
@@ -679,17 +679,17 @@ StartMoveCmd(
 	    || (surfPtr = MappedSurface(interp, winPtr)) == NULL) {
 	return TCL_ERROR;
     }
-    if (tkWlDisplay->seat == NULL) {
+    if (tkXeDisplay->seat == NULL) {
 	return TCL_OK;
     }
     if (surfPtr->frame) {
-	libdecor_frame_move(surfPtr->frame, tkWlDisplay->seat,
-		tkWlDisplay->lastSerial);
+	libdecor_frame_move(surfPtr->frame, tkXeDisplay->seat,
+		tkXeDisplay->lastSerial);
     } else {
-	xdg_toplevel_move(surfPtr->xdgToplevel, tkWlDisplay->seat,
-		tkWlDisplay->lastSerial);
+	xdg_toplevel_move(surfPtr->xdgToplevel, tkXeDisplay->seat,
+		tkXeDisplay->lastSerial);
     }
-    wl_display_flush(tkWlDisplay->wlDisplay);
+    wl_display_flush(tkXeDisplay->wlDisplay);
     return TCL_OK;
 }
 
@@ -735,7 +735,7 @@ StartResizeCmd(
 	XDG_TOPLEVEL_RESIZE_EDGE_BOTTOM_RIGHT
     };
     TkWindow *winPtr;
-    TkWlSurface *surfPtr;
+    TkXeSurface *surfPtr;
     int edge;
 
     if (objc != 3) {
@@ -748,17 +748,17 @@ StartResizeCmd(
 	    || (surfPtr = MappedSurface(interp, winPtr)) == NULL) {
 	return TCL_ERROR;
     }
-    if (tkWlDisplay->seat == NULL) {
+    if (tkXeDisplay->seat == NULL) {
 	return TCL_OK;
     }
     if (surfPtr->frame) {
-	libdecor_frame_resize(surfPtr->frame, tkWlDisplay->seat,
-		tkWlDisplay->lastSerial, decorEdges[edge]);
+	libdecor_frame_resize(surfPtr->frame, tkXeDisplay->seat,
+		tkXeDisplay->lastSerial, decorEdges[edge]);
     } else {
-	xdg_toplevel_resize(surfPtr->xdgToplevel, tkWlDisplay->seat,
-		tkWlDisplay->lastSerial, xdgEdges[edge]);
+	xdg_toplevel_resize(surfPtr->xdgToplevel, tkXeDisplay->seat,
+		tkXeDisplay->lastSerial, xdgEdges[edge]);
     }
-    wl_display_flush(tkWlDisplay->wlDisplay);
+    wl_display_flush(tkXeDisplay->wlDisplay);
     return TCL_OK;
 }
 
@@ -788,7 +788,7 @@ WindowMenuCmd(
     Tcl_Obj *const objv[])
 {
     TkWindow *winPtr;
-    TkWlSurface *surfPtr;
+    TkXeSurface *surfPtr;
     int x = 0, y = 0;
 
     if (objc != 2 && objc != 4) {
@@ -801,21 +801,21 @@ WindowMenuCmd(
 	    || (surfPtr = MappedSurface(interp, winPtr)) == NULL) {
 	return TCL_ERROR;
     }
-    if (objc == 2 && tkWlDisplay->pointerSurface == surfPtr) {
-	x = (int)tkWlDisplay->pointerX;
-	y = (int)tkWlDisplay->pointerY;
+    if (objc == 2 && tkXeDisplay->pointerSurface == surfPtr) {
+	x = (int)tkXeDisplay->pointerX;
+	y = (int)tkXeDisplay->pointerY;
     }
-    if (tkWlDisplay->seat == NULL) {
+    if (tkXeDisplay->seat == NULL) {
 	return TCL_OK;
     }
     if (surfPtr->frame) {
-	libdecor_frame_show_window_menu(surfPtr->frame, tkWlDisplay->seat,
-		tkWlDisplay->lastSerial, x, y);
+	libdecor_frame_show_window_menu(surfPtr->frame, tkXeDisplay->seat,
+		tkXeDisplay->lastSerial, x, y);
     } else {
-	xdg_toplevel_show_window_menu(surfPtr->xdgToplevel, tkWlDisplay->seat,
-		tkWlDisplay->lastSerial, x, y);
+	xdg_toplevel_show_window_menu(surfPtr->xdgToplevel, tkXeDisplay->seat,
+		tkXeDisplay->lastSerial, x, y);
     }
-    wl_display_flush(tkWlDisplay->wlDisplay);
+    wl_display_flush(tkXeDisplay->wlDisplay);
     return TCL_OK;
 }
 
@@ -861,7 +861,7 @@ InhibitIdleCmd(
 	}
 	infoPtr->inhibitIdle = inhibit;
 	UpdateInhibitor(infoPtr);
-	wl_display_flush(tkWlDisplay->wlDisplay);
+	wl_display_flush(tkXeDisplay->wlDisplay);
     }
     Tcl_SetObjResult(interp, Tcl_NewBooleanObj(infoPtr->inhibitIdle));
     return TCL_OK;
@@ -936,22 +936,22 @@ ActivationTokenCmd(
 	Tcl_WrongNumArgs(interp, 1, objv, NULL);
 	return TCL_ERROR;
     }
-    if (tkWlDisplay->activation == NULL) {
+    if (tkXeDisplay->activation == NULL) {
 	return TCL_OK;
     }
-    token = xdg_activation_v1_get_activation_token(tkWlDisplay->activation);
+    token = xdg_activation_v1_get_activation_token(tkXeDisplay->activation);
     xdg_activation_token_v1_add_listener(token, &tokenListener, &resultObj);
-    if (tkWlDisplay->seat && tkWlDisplay->lastSerial) {
-	xdg_activation_token_v1_set_serial(token, tkWlDisplay->lastSerial,
-		tkWlDisplay->seat);
+    if (tkXeDisplay->seat && tkXeDisplay->lastSerial) {
+	xdg_activation_token_v1_set_serial(token, tkXeDisplay->lastSerial,
+		tkXeDisplay->seat);
     }
-    if (tkWlDisplay->keyboardSurface) {
+    if (tkXeDisplay->keyboardSurface) {
 	xdg_activation_token_v1_set_surface(token,
-		tkWlDisplay->keyboardSurface->surface);
+		tkXeDisplay->keyboardSurface->surface);
     }
     xdg_activation_token_v1_commit(token);
     for (i = 0; i < 10 && resultObj == NULL; i++) {
-	if (wl_display_roundtrip(tkWlDisplay->wlDisplay) < 0) {
+	if (wl_display_roundtrip(tkXeDisplay->wlDisplay) < 0) {
 	    break;
 	}
     }
@@ -988,7 +988,7 @@ ScaleCmd(
     Tcl_Obj *const objv[])
 {
     TkWindow *winPtr;
-    TkWlSurface *surfPtr;
+    TkXeSurface *surfPtr;
 
     if (objc != 2) {
 	Tcl_WrongNumArgs(interp, 1, objv, "window");

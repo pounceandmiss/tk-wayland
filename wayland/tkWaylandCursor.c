@@ -150,7 +150,7 @@ MakeImageCursor(
     struct wl_shm_pool *pool;
     uint32_t *pixels, fgPixel, bgPixel;
 
-    if (tkWlDisplay == NULL || width <= 0 || height <= 0) {
+    if (tkXeDisplay == NULL || width <= 0 || height <= 0) {
 	return NULL;
     }
     fd = memfd_create("tk-cursor", MFD_CLOEXEC);
@@ -180,7 +180,7 @@ MakeImageCursor(
 	    pixels[y * width + x] = pixel;
 	}
     }
-    pool = wl_shm_create_pool(tkWlDisplay->shm, fd, (int32_t)size);
+    pool = wl_shm_create_pool(tkXeDisplay->shm, fd, (int32_t)size);
     cursorPtr = (TkWlCursor *)Tcl_Alloc(sizeof(TkWlCursor));
     memset(cursorPtr, 0, sizeof(TkWlCursor));
     cursorPtr->info.cursor = (Tk_Cursor)cursorPtr;
@@ -416,7 +416,7 @@ TkpFreeCursor(
 
     if ((Cursor)cursorPtr->cursor == currentCursor) {
 	currentCursor = None;
-	TkWlUpdateCursor();
+	TkXeUpdateCursor();
     }
     if (wlCursorPtr->buffer) {
 	wl_buffer_destroy(wlCursorPtr->buffer);
@@ -490,7 +490,7 @@ XFreeCursor(
     Display *display,
     TCL_UNUSED(Cursor))
 {
-    TkWlNextRequest(display);
+    TkXeNextRequest(display);
     return Success;
 }
 
@@ -524,40 +524,40 @@ LoadCursor(
     int i;
     struct wl_cursor *cursor;
 
-    if (tkWlDisplay->cursorTheme == NULL || themeScale != scale) {
+    if (tkXeDisplay->cursorTheme == NULL || themeScale != scale) {
 	const char *sizeString = getenv("XCURSOR_SIZE");
 	int size = sizeString ? atoi(sizeString) : 0;
 
 	if (size <= 0) {
 	    size = 24;
 	}
-	if (tkWlDisplay->cursorTheme) {
-	    wl_cursor_theme_destroy(tkWlDisplay->cursorTheme);
+	if (tkXeDisplay->cursorTheme) {
+	    wl_cursor_theme_destroy(tkXeDisplay->cursorTheme);
 	}
-	tkWlDisplay->cursorTheme = wl_cursor_theme_load(
-		getenv("XCURSOR_THEME"), size * scale, tkWlDisplay->shm);
+	tkXeDisplay->cursorTheme = wl_cursor_theme_load(
+		getenv("XCURSOR_THEME"), size * scale, tkXeDisplay->shm);
 	themeScale = scale;
-	if (tkWlDisplay->cursorTheme == NULL) {
+	if (tkXeDisplay->cursorTheme == NULL) {
 	    return NULL;
 	}
     }
-    cursor = wl_cursor_theme_get_cursor(tkWlDisplay->cursorTheme, name);
+    cursor = wl_cursor_theme_get_cursor(tkXeDisplay->cursorTheme, name);
     if (cursor) {
 	return cursor;
     }
     for (i = 0; cursorNames[i].name; i++) {
 	if (!strcmp(cursorNames[i].name, name)) {
-	    cursor = wl_cursor_theme_get_cursor(tkWlDisplay->cursorTheme,
+	    cursor = wl_cursor_theme_get_cursor(tkXeDisplay->cursorTheme,
 		    cursorNames[i].cssName);
 	    break;
 	}
     }
     if (cursor == NULL) {
-	cursor = wl_cursor_theme_get_cursor(tkWlDisplay->cursorTheme,
+	cursor = wl_cursor_theme_get_cursor(tkXeDisplay->cursorTheme,
 		"left_ptr");
     }
     if (cursor == NULL) {
-	cursor = wl_cursor_theme_get_cursor(tkWlDisplay->cursorTheme,
+	cursor = wl_cursor_theme_get_cursor(tkXeDisplay->cursorTheme,
 		"default");
     }
     return cursor;
@@ -566,7 +566,7 @@ LoadCursor(
 /*
  *----------------------------------------------------------------------
  *
- * TkWlUpdateCursor --
+ * TkXeUpdateCursor --
  *
  *	Show the current cursor on the surface under the pointer, at the scale
  *	of that surface.
@@ -582,7 +582,7 @@ LoadCursor(
  */
 
 void
-TkWlUpdateCursor(void)
+TkXeUpdateCursor(void)
 {
     TkWlCursor *cursorPtr = (TkWlCursor *)currentCursor;
     struct wl_cursor *cursor;
@@ -590,30 +590,30 @@ TkWlUpdateCursor(void)
     struct wl_buffer *buffer;
     int scale;
 
-    if (tkWlDisplay == NULL || tkWlDisplay->pointer == NULL
-	    || tkWlDisplay->pointerSurface == NULL) {
+    if (tkXeDisplay == NULL || tkXeDisplay->pointer == NULL
+	    || tkXeDisplay->pointerSurface == NULL) {
 	return;
     }
     if (cursorPtr && cursorPtr->buffer) {
-	if (tkWlDisplay->cursorSurface == NULL) {
-	    tkWlDisplay->cursorSurface = wl_compositor_create_surface(
-		    tkWlDisplay->compositor);
+	if (tkXeDisplay->cursorSurface == NULL) {
+	    tkXeDisplay->cursorSurface = wl_compositor_create_surface(
+		    tkXeDisplay->compositor);
 	}
-	wl_surface_set_buffer_scale(tkWlDisplay->cursorSurface, 1);
-	wl_surface_attach(tkWlDisplay->cursorSurface, cursorPtr->buffer, 0, 0);
-	wl_surface_damage_buffer(tkWlDisplay->cursorSurface, 0, 0, INT32_MAX,
+	wl_surface_set_buffer_scale(tkXeDisplay->cursorSurface, 1);
+	wl_surface_attach(tkXeDisplay->cursorSurface, cursorPtr->buffer, 0, 0);
+	wl_surface_damage_buffer(tkXeDisplay->cursorSurface, 0, 0, INT32_MAX,
 		INT32_MAX);
-	wl_surface_commit(tkWlDisplay->cursorSurface);
-	wl_pointer_set_cursor(tkWlDisplay->pointer, tkWlDisplay->pointerSerial,
-		tkWlDisplay->cursorSurface, cursorPtr->xHot, cursorPtr->yHot);
+	wl_surface_commit(tkXeDisplay->cursorSurface);
+	wl_pointer_set_cursor(tkXeDisplay->pointer, tkXeDisplay->pointerSerial,
+		tkXeDisplay->cursorSurface, cursorPtr->xHot, cursorPtr->yHot);
 	return;
     }
     if (cursorPtr && cursorPtr->name == NULL) {
-	wl_pointer_set_cursor(tkWlDisplay->pointer,
-		tkWlDisplay->pointerSerial, NULL, 0, 0);
+	wl_pointer_set_cursor(tkXeDisplay->pointer,
+		tkXeDisplay->pointerSerial, NULL, 0, 0);
 	return;
     }
-    scale = (int)ceil(tkWlDisplay->pointerSurface->scale);
+    scale = (int)ceil(tkXeDisplay->pointerSurface->scale);
     cursor = LoadCursor(cursorPtr ? cursorPtr->name : "left_ptr", scale);
     if (cursor == NULL || cursor->image_count < 1) {
 	return;
@@ -623,17 +623,17 @@ TkWlUpdateCursor(void)
     if (buffer == NULL) {
 	return;
     }
-    if (tkWlDisplay->cursorSurface == NULL) {
-	tkWlDisplay->cursorSurface = wl_compositor_create_surface(
-		tkWlDisplay->compositor);
+    if (tkXeDisplay->cursorSurface == NULL) {
+	tkXeDisplay->cursorSurface = wl_compositor_create_surface(
+		tkXeDisplay->compositor);
     }
-    wl_surface_set_buffer_scale(tkWlDisplay->cursorSurface, scale);
-    wl_surface_attach(tkWlDisplay->cursorSurface, buffer, 0, 0);
-    wl_surface_damage_buffer(tkWlDisplay->cursorSurface, 0, 0,
+    wl_surface_set_buffer_scale(tkXeDisplay->cursorSurface, scale);
+    wl_surface_attach(tkXeDisplay->cursorSurface, buffer, 0, 0);
+    wl_surface_damage_buffer(tkXeDisplay->cursorSurface, 0, 0,
 	    (int32_t)image->width, (int32_t)image->height);
-    wl_surface_commit(tkWlDisplay->cursorSurface);
-    wl_pointer_set_cursor(tkWlDisplay->pointer, tkWlDisplay->pointerSerial,
-	    tkWlDisplay->cursorSurface, (int32_t)image->hotspot_x / scale,
+    wl_surface_commit(tkXeDisplay->cursorSurface);
+    wl_pointer_set_cursor(tkXeDisplay->pointer, tkXeDisplay->pointerSerial,
+	    tkXeDisplay->cursorSurface, (int32_t)image->hotspot_x / scale,
 	    (int32_t)image->hotspot_y / scale);
 }
 
@@ -662,7 +662,7 @@ TkpSetCursor(
 	return;
     }
     currentCursor = cursor;
-    TkWlUpdateCursor();
+    TkXeUpdateCursor();
 }
 
 /*

@@ -2,9 +2,9 @@
  * Xft.h --
  *
  *	The part of the Xft API which the bidi font code of the X11 port
- *	(tkUnixBidiFont.c) uses, implemented by the Wayland port with Cairo and
- *	fontconfig (tkWaylandXft.c). The types and the macros are those of Xft,
- *	most of which are those of fontconfig.
+ *	(tkUnixBidiFont.c) uses, implemented by the X server emulation with
+ *	Cairo and fontconfig (tkXemuXft.c). The types and the macros are those
+ *	of Xft, most of which are those of fontconfig.
  *
  * Copyright © 2026 The Tk developers.
  *

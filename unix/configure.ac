@@ -265,6 +265,8 @@ if test $tk_aqua = no; then
     AC_MSG_RESULT([$tk_wayland])
 fi
 
+tk_xemu=$tk_wayland
+
 if test $tk_aqua = yes; then
     AC_DEFINE(MAC_OSX_TK, 1, [Are we building TkAqua?])
     LIBS="$LIBS -framework Cocoa -framework Carbon -framework IOKit -framework QuartzCore -framework Security -framework CoreGraphics"
@@ -286,20 +288,24 @@ else
     #	no include files, so double-check its result just to be safe.
     #--------------------------------------------------------------------
 
-    if test $tk_wayland = no; then
+    if test $tk_xemu = no; then
 	SC_PATH_X
 	TK_WINDOWINGSYSTEM=X11
     fi
 fi
 
 #--------------------------------------------------------------------
-#	The Wayland port, like the Aqua and Windows ports, implements the
-#	part of Xlib that Tk uses, with the X11 headers in ../xlib.
+#	The ports on the X server emulation of ../xemu (Wayland), like the
+#	Aqua and Windows ports, implement the part of Xlib that Tk uses, with
+#	the X11 headers in ../xlib.
 #--------------------------------------------------------------------
 
 WAYLAND_CFLAGS=""
 WAYLAND_LIBS=""
 WAYLAND_PROTOCOLS_DIR=""
+if test $tk_xemu = yes; then
+    AC_DEFINE(TK_USE_XEMU, 1, [Are we building Tk on the X server emulation?])
+fi
 if test $tk_wayland = yes; then
     AC_DEFINE(TK_USE_WAYLAND, 1, [Are we building Tk for Wayland?])
     TK_WINDOWINGSYSTEM=WAYLAND
@@ -600,12 +606,12 @@ Please install the HarfBuzz development package:
     fi
     AC_SUBST(FONTSYSTEM)
 
-elif test $tk_wayland = yes; then
-    # Wayland path: the bidi font code of X11 (tkUnixBidiFont.c) runs on
-    # the Xft emulation of tkWaylandXft.c if HarfBuzz is available, otherwise
-    # tkWaylandFont.c is used.
+elif test $tk_xemu = yes; then
+    # X server emulation (Wayland): the bidi font code of X11
+    # (tkUnixBidiFont.c) runs on the Xft emulation of tkXemuXft.c if
+    # HarfBuzz is available, otherwise tkXemuFont.c is used.
     enable_xft=no
-    UNIX_FONT_OBJS="tkWaylandFont.o"
+    UNIX_FONT_OBJS="tkXemuFont.o"
     BIDI_CFLAGS=""
     HB_CFLAGS=""
     HB_LIBS=""
@@ -620,7 +626,7 @@ elif test $tk_wayland = yes; then
 		     -DSB_CONFIG_UNITY -DSB_CONFIG_EXPERIMENTAL_TEXT_API -w \
 		     $HB_CFLAGS"
 	AC_DEFINE(HAVE_BIDI, 1, [Define to 1 if bidirectional text support is enabled])
-	UNIX_FONT_OBJS="tkUnixBidiFont.o SheenBidi.o tkWaylandXft.o"
+	UNIX_FONT_OBJS="tkUnixBidiFont.o SheenBidi.o tkXemuXft.o"
     else
 	enable_bidi=no
     fi

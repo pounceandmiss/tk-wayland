@@ -1,10 +1,10 @@
 /*
- * tkWaylandXlib.c --
+ * tkXemuXlib.c --
  *
- *	The parts of the Xlib emulation of the Wayland port which do not deal
- *	with windows or drawing: the display structure, atoms, properties,
- *	regions, colors, keysyms and functions which have nothing to do on
- *	Wayland.
+ *	The parts of the X server emulation which do not deal with windows
+ *	or drawing: the display structure, atoms, properties, regions,
+ *	colors, keysyms and functions which have nothing to do without an X
+ *	server.
  *
  * Copyright © 2026 The Tk developers.
  *
@@ -13,7 +13,7 @@
  */
 
 #define XLIB_ILLEGAL_ACCESS
-#include "tkWaylandInt.h"
+#include "tkXemuInt.h"
 #include <fontconfig/fontconfig.h>
 
 /*
@@ -27,9 +27,9 @@ struct _XRegion {
 /*
  *----------------------------------------------------------------------
  *
- * TkWlOpenXDisplay --
+ * TkXeOpenXDisplay --
  *
- *	Create the emulated X display of the Wayland connection.
+ *	Create the emulated X display of the port.
  *
  * Results:
  *	The new display.
@@ -41,7 +41,7 @@ struct _XRegion {
  */
 
 Display *
-TkWlOpenXDisplay(
+TkXeOpenXDisplay(
     const char *name,		/* Name of the display. */
     int fd,			/* File descriptor of the connection. */
     int width, int height,	/* Size of the screen, in pixels. */
@@ -60,7 +60,7 @@ TkWlOpenXDisplay(
     display->fd = fd;
     display->proto_major_version = 11;
     display->proto_minor_version = 0;
-    display->vendor = (char *)"Wayland";
+    display->vendor = (char *)TKXE_VENDOR;
     display->release = 1;
     display->byte_order = LSBFirst;
     display->bitmap_unit = 32;
@@ -103,14 +103,14 @@ TkWlOpenXDisplay(
     screen->backing_store = NotUseful;
     screen->save_unders = False;
     screen->root_input_mask = 0;
-    screen->root = TkWlCreateRootWindow(display, width, height)->id;
+    screen->root = TkXeCreateRootWindow(display, width, height)->id;
     return display;
 }
 
 /*
  *----------------------------------------------------------------------
  *
- * TkWlSetScreenSize --
+ * TkXeSetScreenSize --
  *
  *	Update the size of the screen when the outputs change.
  *
@@ -125,21 +125,21 @@ TkWlOpenXDisplay(
  */
 
 void
-TkWlSetScreenSize(
+TkXeSetScreenSize(
     Display *display,
     int width, int height,
     int mmWidth, int mmHeight)
 {
     Screen *screen = ScreenOfDisplay(display, 0);
-    TkWlWindow *rootPtr = TkWlGetWindow(screen->root);
+    TkXeWindow *rootPtr = TkXeGetWindow(screen->root);
 
     screen->width = width;
     screen->height = height;
 
     /*
-     * Logical pixels have 96 dpi in Wayland, whatever the physical size of
-     * the output (which is often unknown or wrong), as in other toolkits.
-     * Higher resolutions are handled with the buffer scale.
+     * Logical pixels have 96 dpi, whatever the physical size of the screen
+     * (which is often unknown or wrong), as in other toolkits. Higher
+     * resolutions are handled with the scale of the surfaces.
      */
 
     (void)mmWidth;
@@ -153,7 +153,7 @@ TkWlSetScreenSize(
 /*
  *----------------------------------------------------------------------
  *
- * TkWlNextRequest --
+ * TkXeNextRequest --
  *
  *	Count a request, as Xlib does, for the serial numbers of the events
  *	and for Tk's error handlers.
@@ -168,7 +168,7 @@ TkWlSetScreenSize(
  */
 
 unsigned long
-TkWlNextRequest(
+TkXeNextRequest(
     Display *display)
 {
     return ++display->request;
@@ -277,7 +277,7 @@ XInternAtom(
     int isNew;
 
     if (display) {
-	TkWlNextRequest(display);
+	TkXeNextRequest(display);
     }
     Tcl_MutexLock(&atomMutex);
     if (!atomsInitialized) {
@@ -324,7 +324,7 @@ XGetAtomName(
     char *result = NULL;
 
     if (display) {
-	TkWlNextRequest(display);
+	TkXeNextRequest(display);
     }
     Tcl_MutexLock(&atomMutex);
     if (!atomsInitialized) {
@@ -354,7 +354,7 @@ XGetAtomName(
 /*
  *----------------------------------------------------------------------
  *
- * TkWlGetProperty --
+ * TkXeGetProperty --
  *
  *	Find a property of a window.
  *
@@ -367,12 +367,12 @@ XGetAtomName(
  *----------------------------------------------------------------------
  */
 
-TkWlProperty *
-TkWlGetProperty(
-    TkWlWindow *winPtr,
+TkXeProperty *
+TkXeGetProperty(
+    TkXeWindow *winPtr,
     Atom name)
 {
-    TkWlProperty *propPtr;
+    TkXeProperty *propPtr;
 
     for (propPtr = winPtr->properties; propPtr; propPtr = propPtr->nextPtr) {
 	if (propPtr->name == name) {
@@ -402,7 +402,7 @@ TkWlGetProperty(
 
 static void
 PropertyChanged(
-    TkWlWindow *winPtr,
+    TkXeWindow *winPtr,
     Atom property,
     int state)
 {
@@ -414,12 +414,12 @@ PropertyChanged(
 	event.xproperty.display = winPtr->display;
 	event.xproperty.window = winPtr->id;
 	event.xproperty.atom = property;
-	event.xproperty.time = TkWlCurrentTime();
+	event.xproperty.time = TkXeCurrentTime();
 	event.xproperty.state = state;
-	TkWlQueueEvent(&event);
+	TkXeQueueEvent(&event);
     }
     if (winPtr->surface && state == PropertyNewValue) {
-	TkWlWmPropertyChanged(winPtr->surface, property);
+	TkXeWmPropertyChanged(winPtr->surface, property);
     }
 }
 
@@ -479,20 +479,20 @@ XChangeProperty(
     _Xconst unsigned char *data,
     int nelements)
 {
-    TkWlWindow *winPtr = TkWlGetWindow(w);
-    TkWlProperty *propPtr;
+    TkXeWindow *winPtr = TkXeGetWindow(w);
+    TkXeProperty *propPtr;
     size_t itemSize = PropertyItemSize(format);
     unsigned char *newData;
     unsigned long nitems;
 
-    TkWlNextRequest(display);
+    TkXeNextRequest(display);
     if (winPtr == NULL || nelements < 0) {
 	return BadWindow;
     }
-    propPtr = TkWlGetProperty(winPtr, property);
+    propPtr = TkXeGetProperty(winPtr, property);
     if (propPtr == NULL) {
-	propPtr = (TkWlProperty *)Tcl_Alloc(sizeof(TkWlProperty));
-	memset(propPtr, 0, sizeof(TkWlProperty));
+	propPtr = (TkXeProperty *)Tcl_Alloc(sizeof(TkXeProperty));
+	memset(propPtr, 0, sizeof(TkXeProperty));
 	propPtr->name = property;
 	propPtr->nextPtr = winPtr->properties;
 	winPtr->properties = propPtr;
@@ -573,11 +573,11 @@ XGetWindowProperty(
     unsigned long *bytesAfterPtr,
     unsigned char **propPtrPtr)
 {
-    TkWlWindow *winPtr = TkWlGetWindow(w);
-    TkWlProperty *propPtr;
+    TkXeWindow *winPtr = TkXeGetWindow(w);
+    TkXeProperty *propPtr;
     size_t itemSize, total, start, count;
 
-    TkWlNextRequest(display);
+    TkXeNextRequest(display);
     *actualTypePtr = None;
     *actualFormatPtr = 0;
     *nitemsPtr = 0;
@@ -586,7 +586,7 @@ XGetWindowProperty(
     if (winPtr == NULL) {
 	return BadWindow;
     }
-    propPtr = TkWlGetProperty(winPtr, property);
+    propPtr = TkXeGetProperty(winPtr, property);
     if (propPtr == NULL) {
 	return Success;
     }
@@ -651,16 +651,16 @@ XDeleteProperty(
     Window w,
     Atom property)
 {
-    TkWlWindow *winPtr = TkWlGetWindow(w);
-    TkWlProperty **prevPtrPtr;
+    TkXeWindow *winPtr = TkXeGetWindow(w);
+    TkXeProperty **prevPtrPtr;
 
-    TkWlNextRequest(display);
+    TkXeNextRequest(display);
     if (winPtr == NULL) {
 	return BadWindow;
     }
     for (prevPtrPtr = &winPtr->properties; *prevPtrPtr;
 	    prevPtrPtr = &(*prevPtrPtr)->nextPtr) {
-	TkWlProperty *propPtr = *prevPtrPtr;
+	TkXeProperty *propPtr = *prevPtrPtr;
 
 	if (propPtr->name == property) {
 	    *prevPtrPtr = propPtr->nextPtr;
@@ -676,7 +676,7 @@ XDeleteProperty(
 /*
  *----------------------------------------------------------------------
  *
- * TkWlFreeProperties --
+ * TkXeFreeProperties --
  *
  *	Free the properties of a window which is destroyed.
  *
@@ -690,11 +690,11 @@ XDeleteProperty(
  */
 
 void
-TkWlFreeProperties(
-    TkWlWindow *winPtr)
+TkXeFreeProperties(
+    TkXeWindow *winPtr)
 {
     while (winPtr->properties) {
-	TkWlProperty *propPtr = winPtr->properties;
+	TkXeProperty *propPtr = winPtr->properties;
 
 	winPtr->properties = propPtr->nextPtr;
 	Tcl_Free(propPtr->data);
@@ -741,7 +741,7 @@ XFree(
 /*
  *----------------------------------------------------------------------
  *
- * TkWlPixmanRegion --
+ * TkXePixmanRegion --
  *
  *	Get the pixman region of a region.
  *
@@ -755,7 +755,7 @@ XFree(
  */
 
 pixman_region32_t *
-TkWlPixmanRegion(
+TkXePixmanRegion(
     Region r)
 {
     return &r->rgn;
@@ -1113,7 +1113,7 @@ XAllocColor(
     TCL_UNUSED(Colormap),
     XColor *colorPtr)
 {
-    TkWlNextRequest(display);
+    TkXeNextRequest(display);
     colorPtr->red = (colorPtr->red >> 8) * 0x101;
     colorPtr->green = (colorPtr->green >> 8) * 0x101;
     colorPtr->blue = (colorPtr->blue >> 8) * 0x101;
@@ -1188,7 +1188,7 @@ XQueryColors(
 {
     int i;
 
-    TkWlNextRequest(display);
+    TkXeNextRequest(display);
     for (i = 0; i < ncolors; i++) {
 	unsigned long p = colors[i].pixel;
 
@@ -1227,7 +1227,7 @@ XFreeColors(
     TCL_UNUSED(int),
     TCL_UNUSED(unsigned long))
 {
-    TkWlNextRequest(display);
+    TkXeNextRequest(display);
     return Success;
 }
 
@@ -1238,7 +1238,7 @@ XCreateColormap(
     TCL_UNUSED(Visual *),
     TCL_UNUSED(int))
 {
-    TkWlNextRequest(display);
+    TkXeNextRequest(display);
     return DefaultColormap(display, 0);
 }
 
@@ -1247,7 +1247,7 @@ XFreeColormap(
     Display *display,
     TCL_UNUSED(Colormap))
 {
-    TkWlNextRequest(display);
+    TkXeNextRequest(display);
     return Success;
 }
 
@@ -1461,7 +1461,7 @@ XKeysymToKeycode(
     Display *display,
     KeySym keysym)
 {
-    struct xkb_keymap *keymap = tkWlDisplay ? tkWlDisplay->keymap : NULL;
+    struct xkb_keymap *keymap = tkXeDisplay ? tkXeDisplay->keymap : NULL;
     xkb_keycode_t kc, min, max;
 
     (void)display;
@@ -1521,7 +1521,7 @@ XkbKeycodeToKeysym(
     int group,
     int level)
 {
-    struct xkb_keymap *keymap = tkWlDisplay ? tkWlDisplay->keymap : NULL;
+    struct xkb_keymap *keymap = tkXeDisplay ? tkXeDisplay->keymap : NULL;
     const xkb_keysym_t *syms;
 
     if (keymap == NULL || group < 0 || level < 0) {
@@ -1540,7 +1540,7 @@ XkbKeycodeToKeysym(
  *
  * XkbOpenDisplay --
  *
- *	Tk does not open displays with Xkb on Wayland.
+ *	Tk does not open displays with Xkb without an X server.
  *
  * Results:
  *	NULL.
@@ -1680,7 +1680,7 @@ XmbLookupString(
 /*
  *----------------------------------------------------------------------
  *
- * TkWlXlfdParse --
+ * TkXeXlfdParse --
  *
  *	Make a fontconfig pattern from an XLFD font name, which Tk expects to
  *	work as on X11.
@@ -1696,7 +1696,7 @@ XmbLookupString(
  */
 
 FcPattern *
-TkWlXlfdParse(
+TkXeXlfdParse(
     const char *name)
 {
     FcPattern *pattern;
@@ -1786,7 +1786,7 @@ XLoadFont(
     Display *display,
     TCL_UNUSED(const char *))
 {
-    TkWlNextRequest(display);
+    TkXeNextRequest(display);
     return (Font)1;
 }
 
@@ -1795,7 +1795,7 @@ XUnloadFont(
     Display *display,
     TCL_UNUSED(Font))
 {
-    TkWlNextRequest(display);
+    TkXeNextRequest(display);
     return Success;
 }
 
@@ -1854,7 +1854,7 @@ XQueryColor(
 /*
  *----------------------------------------------------------------------
  *
- * Functions without any effect on Wayland --
+ * Functions without any effect without an X server --
  *
  *----------------------------------------------------------------------
  */
@@ -1911,7 +1911,7 @@ int
 XNoOp(
     Display *display)
 {
-    TkWlNextRequest(display);
+    TkXeNextRequest(display);
     return Success;
 }
 
@@ -1928,7 +1928,7 @@ int
 XGrabServer(
     Display *display)
 {
-    TkWlNextRequest(display);
+    TkXeNextRequest(display);
     return Success;
 }
 
@@ -1936,7 +1936,7 @@ int
 XUngrabServer(
     Display *display)
 {
-    TkWlNextRequest(display);
+    TkXeNextRequest(display);
     return Success;
 }
 
@@ -1945,7 +1945,7 @@ XForceScreenSaver(
     Display *display,
     TCL_UNUSED(int))
 {
-    TkWlNextRequest(display);
+    TkXeNextRequest(display);
     return Success;
 }
 
@@ -1953,7 +1953,7 @@ int
 XResetScreenSaver(
     Display *display)
 {
-    TkWlNextRequest(display);
+    TkXeNextRequest(display);
     return Success;
 }
 
@@ -1975,7 +1975,7 @@ XSetCommand(
     TCL_UNUSED(char **),
     TCL_UNUSED(int))
 {
-    TkWlNextRequest(display);
+    TkXeNextRequest(display);
     return Success;
 }
 
@@ -1985,7 +1985,7 @@ XSetIconName(
     TCL_UNUSED(Window),
     TCL_UNUSED(const char *))
 {
-    TkWlNextRequest(display);
+    TkXeNextRequest(display);
     return Success;
 }
 
@@ -1995,7 +1995,7 @@ XSetWMClientMachine(
     TCL_UNUSED(Window),
     TCL_UNUSED(XTextProperty *))
 {
-    TkWlNextRequest(display);
+    TkXeNextRequest(display);
 }
 
 /*
@@ -2045,8 +2045,9 @@ XStringListToTextProperty(
  *
  * XFilterEvent, XCreateIC, XGContextFromGC, XRootWindow, XBell --
  *
- *	Functions for things which do not exist on Wayland: X input methods,
- *	server GC contexts and the bell; the root window is the emulated one.
+ *	Functions for things which do not exist without an X server: X input
+ *	methods, server GC contexts and the bell; the root window is the
+ *	emulated one.
  *
  * Results:
  *	XFilterEvent returns False, XCreateIC NULL, XGContextFromGC 0,
@@ -2093,7 +2094,7 @@ XBell(
     Display *display,
     TCL_UNUSED(int))
 {
-    TkWlNextRequest(display);
+    TkXeNextRequest(display);
     return Success;
 }
 

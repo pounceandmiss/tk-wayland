@@ -1031,10 +1031,10 @@ TkCreateMainWindow(
 #ifndef TCL_CFG_OPTIMIZED
 		".no-optimize"
 #endif
-#if !defined(_WIN32) && !defined(MAC_OSX_TK) && !defined(TK_USE_WAYLAND) && !defined(HAVE_XFT) && !defined(HAVE_BIDI)
+#if !defined(_WIN32) && !defined(MAC_OSX_TK) && !defined(TK_USE_XEMU) && !defined(HAVE_XFT) && !defined(HAVE_BIDI)
 		".no-xft"
 #endif
-#if !defined(_WIN32) && !defined(MAC_OSX_TK) && !defined(TK_USE_WAYLAND) && !defined(HAVE_XSS)
+#if !defined(_WIN32) && !defined(MAC_OSX_TK) && !defined(TK_USE_XEMU) && !defined(HAVE_XSS)
 		".no-xss"
 #endif
 #ifdef __OBJC__
@@ -1058,7 +1058,7 @@ TkCreateMainWindow(
 #if defined(_WIN32)
 		".win32"
 #endif
-#if !defined(_WIN32) && !defined(MAC_OSX_TK) && !defined(TK_USE_WAYLAND)
+#if !defined(_WIN32) && !defined(MAC_OSX_TK) && !defined(TK_USE_XEMU)
 		".x11"
 #endif
 		;
@@ -1612,7 +1612,7 @@ Tk_DestroyWindow(
 	TkWmRemoveFromColormapWindows(winPtr);
     }
     if (winPtr->window != None) {
-#if defined(MAC_OSX_TK) || defined(_WIN32) || defined(TK_USE_WAYLAND)
+#if defined(MAC_OSX_TK) || defined(_WIN32) || defined(TK_USE_XEMU)
 	XDestroyWindow(winPtr->display, winPtr->window);
 #else
 	if ((winPtr->flags & TK_TOP_HIERARCHY)

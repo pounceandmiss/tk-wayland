@@ -16,7 +16,7 @@
 #include <locale.h>
 #include <linux/input-event-codes.h>
 
-TkWlDisplay *tkWlDisplay = NULL;
+TkXeDisplay *tkXeDisplay = NULL;
 
 typedef struct {
     bool initialized;
@@ -66,15 +66,15 @@ static void		RepeatProc(void *clientData);
 static void
 UpdateScreenSize(void)
 {
-    TkWlOutput *outPtr = tkWlDisplay->outputs;
+    TkWlOutput *outPtr = tkXeDisplay->outputs;
     int scale;
 
-    if (outPtr == NULL || tkWlDisplay->display == NULL
+    if (outPtr == NULL || tkXeDisplay->display == NULL
 	    || outPtr->width <= 0) {
 	return;
     }
     scale = (outPtr->scale > 0) ? outPtr->scale : 1;
-    TkWlSetScreenSize(tkWlDisplay->display, outPtr->width / scale,
+    TkXeSetScreenSize(tkXeDisplay->display, outPtr->width / scale,
 	    outPtr->height / scale, outPtr->mmWidth, outPtr->mmHeight);
 }
 
@@ -144,10 +144,10 @@ OutputDone(
     TCL_UNUSED(void *),
     TCL_UNUSED(struct wl_output *))
 {
-    TkWlSurface *surfPtr;
+    TkXeSurface *surfPtr;
 
     UpdateScreenSize();
-    for (surfPtr = tkWlDisplay->surfaces; surfPtr; surfPtr = surfPtr->nextPtr) {
+    for (surfPtr = tkXeDisplay->surfaces; surfPtr; surfPtr = surfPtr->nextPtr) {
 	TkWlUpdateScale(surfPtr);
     }
 }
@@ -222,11 +222,11 @@ static const struct wl_output_listener outputListener = {
 
 static void
 SurfaceToRoot(
-    TkWlSurface *surfPtr,
+    TkXeSurface *surfPtr,
     int x, int y,
     int *rootXPtr, int *rootYPtr)
 {
-    TkWlWindow *winPtr = surfPtr->winPtr;
+    TkXeWindow *winPtr = surfPtr->winPtr;
 
     *rootXPtr = winPtr->x + x;
     *rootYPtr = winPtr->y + y;
@@ -251,16 +251,16 @@ SurfaceToRoot(
 
 static Tk_Window
 WindowAtPointer(
-    TkWlSurface *surfPtr,
+    TkXeSurface *surfPtr,
     int x, int y)
 {
-    TkWlWindow *winPtr;
+    TkXeWindow *winPtr;
     Tk_Window tkwin;
 
     if (surfPtr == NULL) {
 	return NULL;
     }
-    winPtr = TkWlWindowAtPoint(surfPtr->winPtr,
+    winPtr = TkXeWindowAtPoint(surfPtr->winPtr,
 	    x - surfPtr->winPtr->borderWidth, y - surfPtr->winPtr->borderWidth);
     for (; winPtr; winPtr = winPtr->parent) {
 	tkwin = Tk_IdToWindow(winPtr->display, winPtr->id);
@@ -291,7 +291,7 @@ WindowAtPointer(
 static unsigned int
 CurrentState(void)
 {
-    return tkWlDisplay->modState | tkWlDisplay->buttonState;
+    return tkXeDisplay->modState | tkXeDisplay->buttonState;
 }
 
 /*
@@ -315,15 +315,15 @@ static void
 UpdatePointer(
     unsigned int state)
 {
-    TkWlSurface *surfPtr = tkWlDisplay->pointerSurface;
+    TkXeSurface *surfPtr = tkXeDisplay->pointerSurface;
     int x, y, rootX, rootY;
 
     if (surfPtr == NULL) {
 	Tk_UpdatePointer(NULL, 0, 0, state);
 	return;
     }
-    x = (int)floor(tkWlDisplay->pointerX);
-    y = (int)floor(tkWlDisplay->pointerY);
+    x = (int)floor(tkXeDisplay->pointerX);
+    y = (int)floor(tkXeDisplay->pointerY);
     SurfaceToRoot(surfPtr, x, y, &rootX, &rootY);
     Tk_UpdatePointer(WindowAtPointer(surfPtr, x, y), rootX, rootY, state);
 }
@@ -358,13 +358,13 @@ PointerEnter(
     wl_fixed_t x,
     wl_fixed_t y)
 {
-    TkWlSurface *surfPtr = surface ? TkWlSurfaceFromWl(surface) : NULL;
+    TkXeSurface *surfPtr = surface ? TkWlSurfaceFromWl(surface) : NULL;
 
-    tkWlDisplay->pointerSerial = serial;
-    tkWlDisplay->pointerSurface = surfPtr;
-    tkWlDisplay->pointerX = wl_fixed_to_double(x);
-    tkWlDisplay->pointerY = wl_fixed_to_double(y);
-    TkWlUpdateCursor();
+    tkXeDisplay->pointerSerial = serial;
+    tkXeDisplay->pointerSurface = surfPtr;
+    tkXeDisplay->pointerX = wl_fixed_to_double(x);
+    tkXeDisplay->pointerY = wl_fixed_to_double(y);
+    TkXeUpdateCursor();
     if (surfPtr) {
 	UpdatePointer(CurrentState());
     }
@@ -383,12 +383,12 @@ PointerLeave(
      * released then, since the client gets no release.
      */
 
-    if (tkWlDisplay->buttonState && tkWlDisplay->pointerSurface) {
-	tkWlDisplay->buttonState = 0;
+    if (tkXeDisplay->buttonState && tkXeDisplay->pointerSurface) {
+	tkXeDisplay->buttonState = 0;
 	UpdatePointer(CurrentState());
     }
-    tkWlDisplay->buttonState = 0;
-    tkWlDisplay->pointerSurface = NULL;
+    tkXeDisplay->buttonState = 0;
+    tkXeDisplay->pointerSurface = NULL;
     UpdatePointer(CurrentState());
 }
 
@@ -400,10 +400,10 @@ PointerMotion(
     wl_fixed_t x,
     wl_fixed_t y)
 {
-    tkWlDisplay->lastTime = time;
-    tkWlDisplay->pointerX = wl_fixed_to_double(x);
-    tkWlDisplay->pointerY = wl_fixed_to_double(y);
-    if (tkWlDisplay->pointerSurface) {
+    tkXeDisplay->lastTime = time;
+    tkXeDisplay->pointerX = wl_fixed_to_double(x);
+    tkXeDisplay->pointerY = wl_fixed_to_double(y);
+    if (tkXeDisplay->pointerSurface) {
 	UpdatePointer(CurrentState());
     }
 }
@@ -419,8 +419,8 @@ PointerButton(
 {
     unsigned int mask;
 
-    tkWlDisplay->lastSerial = serial;
-    tkWlDisplay->lastTime = time;
+    tkXeDisplay->lastSerial = serial;
+    tkXeDisplay->lastTime = time;
     switch (button) {
     case BTN_LEFT:
 	mask = Button1Mask;
@@ -441,9 +441,9 @@ PointerButton(
 	return;
     }
     if (state == WL_POINTER_BUTTON_STATE_PRESSED) {
-	tkWlDisplay->buttonState |= mask;
+	tkXeDisplay->buttonState |= mask;
     } else {
-	tkWlDisplay->buttonState &= ~mask;
+	tkXeDisplay->buttonState &= ~mask;
     }
     UpdatePointer(CurrentState());
 }
@@ -485,7 +485,7 @@ PointerAxis(
     uint32_t axis,
     wl_fixed_t value)
 {
-    tkWlDisplay->lastTime = time;
+    tkXeDisplay->lastTime = time;
     if (axis < 2) {
 	axisValue[axis] += wl_fixed_to_double(value);
     }
@@ -571,10 +571,10 @@ QueueScrollEvent(
     unsigned int state,
     unsigned int value)
 {
-    TkWlSurface *surfPtr = tkWlDisplay->pointerSurface;
+    TkXeSurface *surfPtr = tkXeDisplay->pointerSurface;
     Tk_Window tkwin, capture = TkpGetCapture();
-    int x = (int)floor(tkWlDisplay->pointerX);
-    int y = (int)floor(tkWlDisplay->pointerY);
+    int x = (int)floor(tkXeDisplay->pointerX);
+    int y = (int)floor(tkXeDisplay->pointerY);
     int rootX, rootY, winX, winY;
     XEvent event;
 
@@ -594,7 +594,7 @@ QueueScrollEvent(
     event.xbutton.x_root = rootX;
     event.xbutton.y_root = rootY;
     event.xbutton.state = state;
-    event.xbutton.time = tkWlDisplay->lastTime;
+    event.xbutton.time = tkXeDisplay->lastTime;
     event.xkey.keycode = value;
     Tk_QueueWindowEvent(&event, TCL_QUEUE_TAIL);
 }
@@ -782,23 +782,23 @@ KeyboardKeymap(
 	close(fd);
 	return;
     }
-    keymap = xkb_keymap_new_from_string(tkWlDisplay->xkbContext, map,
+    keymap = xkb_keymap_new_from_string(tkXeDisplay->xkbContext, map,
 	    XKB_KEYMAP_FORMAT_TEXT_V1, XKB_KEYMAP_COMPILE_NO_FLAGS);
     munmap(map, size);
     close(fd);
     if (keymap == NULL) {
 	return;
     }
-    if (tkWlDisplay->xkbState) {
-	xkb_state_unref(tkWlDisplay->xkbState);
+    if (tkXeDisplay->xkbState) {
+	xkb_state_unref(tkXeDisplay->xkbState);
     }
-    if (tkWlDisplay->keymap) {
-	xkb_keymap_unref(tkWlDisplay->keymap);
+    if (tkXeDisplay->keymap) {
+	xkb_keymap_unref(tkXeDisplay->keymap);
     }
-    tkWlDisplay->keymap = keymap;
-    tkWlDisplay->xkbState = xkb_state_new(keymap);
+    tkXeDisplay->keymap = keymap;
+    tkXeDisplay->xkbState = xkb_state_new(keymap);
     InitModIndices(keymap);
-    if (tkWlDisplay->display) {
+    if (tkXeDisplay->display) {
 	TkDisplay *dispPtr = TkGetDisplayList();
 
 	for (; dispPtr; dispPtr = dispPtr->nextPtr) {
@@ -829,12 +829,12 @@ ModState(void)
     unsigned int state = 0;
     int i;
 
-    if (tkWlDisplay->xkbState == NULL) {
+    if (tkXeDisplay->xkbState == NULL) {
 	return 0;
     }
     for (i = 0; i < 8; i++) {
 	if (modIndices[i] != XKB_MOD_INVALID
-		&& xkb_state_mod_index_is_active(tkWlDisplay->xkbState,
+		&& xkb_state_mod_index_is_active(tkXeDisplay->xkbState,
 		    modIndices[i], XKB_STATE_MODS_EFFECTIVE) > 0) {
 	    state |= 1u << i;
 	}
@@ -867,11 +867,11 @@ QueueFocusEvent(
 
     memset(&event, 0, sizeof(XEvent));
     event.xfocus.type = type;
-    event.xfocus.display = tkWlDisplay->display;
+    event.xfocus.display = tkXeDisplay->display;
     event.xfocus.window = w;
     event.xfocus.mode = NotifyNormal;
     event.xfocus.detail = NotifyNonlinear;
-    TkWlQueueEvent(&event);
+    TkXeQueueEvent(&event);
 }
 
 /*
@@ -901,10 +901,10 @@ KeyboardEnter(
     struct wl_surface *surface,
     TCL_UNUSED(struct wl_array *))
 {
-    TkWlSurface *surfPtr = surface ? TkWlSurfaceFromWl(surface) : NULL;
+    TkXeSurface *surfPtr = surface ? TkWlSurfaceFromWl(surface) : NULL;
 
-    tkWlDisplay->lastSerial = serial;
-    tkWlDisplay->keyboardSurface = surfPtr;
+    tkXeDisplay->lastSerial = serial;
+    tkXeDisplay->keyboardSurface = surfPtr;
     if (surfPtr == NULL) {
 	return;
     }
@@ -916,7 +916,7 @@ KeyboardEnter(
 
 	XMapWindow(surfPtr->winPtr->display, surfPtr->winPtr->id);
     }
-    if (TkWlGetWindow(focusWindow) && focusWindow != surfPtr->winPtr->id) {
+    if (TkXeGetWindow(focusWindow) && focusWindow != surfPtr->winPtr->id) {
 	QueueFocusEvent(FocusOut, focusWindow);
     }
     focusWindow = surfPtr->winPtr->id;
@@ -930,11 +930,11 @@ KeyboardLeave(
     uint32_t serial,
     TCL_UNUSED(struct wl_surface *))
 {
-    tkWlDisplay->lastSerial = serial;
-    tkWlDisplay->keyboardSurface = NULL;
-    if (tkWlDisplay->repeatTimer) {
-	Tcl_DeleteTimerHandler(tkWlDisplay->repeatTimer);
-	tkWlDisplay->repeatTimer = NULL;
+    tkXeDisplay->lastSerial = serial;
+    tkXeDisplay->keyboardSurface = NULL;
+    if (tkXeDisplay->repeatTimer) {
+	Tcl_DeleteTimerHandler(tkXeDisplay->repeatTimer);
+	tkXeDisplay->repeatTimer = NULL;
     }
 
     /*
@@ -942,7 +942,7 @@ KeyboardLeave(
      * the keyboard to (see XSetInputFocus).
      */
 
-    if (TkWlGetWindow(focusWindow)) {
+    if (TkXeGetWindow(focusWindow)) {
 	QueueFocusEvent(FocusOut, focusWindow);
     }
     focusWindow = None;
@@ -972,7 +972,7 @@ QueueKeyEvent(
     int type,
     uint32_t key)
 {
-    TkWlSurface *surfPtr = tkWlDisplay->keyboardSurface;
+    TkXeSurface *surfPtr = tkXeDisplay->keyboardSurface;
     xkb_keycode_t keycode = key + 8;
     xkb_keysym_t keysym;
     union {
@@ -982,12 +982,12 @@ QueueKeyEvent(
     char buf[64];
     int len = 0, x, y, rootX, rootY;
 
-    if (surfPtr == NULL || tkWlDisplay->xkbState == NULL) {
+    if (surfPtr == NULL || tkXeDisplay->xkbState == NULL) {
 	return;
     }
-    keysym = xkb_state_key_get_one_sym(tkWlDisplay->xkbState, keycode);
+    keysym = xkb_state_key_get_one_sym(tkXeDisplay->xkbState, keycode);
     if (type == KeyPress) {
-	struct xkb_compose_state *compose = tkWlDisplay->composeState;
+	struct xkb_compose_state *compose = tkXeDisplay->composeState;
 	enum xkb_compose_status status = XKB_COMPOSE_NOTHING;
 
 	if (compose && keysym != XKB_KEY_NoSymbol
@@ -1007,7 +1007,7 @@ QueueKeyEvent(
 	    xkb_compose_state_reset(compose);
 	    break;
 	default:
-	    len = xkb_state_key_get_utf8(tkWlDisplay->xkbState, keycode, buf,
+	    len = xkb_state_key_get_utf8(tkXeDisplay->xkbState, keycode, buf,
 		    sizeof(buf));
 	    break;
 	}
@@ -1016,9 +1016,9 @@ QueueKeyEvent(
 	}
     }
 
-    x = (int)floor(tkWlDisplay->pointerX);
-    y = (int)floor(tkWlDisplay->pointerY);
-    if (tkWlDisplay->pointerSurface != surfPtr) {
+    x = (int)floor(tkXeDisplay->pointerX);
+    y = (int)floor(tkXeDisplay->pointerY);
+    if (tkXeDisplay->pointerSurface != surfPtr) {
 	x = y = 0;
     }
     SurfaceToRoot(surfPtr, x, y, &rootX, &rootY);
@@ -1026,10 +1026,10 @@ QueueKeyEvent(
     memset(&event, 0, sizeof(event));
     event.x.xkey.type = type;
     event.x.xkey.display = surfPtr->winPtr->display;
-    event.x.xkey.window = TkWlGetWindow(focusWindow)
+    event.x.xkey.window = TkXeGetWindow(focusWindow)
 	    ? focusWindow : surfPtr->winPtr->id;
     event.x.xkey.root = RootWindow(event.x.xkey.display, 0);
-    event.x.xkey.time = tkWlDisplay->lastTime;
+    event.x.xkey.time = tkXeDisplay->lastTime;
     event.x.xkey.x = x;
     event.x.xkey.y = y;
     event.x.xkey.x_root = rootX;
@@ -1044,7 +1044,7 @@ QueueKeyEvent(
 	event.k.charValuePtr[len] = '\0';
 	event.k.charValueLen = len;
     }
-    TkWlQueueEvent(&event.x);
+    TkXeQueueEvent(&event.x);
 }
 
 /*
@@ -1073,19 +1073,19 @@ KeyboardKey(
     uint32_t key,
     uint32_t state)
 {
-    tkWlDisplay->lastSerial = serial;
-    tkWlDisplay->lastTime = time;
-    if (tkWlDisplay->repeatTimer) {
-	Tcl_DeleteTimerHandler(tkWlDisplay->repeatTimer);
-	tkWlDisplay->repeatTimer = NULL;
+    tkXeDisplay->lastSerial = serial;
+    tkXeDisplay->lastTime = time;
+    if (tkXeDisplay->repeatTimer) {
+	Tcl_DeleteTimerHandler(tkXeDisplay->repeatTimer);
+	tkXeDisplay->repeatTimer = NULL;
     }
     if (state == WL_KEYBOARD_KEY_STATE_PRESSED) {
 	QueueKeyEvent(KeyPress, key);
-	if (tkWlDisplay->keymap && tkWlDisplay->repeatRate > 0
-		&& xkb_keymap_key_repeats(tkWlDisplay->keymap, key + 8)) {
-	    tkWlDisplay->repeatKey = key;
-	    tkWlDisplay->repeatTimer = Tcl_CreateTimerHandler(
-		    tkWlDisplay->repeatDelay, RepeatProc, NULL);
+	if (tkXeDisplay->keymap && tkXeDisplay->repeatRate > 0
+		&& xkb_keymap_key_repeats(tkXeDisplay->keymap, key + 8)) {
+	    tkXeDisplay->repeatKey = key;
+	    tkXeDisplay->repeatTimer = Tcl_CreateTimerHandler(
+		    tkXeDisplay->repeatDelay, RepeatProc, NULL);
 	}
     } else {
 	QueueKeyEvent(KeyRelease, key);
@@ -1114,9 +1114,9 @@ static void
 RepeatProc(
     TCL_UNUSED(void *))
 {
-    tkWlDisplay->repeatTimer = Tcl_CreateTimerHandler(
-	    1000 / tkWlDisplay->repeatRate, RepeatProc, NULL);
-    QueueKeyEvent(KeyPress, tkWlDisplay->repeatKey);
+    tkXeDisplay->repeatTimer = Tcl_CreateTimerHandler(
+	    1000 / tkXeDisplay->repeatRate, RepeatProc, NULL);
+    QueueKeyEvent(KeyPress, tkXeDisplay->repeatKey);
 }
 
 /*
@@ -1146,11 +1146,11 @@ KeyboardModifiers(
     uint32_t locked,
     uint32_t group)
 {
-    tkWlDisplay->lastSerial = serial;
-    if (tkWlDisplay->xkbState) {
-	xkb_state_update_mask(tkWlDisplay->xkbState, depressed, latched,
+    tkXeDisplay->lastSerial = serial;
+    if (tkXeDisplay->xkbState) {
+	xkb_state_update_mask(tkXeDisplay->xkbState, depressed, latched,
 		locked, 0, 0, group);
-	tkWlDisplay->modState = ModState();
+	tkXeDisplay->modState = ModState();
     }
 }
 
@@ -1161,8 +1161,8 @@ KeyboardRepeatInfo(
     int32_t rate,
     int32_t delay)
 {
-    tkWlDisplay->repeatRate = rate;
-    tkWlDisplay->repeatDelay = delay;
+    tkXeDisplay->repeatRate = rate;
+    tkXeDisplay->repeatDelay = delay;
 }
 
 static const struct wl_keyboard_listener keyboardListener = {
@@ -1206,21 +1206,21 @@ SeatCapabilities(
     struct wl_seat *seat,
     uint32_t caps)
 {
-    if ((caps & WL_SEAT_CAPABILITY_POINTER) && !tkWlDisplay->pointer) {
-	tkWlDisplay->pointer = wl_seat_get_pointer(seat);
-	wl_pointer_add_listener(tkWlDisplay->pointer, &pointerListener, NULL);
-    } else if (!(caps & WL_SEAT_CAPABILITY_POINTER) && tkWlDisplay->pointer) {
-	wl_pointer_release(tkWlDisplay->pointer);
-	tkWlDisplay->pointer = NULL;
+    if ((caps & WL_SEAT_CAPABILITY_POINTER) && !tkXeDisplay->pointer) {
+	tkXeDisplay->pointer = wl_seat_get_pointer(seat);
+	wl_pointer_add_listener(tkXeDisplay->pointer, &pointerListener, NULL);
+    } else if (!(caps & WL_SEAT_CAPABILITY_POINTER) && tkXeDisplay->pointer) {
+	wl_pointer_release(tkXeDisplay->pointer);
+	tkXeDisplay->pointer = NULL;
     }
-    if ((caps & WL_SEAT_CAPABILITY_KEYBOARD) && !tkWlDisplay->keyboard) {
-	tkWlDisplay->keyboard = wl_seat_get_keyboard(seat);
-	wl_keyboard_add_listener(tkWlDisplay->keyboard, &keyboardListener,
+    if ((caps & WL_SEAT_CAPABILITY_KEYBOARD) && !tkXeDisplay->keyboard) {
+	tkXeDisplay->keyboard = wl_seat_get_keyboard(seat);
+	wl_keyboard_add_listener(tkXeDisplay->keyboard, &keyboardListener,
 		NULL);
     } else if (!(caps & WL_SEAT_CAPABILITY_KEYBOARD)
-	    && tkWlDisplay->keyboard) {
-	wl_keyboard_release(tkWlDisplay->keyboard);
-	tkWlDisplay->keyboard = NULL;
+	    && tkXeDisplay->keyboard) {
+	wl_keyboard_release(tkXeDisplay->keyboard);
+	tkXeDisplay->keyboard = NULL;
     }
 }
 
@@ -1318,7 +1318,7 @@ RegistryGlobal(
 {
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
     if (!strncmp(interface, "weston_", 7)) {
-	tkWlDisplay->weston = true;
+	tkXeDisplay->weston = true;
     }
     if (TkWlSelectionBind(registry, name, interface, version)
 	    || TkWlTextInputBind(registry, name, interface)
@@ -1326,41 +1326,41 @@ RegistryGlobal(
 	return;
     }
     if (!strcmp(interface, wl_compositor_interface.name)) {
-	tkWlDisplay->compositor = (struct wl_compositor *)wl_registry_bind(
+	tkXeDisplay->compositor = (struct wl_compositor *)wl_registry_bind(
 		registry, name, &wl_compositor_interface,
 		MIN(version, COMPOSITOR_VERSION));
     } else if (!strcmp(interface, wl_shm_interface.name)) {
-	tkWlDisplay->shm = (struct wl_shm *)wl_registry_bind(registry, name,
+	tkXeDisplay->shm = (struct wl_shm *)wl_registry_bind(registry, name,
 		&wl_shm_interface, 1);
     } else if (!strcmp(interface, wl_seat_interface.name)
-	    && tkWlDisplay->seat == NULL) {
-	tkWlDisplay->seat = (struct wl_seat *)wl_registry_bind(registry, name,
+	    && tkXeDisplay->seat == NULL) {
+	tkXeDisplay->seat = (struct wl_seat *)wl_registry_bind(registry, name,
 		&wl_seat_interface, MIN(version, SEAT_VERSION));
-	wl_seat_add_listener(tkWlDisplay->seat, &seatListener, NULL);
+	wl_seat_add_listener(tkXeDisplay->seat, &seatListener, NULL);
     } else if (!strcmp(interface, wp_viewporter_interface.name)) {
-	tkWlDisplay->viewporter = (struct wp_viewporter *)wl_registry_bind(
+	tkXeDisplay->viewporter = (struct wp_viewporter *)wl_registry_bind(
 		registry, name, &wp_viewporter_interface, 1);
     } else if (!strcmp(interface,
 	    wp_fractional_scale_manager_v1_interface.name)) {
-	tkWlDisplay->fractionalScaleManager =
+	tkXeDisplay->fractionalScaleManager =
 		(struct wp_fractional_scale_manager_v1 *)wl_registry_bind(
 		registry, name, &wp_fractional_scale_manager_v1_interface, 1);
     } else if (!strcmp(interface,
 	    xdg_toplevel_icon_manager_v1_interface.name)) {
-	tkWlDisplay->iconManager = (struct xdg_toplevel_icon_manager_v1 *)
+	tkXeDisplay->iconManager = (struct xdg_toplevel_icon_manager_v1 *)
 		wl_registry_bind(registry, name,
 		&xdg_toplevel_icon_manager_v1_interface, 1);
     } else if (!strcmp(interface, xdg_activation_v1_interface.name)) {
-	tkWlDisplay->activation = (struct xdg_activation_v1 *)
+	tkXeDisplay->activation = (struct xdg_activation_v1 *)
 		wl_registry_bind(registry, name, &xdg_activation_v1_interface,
 		1);
     } else if (!strcmp(interface, xdg_wm_base_interface.name)) {
-	tkWlDisplay->wmBase = (struct xdg_wm_base *)wl_registry_bind(
+	tkXeDisplay->wmBase = (struct xdg_wm_base *)wl_registry_bind(
 		registry, name, &xdg_wm_base_interface, 1);
-	xdg_wm_base_add_listener(tkWlDisplay->wmBase, &wmBaseListener, NULL);
+	xdg_wm_base_add_listener(tkXeDisplay->wmBase, &wmBaseListener, NULL);
     } else if (!strcmp(interface, wl_output_interface.name)) {
 	TkWlOutput *outPtr = (TkWlOutput *)Tcl_Alloc(sizeof(TkWlOutput));
-	TkWlOutput **lastPtrPtr = &tkWlDisplay->outputs;
+	TkWlOutput **lastPtrPtr = &tkXeDisplay->outputs;
 
 	memset(outPtr, 0, sizeof(TkWlOutput));
 	outPtr->name = name;
@@ -1401,7 +1401,7 @@ RegistryGlobalRemove(
 {
     TkWlOutput **outPtrPtr;
 
-    for (outPtrPtr = &tkWlDisplay->outputs; *outPtrPtr;
+    for (outPtrPtr = &tkXeDisplay->outputs; *outPtrPtr;
 	    outPtrPtr = &(*outPtrPtr)->nextPtr) {
 	TkWlOutput *outPtr = *outPtrPtr;
 
@@ -1478,17 +1478,17 @@ TkpOpenDisplay(
     const char *locale;
     TkWlOutput *outPtr;
 
-    if (tkWlDisplay) {
+    if (tkXeDisplay) {
 	/*
 	 * Only one connection per process; any name refers to it.
 	 */
 
-	if (tkWlDisplay->display == NULL) {
+	if (tkXeDisplay->display == NULL) {
 	    return NULL;
 	}
 	for (dispPtr = TkGetDisplayList(); dispPtr;
 		dispPtr = dispPtr->nextPtr) {
-	    if (dispPtr->display == tkWlDisplay->display) {
+	    if (dispPtr->display == tkXeDisplay->display) {
 		return NULL;
 	    }
 	}
@@ -1500,20 +1500,20 @@ TkpOpenDisplay(
 	return NULL;
     }
 
-    tkWlDisplay = (TkWlDisplay *)Tcl_Alloc(sizeof(TkWlDisplay));
-    memset(tkWlDisplay, 0, sizeof(TkWlDisplay));
-    tkWlDisplay->wlDisplay = wlDisplay;
-    tkWlDisplay->repeatRate = 25;
-    tkWlDisplay->repeatDelay = 600;
+    tkXeDisplay = (TkXeDisplay *)Tcl_Alloc(sizeof(TkXeDisplay));
+    memset(tkXeDisplay, 0, sizeof(TkXeDisplay));
+    tkXeDisplay->wlDisplay = wlDisplay;
+    tkXeDisplay->repeatRate = 25;
+    tkXeDisplay->repeatDelay = 600;
 
     /*
      * TK_WAYLAND_SCALE forces the scale of the surfaces, for testing.
      */
 
     if (getenv("TK_WAYLAND_SCALE")) {
-	tkWlDisplay->forcedScale = atof(getenv("TK_WAYLAND_SCALE"));
+	tkXeDisplay->forcedScale = atof(getenv("TK_WAYLAND_SCALE"));
     }
-    tkWlDisplay->xkbContext = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+    tkXeDisplay->xkbContext = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
     locale = setlocale(LC_CTYPE, NULL);
     if (!locale || !strcmp(locale, "C")) {
 	locale = getenv("LC_ALL");
@@ -1527,20 +1527,20 @@ TkpOpenDisplay(
 	    locale = "C";
 	}
     }
-    tkWlDisplay->composeTable = xkb_compose_table_new_from_locale(
-	    tkWlDisplay->xkbContext, locale, XKB_COMPOSE_COMPILE_NO_FLAGS);
-    if (tkWlDisplay->composeTable) {
-	tkWlDisplay->composeState = xkb_compose_state_new(
-		tkWlDisplay->composeTable, XKB_COMPOSE_STATE_NO_FLAGS);
+    tkXeDisplay->composeTable = xkb_compose_table_new_from_locale(
+	    tkXeDisplay->xkbContext, locale, XKB_COMPOSE_COMPILE_NO_FLAGS);
+    if (tkXeDisplay->composeTable) {
+	tkXeDisplay->composeState = xkb_compose_state_new(
+		tkXeDisplay->composeTable, XKB_COMPOSE_STATE_NO_FLAGS);
     }
 
-    tkWlDisplay->registry = wl_display_get_registry(wlDisplay);
-    wl_registry_add_listener(tkWlDisplay->registry, &registryListener, NULL);
+    tkXeDisplay->registry = wl_display_get_registry(wlDisplay);
+    wl_registry_add_listener(tkXeDisplay->registry, &registryListener, NULL);
     wl_display_roundtrip(wlDisplay);
-    if (!tkWlDisplay->compositor || !tkWlDisplay->shm) {
+    if (!tkXeDisplay->compositor || !tkXeDisplay->shm) {
 	wl_display_disconnect(wlDisplay);
-	Tcl_Free(tkWlDisplay);
-	tkWlDisplay = NULL;
+	Tcl_Free(tkXeDisplay);
+	tkXeDisplay = NULL;
 	return NULL;
     }
 
@@ -1551,7 +1551,7 @@ TkpOpenDisplay(
     wl_display_roundtrip(wlDisplay);
     wl_display_roundtrip(wlDisplay);
 
-    tkWlDisplay->decor = libdecor_new(wlDisplay, &decorInterface);
+    tkXeDisplay->decor = libdecor_new(wlDisplay, &decorInterface);
     TkWlSelectionInit();
     TkWlTextInputInit();
 
@@ -1561,27 +1561,27 @@ TkpOpenDisplay(
      * generate].
      */
 
-    if (tkWlDisplay->keymap == NULL) {
-	tkWlDisplay->keymap = xkb_keymap_new_from_names(
-		tkWlDisplay->xkbContext, NULL, XKB_KEYMAP_COMPILE_NO_FLAGS);
-	if (tkWlDisplay->keymap) {
-	    tkWlDisplay->xkbState = xkb_state_new(tkWlDisplay->keymap);
-	    InitModIndices(tkWlDisplay->keymap);
+    if (tkXeDisplay->keymap == NULL) {
+	tkXeDisplay->keymap = xkb_keymap_new_from_names(
+		tkXeDisplay->xkbContext, NULL, XKB_KEYMAP_COMPILE_NO_FLAGS);
+	if (tkXeDisplay->keymap) {
+	    tkXeDisplay->xkbState = xkb_state_new(tkXeDisplay->keymap);
+	    InitModIndices(tkXeDisplay->keymap);
 	}
     }
 
-    outPtr = tkWlDisplay->outputs;
-    tkWlDisplay->display = TkWlOpenXDisplay(
+    outPtr = tkXeDisplay->outputs;
+    tkXeDisplay->display = TkXeOpenXDisplay(
 	    displayNameStr ? displayNameStr : "wayland-0",
 	    wl_display_get_fd(wlDisplay), 1920, 1080, 0, 0);
-    TkWlSetScreenSize(tkWlDisplay->display, 1920, 1080, 0, 0);
+    TkXeSetScreenSize(tkXeDisplay->display, 1920, 1080, 0, 0);
     if (outPtr) {
 	UpdateScreenSize();
     }
 
     dispPtr = (TkDisplay *)Tcl_Alloc(sizeof(TkDisplay));
     memset(dispPtr, 0, sizeof(TkDisplay));
-    dispPtr->display = tkWlDisplay->display;
+    dispPtr->display = tkXeDisplay->display;
     Tcl_CreateFileHandler(wl_display_get_fd(wlDisplay), TCL_READABLE,
 	    DisplayFileProc, dispPtr);
     TkpInitKeymapInfo(dispPtr);
@@ -1612,10 +1612,10 @@ TkpCloseDisplay(
 {
     TkSendCleanup(dispPtr);
     TkWmCleanup(dispPtr);
-    if (dispPtr->display != NULL && tkWlDisplay
-	    && dispPtr->display == tkWlDisplay->display) {
-	Tcl_DeleteFileHandler(wl_display_get_fd(tkWlDisplay->wlDisplay));
-	wl_display_flush(tkWlDisplay->wlDisplay);
+    if (dispPtr->display != NULL && tkXeDisplay
+	    && dispPtr->display == tkXeDisplay->display) {
+	Tcl_DeleteFileHandler(wl_display_get_fd(tkXeDisplay->wlDisplay));
+	wl_display_flush(tkXeDisplay->wlDisplay);
     }
 }
 
@@ -1736,16 +1736,16 @@ DisplaySetupProc(
     TCL_UNUSED(void *),
     int flags)
 {
-    if (!(flags & TCL_WINDOW_EVENTS) || tkWlDisplay == NULL) {
+    if (!(flags & TCL_WINDOW_EVENTS) || tkXeDisplay == NULL) {
 	return;
     }
-    if (wl_display_dispatch_pending(tkWlDisplay->wlDisplay) > 0) {
+    if (wl_display_dispatch_pending(tkXeDisplay->wlDisplay) > 0) {
 	Tcl_Time blockTime = {0, 0};
 
 	Tcl_SetMaxBlockTime(&blockTime);
     }
     TkWlTextInputUpdate();
-    wl_display_flush(tkWlDisplay->wlDisplay);
+    wl_display_flush(tkXeDisplay->wlDisplay);
 }
 
 static void
@@ -1776,10 +1776,10 @@ static int
 Dispatch(
     int timeout)
 {
-    if (tkWlDisplay->decor) {
-	return libdecor_dispatch(tkWlDisplay->decor, timeout);
+    if (tkXeDisplay->decor) {
+	return libdecor_dispatch(tkXeDisplay->decor, timeout);
     }
-    return wl_display_dispatch(tkWlDisplay->wlDisplay);
+    return wl_display_dispatch(tkXeDisplay->wlDisplay);
 }
 
 /*
@@ -1808,7 +1808,7 @@ DisplayFileProc(
 	 * The compositor went away. There is nothing more Tk can do.
 	 */
 
-	Tcl_DeleteFileHandler(wl_display_get_fd(tkWlDisplay->wlDisplay));
+	Tcl_DeleteFileHandler(wl_display_get_fd(tkXeDisplay->wlDisplay));
 	Tcl_Panic("lost the connection to the Wayland compositor: %s",
 		strerror(errno));
     }
@@ -1843,14 +1843,14 @@ TkUnixDoOneXEvent(
     if (Tcl_ServiceEvent(TCL_WINDOW_EVENTS)) {
 	return true;
     }
-    if (tkWlDisplay == NULL) {
+    if (tkXeDisplay == NULL) {
 	return false;
     }
-    wl_display_dispatch_pending(tkWlDisplay->wlDisplay);
+    wl_display_dispatch_pending(tkXeDisplay->wlDisplay);
     if (Tcl_ServiceEvent(TCL_WINDOW_EVENTS)) {
 	return true;
     }
-    wl_display_flush(tkWlDisplay->wlDisplay);
+    wl_display_flush(tkXeDisplay->wlDisplay);
     if (timePtr) {
 	Tcl_Time now;
 
@@ -1861,7 +1861,7 @@ TkUnixDoOneXEvent(
 	    timeout = 0;
 	}
     }
-    pfd.fd = wl_display_get_fd(tkWlDisplay->wlDisplay);
+    pfd.fd = wl_display_get_fd(tkXeDisplay->wlDisplay);
     pfd.events = POLLIN;
     if (poll(&pfd, 1, timeout) > 0) {
 	Dispatch(0);
@@ -1884,7 +1884,7 @@ TkUnixDoOneXEvent(
 /*
  *----------------------------------------------------------------------
  *
- * TkWlCurrentTime --
+ * TkXeCurrentTime --
  *
  *	The time of the last input event, which serves as the current server
  *	time.
@@ -1899,9 +1899,9 @@ TkUnixDoOneXEvent(
  */
 
 Time
-TkWlCurrentTime(void)
+TkXeCurrentTime(void)
 {
-    return tkWlDisplay ? tkWlDisplay->lastTime : CurrentTime;
+    return tkXeDisplay ? tkXeDisplay->lastTime : CurrentTime;
 }
 
 /*
@@ -1995,7 +1995,7 @@ KeycodeToKeysym(
     unsigned int keycode,
     unsigned int state)
 {
-    struct xkb_keymap *keymap = tkWlDisplay ? tkWlDisplay->keymap : NULL;
+    struct xkb_keymap *keymap = tkXeDisplay ? tkXeDisplay->keymap : NULL;
     xkb_layout_index_t layout = 0;
     xkb_level_index_t level = 0;
     const xkb_keysym_t *syms;
@@ -2004,8 +2004,8 @@ KeycodeToKeysym(
     if (keymap == NULL || keycode == 0) {
 	return NoSymbol;
     }
-    if (tkWlDisplay->xkbState) {
-	layout = xkb_state_key_get_layout(tkWlDisplay->xkbState, keycode);
+    if (tkXeDisplay->xkbState) {
+	layout = xkb_state_key_get_layout(tkXeDisplay->xkbState, keycode);
 	if (layout == XKB_LAYOUT_INVALID) {
 	    layout = 0;
 	}
@@ -2197,17 +2197,17 @@ XSetInputFocus(
     TCL_UNUSED(int),
     TCL_UNUSED(Time))
 {
-    TkWlWindow *winPtr = TkWlGetWindow(focus);
-    TkWlWindow *topPtr = winPtr ? TkWlTopWindow(winPtr) : NULL;
+    TkXeWindow *winPtr = TkXeGetWindow(focus);
+    TkXeWindow *topPtr = winPtr ? TkXeTopWindow(winPtr) : NULL;
 
-    TkWlNextRequest(display);
-    if (topPtr == NULL || tkWlDisplay->keyboardSurface == NULL) {
+    TkXeNextRequest(display);
+    if (topPtr == NULL || tkXeDisplay->keyboardSurface == NULL) {
 	/*
 	 * Only the compositor can give the keyboard to the application.
 	 */
 
 	if (topPtr) {
-	    TkWlWmActivate(topPtr->surface);
+	    TkXeWmActivate(topPtr->surface);
 	}
 	return Success;
     }
@@ -2218,11 +2218,11 @@ XSetInputFocus(
      * activate the toplevel, so that it is shown in front.
      */
 
-    if (topPtr != tkWlDisplay->keyboardSurface->winPtr) {
-	TkWlWmActivate(topPtr->surface);
+    if (topPtr != tkXeDisplay->keyboardSurface->winPtr) {
+	TkXeWmActivate(topPtr->surface);
     }
     if (focus != focusWindow) {
-	if (TkWlGetWindow(focusWindow)) {
+	if (TkXeGetWindow(focusWindow)) {
 	    QueueFocusEvent(FocusOut, focusWindow);
 	}
 	focusWindow = focus;
@@ -2253,8 +2253,8 @@ XGetInputFocus(
     Window *focusPtr,
     int *revertPtr)
 {
-    TkWlNextRequest(display);
-    *focusPtr = TkWlGetWindow(focusWindow) ? focusWindow : None;
+    TkXeNextRequest(display);
+    *focusPtr = TkXeGetWindow(focusWindow) ? focusWindow : None;
     *revertPtr = RevertToParent;
     return Success;
 }
@@ -2285,7 +2285,7 @@ XGrabKeyboard(
     TCL_UNUSED(int),
     TCL_UNUSED(Time))
 {
-    TkWlNextRequest(display);
+    TkXeNextRequest(display);
     return GrabSuccess;
 }
 
@@ -2294,7 +2294,7 @@ XUngrabKeyboard(
     Display *display,
     TCL_UNUSED(Time))
 {
-    TkWlNextRequest(display);
+    TkXeNextRequest(display);
     return Success;
 }
 
@@ -2366,13 +2366,13 @@ XQueryPointer(
     int *winXPtr, int *winYPtr,
     unsigned int *maskPtr)
 {
-    TkWlSurface *surfPtr = tkWlDisplay->pointerSurface;
+    TkXeSurface *surfPtr = tkXeDisplay->pointerSurface;
     int rootX = 0, rootY = 0, x, y;
 
-    TkWlNextRequest(display);
+    TkXeNextRequest(display);
     if (surfPtr) {
-	SurfaceToRoot(surfPtr, (int)floor(tkWlDisplay->pointerX),
-		(int)floor(tkWlDisplay->pointerY), &rootX, &rootY);
+	SurfaceToRoot(surfPtr, (int)floor(tkXeDisplay->pointerX),
+		(int)floor(tkXeDisplay->pointerY), &rootX, &rootY);
     }
     *rootPtr = RootWindow(display, 0);
     *childPtr = None;
@@ -2414,7 +2414,7 @@ XWarpPointer(
     TCL_UNUSED(int),
     TCL_UNUSED(int))
 {
-    TkWlNextRequest(display);
+    TkXeNextRequest(display);
     return Success;
 }
 
@@ -2452,15 +2452,15 @@ XSendEvent(
 {
     XEvent event = *eventPtr;
 
-    TkWlNextRequest(display);
+    TkXeNextRequest(display);
     if (w == PointerWindow || w == InputFocus) {
 	w = focusWindow;
     }
     event.xany.display = display;
-    if (w == RootWindow(display, 0) && TkWlWmClientMessage(&event)) {
+    if (w == RootWindow(display, 0) && TkXeWmClientMessage(&event)) {
 	return 1;
     }
-    if (TkWlGetWindow(w) == NULL) {
+    if (TkXeGetWindow(w) == NULL) {
 	return 0;
     }
     event.xany.display = display;

@@ -219,8 +219,8 @@ QueueText(
     event.x.xkey.display = winPtr->display;
     event.x.xkey.window = winPtr->window;
     event.x.xkey.root = RootWindow(winPtr->display, winPtr->screenNum);
-    event.x.xkey.time = TkWlCurrentTime();
-    event.x.xkey.state = tkWlDisplay->modState
+    event.x.xkey.time = TkXeCurrentTime();
+    event.x.xkey.state = tkXeDisplay->modState
 	    & ~(ControlMask | Mod1Mask | Mod4Mask);
     event.x.xkey.keycode = 0;
     event.x.xkey.same_screen = True;
@@ -228,7 +228,7 @@ QueueText(
     event.k.charValuePtr = (char *)Tcl_Alloc(len + 1);
     memcpy(event.k.charValuePtr, text, len + 1);
     event.k.charValueLen = len;
-    TkWlQueueEvent(&event.x);
+    TkXeQueueEvent(&event.x);
 }
 
 /*
@@ -354,9 +354,9 @@ TkWlTextInputBind(
 void
 TkWlTextInputInit(void)
 {
-    if (textInputManager && tkWlDisplay->seat && textInput == NULL) {
+    if (textInputManager && tkXeDisplay->seat && textInput == NULL) {
 	textInput = zwp_text_input_manager_v3_get_text_input(textInputManager,
-		tkWlDisplay->seat);
+		tkXeDisplay->seat);
 	zwp_text_input_v3_add_listener(textInput, &textInputListener, NULL);
     }
 }
@@ -386,8 +386,8 @@ TkWlTextInputUpdate(void)
     TkDisplay *dispPtr = TkGetDisplayList();
     TkWindow *focusPtr = dispPtr ? dispPtr->focusPtr : NULL;
     TkWindow *caretPtr = dispPtr ? dispPtr->caret.winPtr : NULL;
-    TkWlWindow *wlWinPtr = NULL;
-    TkWlWindow *topPtr = NULL;
+    TkXeWindow *wlWinPtr = NULL;
+    TkXeWindow *topPtr = NULL;
     bool want;
 
     if (textInput == NULL || enteredSurface == NULL) {
@@ -403,8 +403,8 @@ TkWlTextInputUpdate(void)
     }
     if (focusPtr && focusPtr == caretPtr && focusPtr->window != None
 	    && !(focusPtr->flags & TK_ALREADY_DEAD)) {
-	wlWinPtr = TkWlGetWindow(focusPtr->window);
-	topPtr = wlWinPtr ? TkWlTopWindow(wlWinPtr) : NULL;
+	wlWinPtr = TkXeGetWindow(focusPtr->window);
+	topPtr = wlWinPtr ? TkXeTopWindow(wlWinPtr) : NULL;
     }
     want = topPtr && topPtr->surface
 	    && topPtr->surface->surface == enteredSurface;
@@ -425,7 +425,7 @@ TkWlTextInputUpdate(void)
     if (enabled) {
 	int x, y;
 
-	TkWlWindowOrigin(wlWinPtr, &x, &y);
+	TkXeWindowOrigin(wlWinPtr, &x, &y);
 	x += dispPtr->caret.x;
 	y += dispPtr->caret.y;
 	if (x != caretX || y != caretY

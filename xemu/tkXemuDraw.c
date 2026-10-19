@@ -1,10 +1,10 @@
 /*
- * tkWaylandDraw.c --
+ * tkXemuDraw.c --
  *
- *	The drawing part of the Xlib emulation of the Wayland port: pixmaps,
- *	images, and the drawing functions, which draw with Cairo into the
- *	backing image of the surface of a window or into a pixmap, following
- *	the rules of X11 for which pixels are drawn.
+ *	The drawing part of the X server emulation: pixmaps, images, and the
+ *	drawing functions, which draw with Cairo into the backing image of
+ *	the surface of a window or into a pixmap, following the rules of X11
+ *	for which pixels are drawn.
  *
  * Copyright © 2026 The Tk developers.
  *
@@ -12,8 +12,8 @@
  * this file, and for a DISCLAIMER OF ALL WARRANTIES.
  */
 
-#include "tkWaylandInt.h"
-#include "tkWaylandDraw.h"
+#include "tkXemuInt.h"
+#include "tkXemuDraw.h"
 
 /*
  *----------------------------------------------------------------------
@@ -76,20 +76,20 @@ XCreatePixmap(
     unsigned int width, unsigned int height,
     unsigned int depth)
 {
-    TkWlPixmap *pixPtr = (TkWlPixmap *)Tcl_Alloc(sizeof(TkWlPixmap));
+    TkXePixmap *pixPtr = (TkXePixmap *)Tcl_Alloc(sizeof(TkXePixmap));
     cairo_format_t format = (depth == 1) ? CAIRO_FORMAT_A8
 	    : (depth == 32) ? CAIRO_FORMAT_ARGB32 : CAIRO_FORMAT_RGB24;
-    TkWlSurface *surfPtr = TkWlGetSurface(d);
+    TkXeSurface *surfPtr = TkXeGetSurface(d);
     double scale = 1.0;
 
-    TkWlNextRequest(display);
+    TkXeNextRequest(display);
     if (width == 0) {
 	width = 1;
     }
     if (height == 0) {
 	height = 1;
     }
-    pixPtr->type = TKWL_PIXMAP;
+    pixPtr->type = TKXE_PIXMAP;
     pixPtr->width = (int)width;
     pixPtr->height = (int)height;
     pixPtr->depth = (depth == 1 || depth == 32) ? (int)depth : 24;
@@ -106,7 +106,7 @@ XCreatePixmap(
     pixPtr->surface = cairo_image_surface_create(format,
 	    PixmapSize(width, scale), PixmapSize(height, scale));
     cairo_surface_set_device_scale(pixPtr->surface, scale, scale);
-    pixPtr->id = TkWlNewId(pixPtr);
+    pixPtr->id = TkXeNewId(pixPtr);
     return pixPtr->id;
 }
 
@@ -131,13 +131,13 @@ XFreePixmap(
     Display *display,
     Pixmap pixmap)
 {
-    TkWlPixmap *pixPtr = TkWlGetPixmap(pixmap);
+    TkXePixmap *pixPtr = TkXeGetPixmap(pixmap);
 
-    TkWlNextRequest(display);
+    TkXeNextRequest(display);
     if (pixPtr == NULL) {
 	return BadPixmap;
     }
-    TkWlFreeId(pixmap);
+    TkXeFreeId(pixmap);
     cairo_surface_destroy(pixPtr->surface);
     Tcl_Free(pixPtr);
     return Success;
@@ -146,7 +146,7 @@ XFreePixmap(
 /*
  *----------------------------------------------------------------------
  *
- * TkWlPixmapSurface --
+ * TkXePixmapSurface --
  *
  *	Get the Cairo image of a pixmap.
  *
@@ -160,10 +160,10 @@ XFreePixmap(
  */
 
 cairo_surface_t *
-TkWlPixmapSurface(
+TkXePixmapSurface(
     Pixmap pixmap)
 {
-    TkWlPixmap *pixPtr = TkWlGetPixmap(pixmap);
+    TkXePixmap *pixPtr = TkXeGetPixmap(pixmap);
 
     return pixPtr ? pixPtr->surface : NULL;
 }
@@ -202,12 +202,12 @@ SetSourcePixel(
 /*
  *----------------------------------------------------------------------
  *
- * TkWlBeginDraw --
+ * TkXeBeginDraw --
  *
  *	Prepare a Cairo context to draw in a drawable: the user space is that
  *	of the drawable, and the context is clipped to the visible region of
  *	the window and to the clip region of the GC. If the GC has a clip
- *	mask, drawing is done in a group which is masked by TkWlEndDraw.
+ *	mask, drawing is done in a group which is masked by TkXeEndDraw.
  *
  * Results:
  *	True if drawing can be done, false if nothing can be drawn (the
@@ -216,46 +216,46 @@ SetSourcePixel(
  * Side effects:
  *	Pending exposures of the surface of a window are processed. When the
  *	result is true, *ctxPtr holds a new Cairo context and a clip region,
- *	which TkWlEndDraw frees.
+ *	which TkXeEndDraw frees.
  *
  *----------------------------------------------------------------------
  */
 
 bool
-TkWlBeginDraw(
+TkXeBeginDraw(
     Drawable d,
     GC gc,
-    TkWlDrawContext *ctxPtr)
+    TkXeDrawContext *ctxPtr)
 {
-    void *p = TkWlLookupId(d);
+    void *p = TkXeLookupId(d);
     TkpClipMask *clipPtr = gc ? (TkpClipMask *)gc->clip_mask : NULL;
     int i, n;
     pixman_box32_t *boxes;
 
-    memset(ctxPtr, 0, sizeof(TkWlDrawContext));
+    memset(ctxPtr, 0, sizeof(TkXeDrawContext));
     pixman_region32_init(&ctxPtr->clip);
     if (p == NULL) {
 	return false;
     }
-    if (*(int *)p == TKWL_WINDOW) {
-	TkWlWindow *winPtr = (TkWlWindow *)p, *topPtr = TkWlTopWindow(winPtr);
+    if (*(int *)p == TKXE_WINDOW) {
+	TkXeWindow *winPtr = (TkXeWindow *)p, *topPtr = TkXeTopWindow(winPtr);
 
 	if (topPtr == NULL || topPtr->surface == NULL
-		|| !TkWlIsViewable(winPtr)) {
+		|| !TkXeIsViewable(winPtr)) {
 	    return false;
 	}
 	ctxPtr->surfPtr = topPtr->surface;
-	TkWlProcessExposures(ctxPtr->surfPtr);
+	TkXeProcessExposures(ctxPtr->surfPtr);
 	if (ctxPtr->surfPtr->backing == NULL) {
 	    return false;
 	}
 	ctxPtr->target = ctxPtr->surfPtr->backing;
 	ctxPtr->depth = 24;
-	TkWlWindowOrigin(winPtr, &ctxPtr->x, &ctxPtr->y);
-	TkWlVisibleRegion(winPtr,
+	TkXeWindowOrigin(winPtr, &ctxPtr->x, &ctxPtr->y);
+	TkXeVisibleRegion(winPtr,
 		gc && gc->subwindow_mode == IncludeInferiors, &ctxPtr->clip);
     } else {
-	TkWlPixmap *pixPtr = (TkWlPixmap *)p;
+	TkXePixmap *pixPtr = (TkXePixmap *)p;
 
 	ctxPtr->target = pixPtr->surface;
 	ctxPtr->depth = pixPtr->depth;
@@ -268,7 +268,7 @@ TkWlBeginDraw(
 	pixman_region32_t rgn;
 
 	pixman_region32_init(&rgn);
-	pixman_region32_copy(&rgn, TkWlPixmanRegion(clipPtr->value.region));
+	pixman_region32_copy(&rgn, TkXePixmanRegion(clipPtr->value.region));
 	pixman_region32_translate(&rgn, ctxPtr->x + gc->clip_x_origin,
 		ctxPtr->y + gc->clip_y_origin);
 	pixman_region32_intersect(&ctxPtr->clip, &ctxPtr->clip, &rgn);
@@ -312,13 +312,13 @@ TkWlBeginDraw(
 	    break;
 	}
 	if (clipPtr && clipPtr->type == TKP_CLIP_PIXMAP
-		&& TkWlPixmapSurface(clipPtr->value.pixmap)) {
-	    ctxPtr->mask = TkWlPixmapSurface(clipPtr->value.pixmap);
+		&& TkXePixmapSurface(clipPtr->value.pixmap)) {
+	    ctxPtr->mask = TkXePixmapSurface(clipPtr->value.pixmap);
 	    ctxPtr->maskX = gc->clip_x_origin;
 	    ctxPtr->maskY = gc->clip_y_origin;
 	    cairo_push_group(ctxPtr->cr);
 	}
-	TkWlSetSource(ctxPtr, gc, gc->foreground);
+	TkXeSetSource(ctxPtr, gc, gc->foreground);
     }
     return true;
 }
@@ -326,7 +326,7 @@ TkWlBeginDraw(
 /*
  *----------------------------------------------------------------------
  *
- * TkWlSetSource --
+ * TkXeSetSource --
  *
  *	Set the source of a drawing context from a pixel and the fill style of
  *	a GC.
@@ -342,8 +342,8 @@ TkWlBeginDraw(
  */
 
 void
-TkWlSetSource(
-    TkWlDrawContext *ctxPtr,
+TkXeSetSource(
+    TkXeDrawContext *ctxPtr,
     GC gc,
     unsigned long pixel)
 {
@@ -355,9 +355,9 @@ TkWlSetSource(
 	pixel ^= (gc->function == GXequiv) ? 0xFFFFFF : 0;
     }
     ctxPtr->stipple = NULL;
-    if (gc->fill_style == FillTiled && TkWlPixmapSurface(gc->tile)) {
+    if (gc->fill_style == FillTiled && TkXePixmapSurface(gc->tile)) {
 	cairo_pattern_t *pattern = cairo_pattern_create_for_surface(
-		TkWlPixmapSurface(gc->tile));
+		TkXePixmapSurface(gc->tile));
 	cairo_matrix_t matrix;
 
 	cairo_pattern_set_extend(pattern, CAIRO_EXTEND_REPEAT);
@@ -370,8 +370,8 @@ TkWlSetSource(
     }
     SetSourcePixel(cr, ctxPtr->depth, pixel);
     if ((gc->fill_style == FillStippled || gc->fill_style == FillOpaqueStippled)
-	    && TkWlPixmapSurface(gc->stipple)) {
-	ctxPtr->stipple = TkWlPixmapSurface(gc->stipple);
+	    && TkXePixmapSurface(gc->stipple)) {
+	ctxPtr->stipple = TkXePixmapSurface(gc->stipple);
     }
 }
 
@@ -394,7 +394,7 @@ TkWlSetSource(
 
 static void
 StippleMask(
-    TkWlDrawContext *ctxPtr,
+    TkXeDrawContext *ctxPtr,
     GC gc)
 {
     cairo_t *cr = ctxPtr->cr;
@@ -421,7 +421,7 @@ StippleMask(
 /*
  *----------------------------------------------------------------------
  *
- * TkWlFill --
+ * TkXeFill --
  *
  *	Fill the current path of a drawing context, applying the stipple of
  *	the GC.
@@ -436,8 +436,8 @@ StippleMask(
  */
 
 void
-TkWlFill(
-    TkWlDrawContext *ctxPtr,
+TkXeFill(
+    TkXeDrawContext *ctxPtr,
     GC gc)
 {
     cairo_t *cr = ctxPtr->cr;
@@ -455,7 +455,7 @@ TkWlFill(
 /*
  *----------------------------------------------------------------------
  *
- * TkWlStroke --
+ * TkXeStroke --
  *
  *	Stroke the current path of a drawing context, applying the stipple of
  *	the GC: a stippled stroke is turned into a mask, through which the
@@ -471,8 +471,8 @@ TkWlFill(
  */
 
 void
-TkWlStroke(
-    TkWlDrawContext *ctxPtr,
+TkXeStroke(
+    TkXeDrawContext *ctxPtr,
     GC gc)
 {
     cairo_t *cr = ctxPtr->cr;
@@ -523,7 +523,7 @@ TkWlStroke(
 /*
  *----------------------------------------------------------------------
  *
- * TkWlEndDraw --
+ * TkXeEndDraw --
  *
  *	Finish drawing: apply the clip mask of the GC, and record the damage,
  *	which is the given rectangle (in the coordinates of the drawable)
@@ -541,8 +541,8 @@ TkWlStroke(
  */
 
 void
-TkWlEndDraw(
-    TkWlDrawContext *ctxPtr,
+TkXeEndDraw(
+    TkXeDrawContext *ctxPtr,
     int x, int y, int width, int height)
 {
     if (ctxPtr->cr == NULL) {
@@ -559,7 +559,7 @@ TkWlEndDraw(
 	pixman_region32_intersect_rect(&ctxPtr->clip, &ctxPtr->clip,
 		x + ctxPtr->x, y + ctxPtr->y, (unsigned)width,
 		(unsigned)height);
-	TkWlAddDamage(ctxPtr->surfPtr, &ctxPtr->clip);
+	TkXeAddDamage(ctxPtr->surfPtr, &ctxPtr->clip);
     }
     pixman_region32_fini(&ctxPtr->clip);
 }
@@ -704,14 +704,14 @@ XDrawLines(
     int npoints,
     int mode)
 {
-    TkWlDrawContext ctx;
+    TkXeDrawContext ctx;
     XPoint *absPoints = points;
     XRectangle box;
     double offset;
     int i;
 
-    TkWlNextRequest(display);
-    if (npoints < 1 || !TkWlBeginDraw(d, gc, &ctx)) {
+    TkXeNextRequest(display);
+    if (npoints < 1 || !TkXeBeginDraw(d, gc, &ctx)) {
 	return Success;
     }
     if (mode == CoordModePrevious) {
@@ -732,12 +732,12 @@ XDrawLines(
 	cairo_line_to(ctx.cr, absPoints[0].x + offset,
 		absPoints[0].y + offset);
     }
-    TkWlStroke(&ctx, gc);
+    TkXeStroke(&ctx, gc);
     LineBounds(absPoints, npoints, gc->line_width, &box);
     if (absPoints != points) {
 	Tcl_Free(absPoints);
     }
-    TkWlEndDraw(&ctx, box.x, box.y, box.width, box.height);
+    TkXeEndDraw(&ctx, box.x, box.y, box.width, box.height);
     return Success;
 }
 
@@ -806,12 +806,12 @@ XDrawRectangle(
     int x, int y,
     unsigned int width, unsigned int height)
 {
-    TkWlDrawContext ctx;
+    TkXeDrawContext ctx;
     double offset;
     int pad = (gc->line_width > 1) ? gc->line_width : 1;
 
-    TkWlNextRequest(display);
-    if (!TkWlBeginDraw(d, gc, &ctx)) {
+    TkXeNextRequest(display);
+    if (!TkXeBeginDraw(d, gc, &ctx)) {
 	return Success;
     }
     offset = SetLineAttributes(ctx.cr, gc);
@@ -822,8 +822,8 @@ XDrawRectangle(
     } else {
 	cairo_rectangle(ctx.cr, x + offset, y + offset, width, height);
     }
-    TkWlStroke(&ctx, gc);
-    TkWlEndDraw(&ctx, x - pad, y - pad, (int)width + 2 * pad + 1,
+    TkXeStroke(&ctx, gc);
+    TkXeEndDraw(&ctx, x - pad, y - pad, (int)width + 2 * pad + 1,
 	    (int)height + 2 * pad + 1);
     return Success;
 }
@@ -887,11 +887,11 @@ XFillRectangles(
     XRectangle *rects,
     int nrects)
 {
-    TkWlDrawContext ctx;
+    TkXeDrawContext ctx;
     int i, x1, y1, x2, y2;
 
-    TkWlNextRequest(display);
-    if (nrects < 1 || !TkWlBeginDraw(d, gc, &ctx)) {
+    TkXeNextRequest(display);
+    if (nrects < 1 || !TkXeBeginDraw(d, gc, &ctx)) {
 	return Success;
     }
     x1 = y1 = INT_MAX;
@@ -912,8 +912,8 @@ XFillRectangles(
 	    y2 = rects[i].y + rects[i].height;
 	}
     }
-    TkWlFill(&ctx, gc);
-    TkWlEndDraw(&ctx, x1, y1, x2 - x1, y2 - y1);
+    TkXeFill(&ctx, gc);
+    TkXeEndDraw(&ctx, x1, y1, x2 - x1, y2 - y1);
     return Success;
 }
 
@@ -995,19 +995,19 @@ XDrawArc(
     unsigned int width, unsigned int height,
     int angle1, int angle2)
 {
-    TkWlDrawContext ctx;
+    TkXeDrawContext ctx;
     double offset;
     int pad = (gc->line_width > 1) ? gc->line_width : 1;
 
-    TkWlNextRequest(display);
-    if (!TkWlBeginDraw(d, gc, &ctx)) {
+    TkXeNextRequest(display);
+    if (!TkXeBeginDraw(d, gc, &ctx)) {
 	return Success;
     }
     offset = SetLineAttributes(ctx.cr, gc);
     cairo_new_path(ctx.cr);
     ArcPath(ctx.cr, x + offset, y + offset, width, height, angle1, angle2);
-    TkWlStroke(&ctx, gc);
-    TkWlEndDraw(&ctx, x - pad, y - pad, (int)width + 2 * pad + 1,
+    TkXeStroke(&ctx, gc);
+    TkXeEndDraw(&ctx, x - pad, y - pad, (int)width + 2 * pad + 1,
 	    (int)height + 2 * pad + 1);
     return Success;
 }
@@ -1073,10 +1073,10 @@ XFillArc(
     unsigned int width, unsigned int height,
     int angle1, int angle2)
 {
-    TkWlDrawContext ctx;
+    TkXeDrawContext ctx;
 
-    TkWlNextRequest(display);
-    if (!TkWlBeginDraw(d, gc, &ctx)) {
+    TkXeNextRequest(display);
+    if (!TkXeBeginDraw(d, gc, &ctx)) {
 	return Success;
     }
     cairo_new_path(ctx.cr);
@@ -1086,8 +1086,8 @@ XFillArc(
     }
     ArcPath(ctx.cr, x, y, width, height, angle1, angle2);
     cairo_close_path(ctx.cr);
-    TkWlFill(&ctx, gc);
-    TkWlEndDraw(&ctx, x, y, (int)width + 1, (int)height + 1);
+    TkXeFill(&ctx, gc);
+    TkXeEndDraw(&ctx, x, y, (int)width + 1, (int)height + 1);
     return Success;
 }
 
@@ -1152,12 +1152,12 @@ XFillPolygon(
     TCL_UNUSED(int),		/* shape */
     int mode)
 {
-    TkWlDrawContext ctx;
+    TkXeDrawContext ctx;
     XRectangle box;
     int i, x, y;
 
-    TkWlNextRequest(display);
-    if (npoints < 2 || !TkWlBeginDraw(d, gc, &ctx)) {
+    TkXeNextRequest(display);
+    if (npoints < 2 || !TkXeBeginDraw(d, gc, &ctx)) {
 	return Success;
     }
     cairo_set_fill_rule(ctx.cr, (gc->fill_rule == WindingRule)
@@ -1182,8 +1182,8 @@ XFillPolygon(
 	if (y > (short)box.height) box.height = (unsigned short)y;
     }
     cairo_close_path(ctx.cr);
-    TkWlFill(&ctx, gc);
-    TkWlEndDraw(&ctx, box.x, box.y, (short)box.width - box.x + 1,
+    TkXeFill(&ctx, gc);
+    TkXeEndDraw(&ctx, box.x, box.y, (short)box.width - box.x + 1,
 	    (short)box.height - box.y + 1);
     return Success;
 }
@@ -1191,7 +1191,7 @@ XFillPolygon(
 /*
  *----------------------------------------------------------------------
  *
- * TkWlPaintBackground --
+ * TkXePaintBackground --
  *
  *	Paint a region of a window (in surface coordinates) with its
  *	background, as the X server does when the region is exposed or
@@ -1208,12 +1208,12 @@ XFillPolygon(
  */
 
 void
-TkWlPaintBackground(
-    TkWlWindow *winPtr,
+TkXePaintBackground(
+    TkXeWindow *winPtr,
     pixman_region32_t *rgn)
 {
-    TkWlWindow *topPtr = TkWlTopWindow(winPtr), *bgPtr = winPtr;
-    TkWlSurface *surfPtr;
+    TkXeWindow *topPtr = TkXeTopWindow(winPtr), *bgPtr = winPtr;
+    TkXeSurface *surfPtr;
     cairo_t *cr;
     pixman_box32_t *boxes;
     int i, n, x, y;
@@ -1237,12 +1237,12 @@ TkWlPaintBackground(
     }
     cairo_clip(cr);
     if (bgPtr->backgroundType == BG_PIXMAP
-	    && TkWlPixmapSurface(bgPtr->backgroundPixmap)) {
+	    && TkXePixmapSurface(bgPtr->backgroundPixmap)) {
 	cairo_pattern_t *pattern = cairo_pattern_create_for_surface(
-		TkWlPixmapSurface(bgPtr->backgroundPixmap));
+		TkXePixmapSurface(bgPtr->backgroundPixmap));
 	cairo_matrix_t matrix;
 
-	TkWlWindowOrigin(bgPtr, &x, &y);
+	TkXeWindowOrigin(bgPtr, &x, &y);
 	cairo_pattern_set_extend(pattern, CAIRO_EXTEND_REPEAT);
 	cairo_matrix_init_translate(&matrix, -x, -y);
 	cairo_pattern_set_matrix(pattern, &matrix);
@@ -1253,7 +1253,7 @@ TkWlPaintBackground(
     }
     cairo_paint(cr);
     cairo_destroy(cr);
-    TkWlAddDamage(surfPtr, rgn);
+    TkXeAddDamage(surfPtr, rgn);
 }
 
 /*
@@ -1280,26 +1280,26 @@ static cairo_surface_t *
 SourceSurface(
     Drawable src,
     int *xPtr, int *yPtr,
-    TkWlWindow **winPtrPtr)
+    TkXeWindow **winPtrPtr)
 {
-    void *p = TkWlLookupId(src);
+    void *p = TkXeLookupId(src);
 
     *xPtr = *yPtr = 0;
     *winPtrPtr = NULL;
     if (p == NULL) {
 	return NULL;
     }
-    if (*(int *)p == TKWL_PIXMAP) {
-	return ((TkWlPixmap *)p)->surface;
+    if (*(int *)p == TKXE_PIXMAP) {
+	return ((TkXePixmap *)p)->surface;
     } else {
-	TkWlWindow *winPtr = (TkWlWindow *)p, *topPtr = TkWlTopWindow(winPtr);
+	TkXeWindow *winPtr = (TkXeWindow *)p, *topPtr = TkXeTopWindow(winPtr);
 
 	if (topPtr == NULL || topPtr->surface == NULL) {
 	    return NULL;
 	}
-	TkWlProcessExposures(topPtr->surface);
+	TkXeProcessExposures(topPtr->surface);
 	*winPtrPtr = winPtr;
-	TkWlWindowOrigin(winPtr, xPtr, yPtr);
+	TkXeWindowOrigin(winPtr, xPtr, yPtr);
 	return topPtr->surface->backing;
     }
 }
@@ -1327,7 +1327,7 @@ static void
 QueueGraphicsExposures(
     Display *display,
     Drawable dst,
-    TkWlWindow *srcWinPtr,
+    TkXeWindow *srcWinPtr,
     int srcX, int srcY,
     unsigned int width, unsigned int height,
     int dstX, int dstY,
@@ -1348,8 +1348,8 @@ QueueGraphicsExposures(
 	int x, y;
 
 	pixman_region32_init(&visible);
-	TkWlVisibleRegion(srcWinPtr, true, &visible);
-	TkWlWindowOrigin(srcWinPtr, &x, &y);
+	TkXeVisibleRegion(srcWinPtr, true, &visible);
+	TkXeWindowOrigin(srcWinPtr, &x, &y);
 	pixman_region32_translate(&visible, -x, -y);
 	pixman_region32_init_rect(&lost, srcX, srcY, width, height);
 	pixman_region32_subtract(&lost, &lost, &visible);
@@ -1369,13 +1369,13 @@ QueueGraphicsExposures(
 	    event.xgraphicsexpose.height = boxes[i].y2 - boxes[i].y1;
 	    event.xgraphicsexpose.count = n - i - 1;
 	    event.xgraphicsexpose.major_code = majorCode;
-	    TkWlQueueEvent(&event);
+	    TkXeQueueEvent(&event);
 	}
     } else {
 	event.xnoexpose.type = NoExpose;
 	event.xnoexpose.drawable = dst;
 	event.xnoexpose.major_code = majorCode;
-	TkWlQueueEvent(&event);
+	TkXeQueueEvent(&event);
     }
     pixman_region32_fini(&lost);
 }
@@ -1411,20 +1411,20 @@ XCopyArea(
     unsigned int width, unsigned int height,
     int dstX, int dstY)
 {
-    TkWlDrawContext ctx;
-    TkWlWindow *srcWinPtr;
+    TkXeDrawContext ctx;
+    TkXeWindow *srcWinPtr;
     cairo_surface_t *srcSurface;
     int sx, sy;
 
-    TkWlNextRequest(display);
+    TkXeNextRequest(display);
     srcSurface = SourceSurface(src, &sx, &sy, &srcWinPtr);
-    if (srcSurface && TkWlBeginDraw(dst, gc, &ctx)) {
+    if (srcSurface && TkXeBeginDraw(dst, gc, &ctx)) {
 	cairo_surface_t *copy = NULL;
 
 	cairo_set_operator(ctx.cr, (gc->function == GXxor)
 		? CAIRO_OPERATOR_DIFFERENCE : CAIRO_OPERATOR_SOURCE);
 	if (srcSurface == ctx.target && gc->graphics_exposures
-		&& ctx.surfPtr && !TkWlIntegralScale(ctx.surfPtr)) {
+		&& ctx.surfPtr && !TkXeIntegralScale(ctx.surfPtr)) {
 	    /*
 	     * Scrolling at a fractional scale would move the pixels by a
 	     * fraction of a pixel: report the destination as exposed
@@ -1479,7 +1479,7 @@ XCopyArea(
 	}
 	cairo_rectangle(ctx.cr, dstX, dstY, width, height);
 	cairo_fill(ctx.cr);
-	TkWlEndDraw(&ctx, dstX, dstY, (int)width, (int)height);
+	TkXeEndDraw(&ctx, dstX, dstY, (int)width, (int)height);
 	if (copy) {
 	    cairo_surface_destroy(copy);
 	}
@@ -1568,14 +1568,14 @@ XCopyPlane(
     int dstX, int dstY,
     unsigned long plane)
 {
-    TkWlDrawContext ctx;
-    TkWlWindow *srcWinPtr;
+    TkXeDrawContext ctx;
+    TkXeWindow *srcWinPtr;
     cairo_surface_t *srcSurface, *mask;
     int sx, sy;
 
-    TkWlNextRequest(display);
+    TkXeNextRequest(display);
     srcSurface = SourceSurface(src, &sx, &sy, &srcWinPtr);
-    if (srcSurface && TkWlBeginDraw(dst, gc, &ctx)) {
+    if (srcSurface && TkXeBeginDraw(dst, gc, &ctx)) {
 	cairo_save(ctx.cr);
 	cairo_rectangle(ctx.cr, dstX, dstY, width, height);
 	cairo_clip(ctx.cr);
@@ -1600,7 +1600,7 @@ XCopyPlane(
 	}
 	cairo_surface_destroy(mask);
 	cairo_restore(ctx.cr);
-	TkWlEndDraw(&ctx, dstX, dstY, (int)width, (int)height);
+	TkXeEndDraw(&ctx, dstX, dstY, (int)width, (int)height);
     }
     if (gc->graphics_exposures) {
 	QueueGraphicsExposures(display, dst, srcWinPtr, srcX, srcY, width,
@@ -1881,7 +1881,7 @@ XCreateImage(
     XImage *image = (XImage *)Tcl_Alloc(sizeof(XImage));
 
     if (display) {
-	TkWlNextRequest(display);
+	TkXeNextRequest(display);
     }
     memset(image, 0, sizeof(XImage));
     image->width = (int)width;
@@ -2007,11 +2007,11 @@ XPutImage(
     int dstX, int dstY,
     unsigned int width, unsigned int height)
 {
-    TkWlDrawContext ctx;
+    TkXeDrawContext ctx;
     cairo_surface_t *surface;
 
-    TkWlNextRequest(display);
-    if (width == 0 || height == 0 || !TkWlBeginDraw(d, gc, &ctx)) {
+    TkXeNextRequest(display);
+    if (width == 0 || height == 0 || !TkXeBeginDraw(d, gc, &ctx)) {
 	return Success;
     }
     surface = ImageToSurface(image, srcX, srcY, (int)width, (int)height,
@@ -2033,7 +2033,7 @@ XPutImage(
 	cairo_paint(ctx.cr);
     }
     cairo_surface_destroy(surface);
-    TkWlEndDraw(&ctx, dstX, dstY, (int)width, (int)height);
+    TkXeEndDraw(&ctx, dstX, dstY, (int)width, (int)height);
     return Success;
 }
 
@@ -2065,11 +2065,11 @@ TkpPutRGBAImage(
     int dstX, int dstY,
     unsigned int width, unsigned int height)
 {
-    TkWlDrawContext ctx;
+    TkXeDrawContext ctx;
     cairo_surface_t *surface;
 
-    TkWlNextRequest(display);
-    if (width == 0 || height == 0 || !TkWlBeginDraw(d, gc, &ctx)) {
+    TkXeNextRequest(display);
+    if (width == 0 || height == 0 || !TkXeBeginDraw(d, gc, &ctx)) {
 	return Success;
     }
     surface = ImageToSurface(image, srcX, srcY, (int)width, (int)height,
@@ -2079,7 +2079,7 @@ TkpPutRGBAImage(
     cairo_rectangle(ctx.cr, dstX, dstY, width, height);
     cairo_fill(ctx.cr);
     cairo_surface_destroy(surface);
-    TkWlEndDraw(&ctx, dstX, dstY, (int)width, (int)height);
+    TkXeEndDraw(&ctx, dstX, dstY, (int)width, (int)height);
     return Success;
 }
 
@@ -2112,7 +2112,7 @@ XGetImage(
     TCL_UNUSED(unsigned long),	/* planeMask */
     int format)
 {
-    TkWlWindow *winPtr;
+    TkXeWindow *winPtr;
     cairo_surface_t *surface, *copy;
     XImage *image;
     cairo_t *cr;
@@ -2121,7 +2121,7 @@ XGetImage(
     int stride;
     unsigned int i;
 
-    TkWlNextRequest(display);
+    TkXeNextRequest(display);
     surface = SourceSurface(d, &ox, &oy, &winPtr);
     if (surface == NULL || width == 0 || height == 0) {
 	return NULL;

@@ -1,12 +1,12 @@
 /*
- * tkWaylandXft.c --
+ * tkXemuXft.c --
  *
  *	The part of Xft which the bidi font code of the X11 port
  *	(tkUnixBidiFont.c) uses, implemented with Cairo and fontconfig, so
- *	that the Wayland port has the same text layout, shaping and
- *	bidirectional text as the X11 port. Fonts are Cairo scaled fonts made
- *	from fontconfig patterns, and glyphs are drawn with the drawing
- *	contexts of tkWaylandDraw.c.
+ *	that the ports on the X server emulation have the same text layout,
+ *	shaping and bidirectional text as the X11 port. Fonts are Cairo
+ *	scaled fonts made from fontconfig patterns, and glyphs are drawn with
+ *	the drawing contexts of tkXemuDraw.c.
  *
  * Copyright © 2026 The Tk developers.
  *
@@ -14,8 +14,8 @@
  * this file, and for a DISCLAIMER OF ALL WARRANTIES.
  */
 
-#include "tkWaylandInt.h"
-#include "tkWaylandDraw.h"
+#include "tkXemuInt.h"
+#include "tkXemuDraw.h"
 #include <X11/Xft/Xft.h>
 #include <fontconfig/fcfreetype.h>
 #include <cairo-ft.h>
@@ -393,7 +393,7 @@ XftXlfdParse(
     TCL_UNUSED(Bool),
     TCL_UNUSED(Bool))
 {
-    return TkWlXlfdParse(name);
+    return TkXeXlfdParse(name);
 }
 
 /*
@@ -585,7 +585,7 @@ XftDrawGlyphFontSpec(
     const XftGlyphFontSpec *glyphs,
     int len)
 {
-    TkWlDrawContext ctx;
+    TkXeDrawContext ctx;
     cairo_glyph_t *cairoGlyphs;
     GC gc;
     int i, start, x1, y1, x2, y2;
@@ -597,7 +597,7 @@ XftDrawGlyphFontSpec(
     if (draw->clip) {
 	XSetRegion(draw->display, gc, draw->clip);
     }
-    if (!TkWlBeginDraw(draw->drawable, gc, &ctx)) {
+    if (!TkXeBeginDraw(draw->drawable, gc, &ctx)) {
 	XFreeGC(draw->display, gc);
 	return;
     }
@@ -631,7 +631,7 @@ XftDrawGlyphFontSpec(
 	cairo_show_glyphs(ctx.cr, cairoGlyphs, i - start);
     }
     Tcl_Free(cairoGlyphs);
-    TkWlEndDraw(&ctx, x1, y1, x2 - x1 + 1, y2 - y1 + 1);
+    TkXeEndDraw(&ctx, x1, y1, x2 - x1 + 1, y2 - y1 + 1);
     XFreeGC(draw->display, gc);
 }
 

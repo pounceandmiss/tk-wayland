@@ -1,14 +1,15 @@
 /*
- * tkWaylandPort.h --
+ * tkXemuPort.h --
  *
  *	This file is included by all of the Tk C files. It contains
  *	information that may be configuration-dependent, such as #includes
  *	for system include files and a few other things.
  *
- *	The Wayland port shares most of its code with the X11 port: Tk itself
- *	draws through the subset of Xlib declared in tkIntXlibDecls.h, which
- *	the Wayland port implements on top of Wayland and Cairo (as the Aqua
- *	and Windows ports implement it on top of their native APIs).
+ *	The ports which run on the emulated X server of xemu (Wayland) share
+ *	most of their code with the X11 port: Tk itself draws through the
+ *	subset of Xlib declared in tkIntXlibDecls.h, which xemu implements
+ *	with Cairo (as the Aqua and Windows ports implement it on top of their
+ *	native APIs).
  *
  * Copyright © 2026 The Tk developers.
  *
@@ -16,8 +17,8 @@
  * this file, and for a DISCLAIMER OF ALL WARRANTIES.
  */
 
-#ifndef _WAYLANDPORT
-#define _WAYLANDPORT
+#ifndef _XEMUPORT
+#define _XEMUPORT
 
 #include "tkUnixPort.h"
 
@@ -51,4 +52,4 @@ MODULE_SCOPE void	TkpSetCapture(struct TkWindow *winPtr);
 MODULE_SCOPE Tk_Window	TkpGetCapture(void);
 MODULE_SCOPE void	TkpSetCursor(Cursor cursor);
 
-#endif /* _WAYLANDPORT */
+#endif /* _XEMUPORT */

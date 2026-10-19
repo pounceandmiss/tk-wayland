@@ -7987,6 +7987,8 @@ fi
 printf '%s\n' "$tk_wayland" >&6; }
 fi
 
+tk_xemu=$tk_wayland
+
 if test $tk_aqua = yes; then
 
 printf '%s\n' "#define MAC_OSX_TK 1" >>confdefs.h
@@ -8012,7 +8014,7 @@ else
     #	no include files, so double-check its result just to be safe.
     #--------------------------------------------------------------------
 
-    if test $tk_wayland = no; then
+    if test $tk_xemu = no; then
 
     { printf '%s\n' "$as_me:${as_lineno-$LINENO}: checking for X" >&5
 printf %s "checking for X... " >&6; }
@@ -8388,13 +8390,19 @@ printf '%s\n' "could not find any!  Using -lX11." >&6; }
 fi
 
 #--------------------------------------------------------------------
-#	The Wayland port, like the Aqua and Windows ports, implements the
-#	part of Xlib that Tk uses, with the X11 headers in ../xlib.
+#	The ports on the X server emulation of ../xemu (Wayland), like the
+#	Aqua and Windows ports, implement the part of Xlib that Tk uses, with
+#	the X11 headers in ../xlib.
 #--------------------------------------------------------------------
 
 WAYLAND_CFLAGS=""
 WAYLAND_LIBS=""
 WAYLAND_PROTOCOLS_DIR=""
+if test $tk_xemu = yes; then
+
+printf '%s\n' "#define TK_USE_XEMU 1" >>confdefs.h
+
+fi
 if test $tk_wayland = yes; then
 
 printf '%s\n' "#define TK_USE_WAYLAND 1" >>confdefs.h
@@ -9003,12 +9011,12 @@ printf '%s\n' "$as_me: WARNING: Can't find xft configuration or xft is unusable 
     fi
 
 
-elif test $tk_wayland = yes; then
-    # Wayland path: the bidi font code of X11 (tkUnixBidiFont.c) runs on
-    # the Xft emulation of tkWaylandXft.c if HarfBuzz is available, otherwise
-    # tkWaylandFont.c is used.
+elif test $tk_xemu = yes; then
+    # X server emulation (Wayland): the bidi font code of X11
+    # (tkUnixBidiFont.c) runs on the Xft emulation of tkXemuXft.c if
+    # HarfBuzz is available, otherwise tkXemuFont.c is used.
     enable_xft=no
-    UNIX_FONT_OBJS="tkWaylandFont.o"
+    UNIX_FONT_OBJS="tkXemuFont.o"
     BIDI_CFLAGS=""
     HB_CFLAGS=""
     HB_LIBS=""
@@ -9026,7 +9034,7 @@ printf %s "checking whether to enable bidirectional (Bidi) text support... " >&6
 
 printf '%s\n' "#define HAVE_BIDI 1" >>confdefs.h
 
-	UNIX_FONT_OBJS="tkUnixBidiFont.o SheenBidi.o tkWaylandXft.o"
+	UNIX_FONT_OBJS="tkUnixBidiFont.o SheenBidi.o tkXemuXft.o"
     else
 	enable_bidi=no
     fi
