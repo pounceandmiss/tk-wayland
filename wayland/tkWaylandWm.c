@@ -473,13 +473,16 @@ ApplySizeHints(
 /*
  *----------------------------------------------------------------------
  *
- * ApplyTransient --
+ * TransientParent, ApplyTransient --
  *
  *	Set the parent of the frame of a toplevel from its WM_TRANSIENT_FOR
- *	property.
+ *	property. The properties can make a cycle, since Tk recycles the ids
+ *	of windows, which compositors refuse with a protocol error: then the
+ *	toplevel has no parent.
  *
  * Results:
- *	None.
+ *	TransientParent returns the surface of the container of a toplevel,
+ *	if it has a frame, or NULL.
  *
  * Side effects:
  *	The parent of the frame changes.
@@ -487,16 +490,35 @@ ApplySizeHints(
  *----------------------------------------------------------------------
  */
 
-static void
-ApplyTransient(
+static TkXeSurface *
+TransientParent(
     TkXeSurface *surfPtr)
 {
     long *container = GetLongs(surfPtr->winPtr, XA_WM_TRANSIENT_FOR, 1);
     TkXeSurface *parentPtr = container
 	    ? TkXeGetSurface((Window)container[0]) : NULL;
-    struct xdg_toplevel *toplevel;
 
-    if (parentPtr && parentPtr->frame) {
+    return (parentPtr && parentPtr->frame) ? parentPtr : NULL;
+}
+
+static void
+ApplyTransient(
+    TkXeSurface *surfPtr)
+{
+    TkXeSurface *parentPtr = TransientParent(surfPtr), *p;
+    struct xdg_toplevel *toplevel;
+    int n = 0;
+
+    for (p = tkXeDisplay->surfaces; p; p = p->nextPtr) {
+	n++;
+    }
+    for (p = parentPtr; p && n > 0; p = TransientParent(p), n--) {
+	if (p == surfPtr) {
+	    parentPtr = NULL;
+	    break;
+	}
+    }
+    if (parentPtr) {
 	libdecor_frame_set_parent(surfPtr->frame, parentPtr->frame);
 	return;
     }
