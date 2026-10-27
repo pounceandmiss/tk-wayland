@@ -563,9 +563,18 @@ proc ::tk::touch::Place {{toolbar 0}} {
 	    }
 	}
     }
+    # The text of an entry which shows other characters (a password) is not
+    # copied.
+
+    if {[winfo class $w] ne "Text" && ![catch {$w cget -show} show]
+	    && $show ne ""} {
+	set copy 0
+    } else {
+	set copy $selected
+    }
     set actions {}
     foreach action {cut copy paste selectall} show [list \
-	    [expr {$editable && $selected}] $selected \
+	    [expr {$editable && $copy}] $copy \
 	    [expr {$editable && $Priv(clipboard)}] [expr {!$empty}]] {
 	if {$show} {
 	    lappend actions $action
@@ -754,8 +763,9 @@ proc ::tk::touch::HandleRelease {} {
 #	None.
 #
 # Side effects:
-#	The text, the clipboard or the selection change. The handles and
-#	the toolbar are hidden after cutting, copying and pasting.
+#	The text, the clipboard or the selection change; pasting replaces
+#	the selection. The handles and the toolbar are hidden after cutting,
+#	copying and pasting.
 
 proc ::tk::touch::Action {action} {
     variable Priv
@@ -766,7 +776,19 @@ proc ::tk::touch::Action {action} {
     switch -- $action {
 	cut {event generate $w <<Cut>>}
 	copy {event generate $w <<Copy>>}
-	paste {event generate $w <<Paste>>}
+	paste {
+	    # Pasting replaces the selection, as touchscreens do (the
+	    # bindings of X11 paste at the insertion cursor).
+
+	    if {[winfo class $w] eq "Text"} {
+		if {[$w tag ranges sel] ne ""} {
+		    $w delete sel.first sel.last
+		}
+	    } elseif {[$w selection present]} {
+		$w delete sel.first sel.last
+	    }
+	    event generate $w <<Paste>>
+	}
 	selectall {
 	    event generate $w <<SelectAll>>
 	    Place 1

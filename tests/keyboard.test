@@ -237,6 +237,168 @@ test keyboard-3.4 {hidden by the user, shown again by a click in the focus} -con
     list $before $::testkeyboard
 } -cleanup cleanupKeyboard -result {{{show text}} {{show text} {show text}}}
 
+test keyboard-4.1 {kept through a sequence of entries and texts} -constraints {
+    testkeyboard
+} -setup {
+    setupKeyboard
+    text .t -height 2
+    ttk::entry .te
+    pack .t .te
+} -body {
+    foreach w {.e .t .te .e2 .t .e} {
+	focusOn $w
+    }
+    set ::testkeyboard
+} -cleanup {
+    destroy .t .te
+    cleanupKeyboard
+} -result {{show text}}
+test keyboard-4.2 {hidden when the focus moves to a button} -constraints {
+    testkeyboard
+} -setup setupKeyboard -body {
+    focusOn .e
+    focusOn .e2
+    focusOn .b
+    focusOn .e
+    set ::testkeyboard
+} -cleanup cleanupKeyboard -result {{show text} hide {show text}}
+test keyboard-4.3 {shown for an entry in a toplevel} -constraints {
+    testkeyboard
+} -setup {
+    setupKeyboard
+    toplevel .d
+    entry .d.e
+    pack .d.e
+    update
+} -body {
+    focusOn .d.e
+    set shown $::testkeyboard
+    focusOn .b
+    list $shown $::testkeyboard
+} -cleanup {
+    destroy .d
+    cleanupKeyboard
+} -result {{{show text}} {{show text} hide}}
+test keyboard-4.4 {a disabled entry, then enabled} -constraints {
+    testkeyboard
+} -setup setupKeyboard -body {
+    .e configure -state disabled
+    focusOn .e
+    set before $::testkeyboard
+    .e configure -state normal
+    focusOn .b
+    focusOn .e
+    list $before $::testkeyboard
+} -cleanup cleanupKeyboard -result {{} {{show text}}}
+test keyboard-4.5 {readonly and disabled themed entries} -constraints {
+    testkeyboard
+} -setup {
+    setupKeyboard
+    ttk::entry .te
+    ttk::entry .te2 -state disabled
+    pack .te .te2
+} -body {
+    .te state readonly
+    focusOn .te
+    focusOn .te2
+    set before $::testkeyboard
+    .te state !readonly
+    focusOn .te
+    list $before $::testkeyboard
+} -cleanup {
+    destroy .te .te2
+    cleanupKeyboard
+} -result {{} {{show text}}}
+test keyboard-4.6 {a readonly combobox, then editable} -constraints {
+    testkeyboard
+} -setup {
+    setupKeyboard
+    ttk::combobox .c -values {a b c} -state readonly
+    pack .c
+} -body {
+    focusOn .c
+    set before $::testkeyboard
+    .c configure -state normal
+    focusOn .b
+    focusOn .c
+    list $before $::testkeyboard
+} -cleanup {
+    destroy .c
+    cleanupKeyboard
+} -result {{} {{show text}}}
+test keyboard-4.7 {not shown for a disabled text} -constraints {
+    testkeyboard
+} -setup {
+    setupKeyboard
+    text .t -height 2 -state disabled
+    pack .t
+} -body {
+    focusOn .t
+    set before $::testkeyboard
+    .t configure -state normal
+    focusOn .b
+    focusOn .t
+    list $before $::testkeyboard
+} -cleanup {
+    destroy .t
+    cleanupKeyboard
+} -result {{} {{show text}}}
+test keyboard-4.8 {the type changes while focused} -constraints {
+    testkeyboard
+} -setup setupKeyboard -body {
+    focusOn .e
+    tk keyboard type .e email
+    settle
+    tk keyboard type .e none
+    settle
+    set before $::testkeyboard
+    tk keyboard type .e text
+    settle
+    list $before $::testkeyboard
+} -cleanup cleanupKeyboard -result [list \
+    {{show text} {show email} hide} \
+    {{show text} {show email} hide {show text}}]
+test keyboard-4.9 {hidden when the focused entry is destroyed} -constraints {
+    testkeyboard
+} -setup setupKeyboard -body {
+    focusOn .e
+    destroy .e
+    settle
+    list $::testkeyboard [tk keyboard]
+} -cleanup cleanupKeyboard -result {{{show text} hide} hidden}
+test keyboard-4.10 {kept while a menu is posted and unposted} -constraints {
+    testkeyboard
+} -setup {
+    setupKeyboard
+    menu .m -tearoff 0
+    .m add command -label item
+} -body {
+    focusOn .e
+    tk_popup .m [winfo rootx .e] [winfo rooty .e]
+    settle
+    focus -force .m
+    settle
+    set during $::testkeyboard
+    tk::MenuUnpost .m
+    focusOn .e2
+    list $during $::testkeyboard
+} -cleanup cleanupKeyboard -result {{{show text}} {{show text}}}
+test keyboard-4.11 {manual mode ignores the focus} -constraints {
+    testkeyboard
+} -setup {
+    setupKeyboard
+    tk keyboard mode manual
+} -body {
+    tk keyboard show
+    focusOn .e
+    focusOn .b
+    focusOn .e2
+    set shown [tk keyboard]
+    tk keyboard mode auto
+    settle
+    list $shown $::testkeyboard
+} -cleanup cleanupKeyboard -result {shown {{show text} {show text}}}
+
 cleanupTests
 return
 
