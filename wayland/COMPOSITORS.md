@@ -116,9 +116,13 @@ any more. It cannot build the port with its own wayland-protocols (1.31,
 without xdg-toplevel-icon); with wayland-protocols 1.45 from source, these
 were seen and left alone:
 
-- KWin 5.27 with libdecor 0.1.1: Tk sometimes crashes (SIGSEGV in
+- KWin 5.27 with libdecor 0.1.1: Tk crashes (SIGSEGV in
   `wl_display_read_events`, called by the dispatch of libdecor's cairo
-  plugin) at the start of the tests; not with `WAYLAND_DEBUG` set.
+  plugin) at the start of the tests. libdecor before 0.2.0 does not destroy
+  the `zxdg_toplevel_decoration_v1` of a frame it frees, and writes into the
+  freed frame when KWin configures that decoration (seen with valgrind; fixed
+  by libdecor commit ca6e6b6, "Fix window closing in case of SSD"). The
+  decoration is private to libdecor: no workaround.
 - Sway 1.7: the connection is lost after `wayland-4.14` when the whole of
   `wayland.test` runs; it maximizes a floating window, and does not make a
   window fullscreen at the size of the output (`wayland-4.8`,
