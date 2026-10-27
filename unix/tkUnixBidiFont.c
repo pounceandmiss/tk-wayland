@@ -111,6 +111,36 @@ FaceHasChar(
 
 /*
  * ---------------------------------------------------------------
+ * IsCombiningMark --
+ *
+ *	Whether a character is a combining mark, which HarfBuzz places on
+ *	the character before it when they are shaped with the same face.
+ *
+ * Results:
+ *	true for the marks (general categories Mn, Mc and Me).
+ *
+ * Side effects:
+ *	None.
+ * ---------------------------------------------------------------
+ */
+
+static inline bool
+IsCombiningMark(
+    FcChar32 ucs4)
+{
+    switch (hb_unicode_general_category(hb_unicode_funcs_get_default(),
+	    ucs4)) {
+    case HB_UNICODE_GENERAL_CATEGORY_NON_SPACING_MARK:
+    case HB_UNICODE_GENERAL_CATEGORY_SPACING_MARK:
+    case HB_UNICODE_GENERAL_CATEGORY_ENCLOSING_MARK:
+	return true;
+    default:
+	return false;
+    }
+}
+
+/*
+ * ---------------------------------------------------------------
  * UnixFtColorList --
  *
  *	Cached XftColor entry with LRU next pointer.
@@ -1704,6 +1734,31 @@ GetRunFaceIndex(
     presentation = TkFontEmojiPresentation((int) uc, next);
 
     /*
+     * A character followed by combining marks takes the first face which
+     * has the marks too, so that HarfBuzz can place them on it: the face of
+     * the character may lack them (Nimbus Sans, which fontconfig gives for
+     * Helvetica, has no combining marks). Such a character is not cached.
+     */
+
+    if (presentation == 0 && next >= 0 && IsCombiningMark((FcChar32) next)) {
+	int end = runStart + 1, i;
+
+	while (end < totalChars && IsCombiningMark(ucs4Chars[end])) {
+	    end++;
+	}
+	for (fi = 0; fi < fontPtr->nfaces; fi++) {
+	    for (i = runStart; i < end; i++) {
+		if (!FaceHasChar(&fontPtr->faces[fi], ucs4Chars[i])) {
+		    break;
+		}
+	    }
+	    if (i == end) {
+		return fi;
+	    }
+	}
+    }
+
+    /*
      * The per-character cache holds the presentation 0 answer only: the
      * result for presentation 1 and 2 depends on the following code
      * point, so it is never read or written for them.
@@ -2091,13 +2146,20 @@ X11Shaper_ShapeString(
 		    if (s == HB_SCRIPT_INHERITED || s == HB_SCRIPT_COMMON) {
 			/*
 			 * Face-change check for neutral characters.
-			 * Combining marks (INHERITED) virtually always share the
-			 * base character's face, so this rarely fires for them.
-			 * Emoji (COMMON) frequently require a different face and
-			 * must be split out.
+			 * Combining marks (INHERITED) stay with their base
+			 * character when its face has them, which
+			 * GetRunFaceIndex chose it for, so that HarfBuzz places
+			 * them on it. Emoji (COMMON) frequently require a
+			 * different face and must be split out.
 			 */
-			int neutralFace = GetRunFaceIndex(fontPtr, ucs4Chars, subrunEnd, 1, charCount);
 			FcChar32 nc = ucs4Chars[subrunEnd];
+
+			if (s == HB_SCRIPT_INHERITED && FaceHasChar(
+				&fontPtr->faces[runFaceIndex], nc)) {
+			    subrunEnd++;
+			    continue;
+			}
+			int neutralFace = GetRunFaceIndex(fontPtr, ucs4Chars, subrunEnd, 1, charCount);
 
 			/*
 			 * Variation selectors, ZWJ, keycap, tag characters and
