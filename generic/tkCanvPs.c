@@ -434,8 +434,12 @@ TkCanvPostscriptObjCmd(
 	if (!Tcl_IsSafe(interp)) {
 	    struct passwd *pwPtr = getpwuid(getuid());	/* INTL: Native. */
 
-	    Tcl_AppendPrintfToObj(psObj,
-		    "%%%%For: %s\n", (pwPtr ? pwPtr->pw_gecos : "Unknown"));
+	    /*
+	     * The C library of Android has no GECOS field (NULL).
+	     */
+
+	    Tcl_AppendPrintfToObj(psObj, "%%%%For: %s\n",
+		    (pwPtr && pwPtr->pw_gecos) ? pwPtr->pw_gecos : "Unknown");
 	    endpwent();
 	}
 #endif /* HAVE_PW_GECOS */

@@ -71,10 +71,14 @@ testConstraint aquaKnownBug [expr {[testConstraint notAqua] || [testConstraint k
 # cannot be done on a CI runner.
 testConstraint notMacCI [expr {[testConstraint notAqua] || ![info exists ::env(CI)]}]
 
-# constraint based on whether our display is secure
+# constraint based on whether our display is secure (with this application
+# where another process cannot be started, as on Android)
 testutils import child
-childTkProcess create
-set app [childTkProcess eval {tk appname}]
+if {[catch {childTkProcess create}]} {
+    set app [tk appname]
+} else {
+    set app [childTkProcess eval {tk appname}]
+}
 testConstraint secureserver 0
 if {[llength [info commands send]]} {
     testConstraint secureserver 1
@@ -84,7 +88,7 @@ if {[llength [info commands send]]} {
 	}
     }
 }
-childTkProcess exit
+catch {childTkProcess exit}
 testutils forget child
 
 testConstraint failsOnXQuartz [expr {$tcl_platform(os) ne "Darwin" || [tk windowingsystem] ne "x11" }]
