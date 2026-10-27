@@ -34,6 +34,7 @@
 #include "fractional-scale-v1-client-protocol.h"
 #include "xdg-activation-v1-client-protocol.h"
 #include "xdg-toplevel-icon-v1-client-protocol.h"
+#include "xdg-output-unstable-v1-client-protocol.h"
 
 #define TKXE_VENDOR	"Wayland"
 
@@ -178,6 +179,10 @@ typedef struct TkWlOutput {
     int scale;
     int width, height;		/* Current mode, in pixels. */
     int mmWidth, mmHeight;
+    struct zxdg_output_v1 *xdgOutput;
+    int logicalWidth, logicalHeight;
+				/* Size in the layout (from xdg-output, with
+				 * fractional scales), or 0. */
     struct TkWlOutput *nextPtr;
 } TkWlOutput;
 
@@ -196,6 +201,7 @@ struct TkXeDisplay {
     struct wp_fractional_scale_manager_v1 *fractionalScaleManager;
     struct xdg_activation_v1 *activation;
     struct xdg_toplevel_icon_manager_v1 *iconManager;
+    struct zxdg_output_manager_v1 *xdgOutputManager;
     bool weston;		/* The compositor is Weston, whose version 15
 				 * crashes positioning popups which may slide
 				 * or flip. */

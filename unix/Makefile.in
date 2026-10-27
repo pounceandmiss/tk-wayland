@@ -480,7 +480,7 @@ WAYLAND_OBJS = tkUnix.o tkUnix3d.o tkUnixAccessibility.o tkUnixButton.o \
 
 WAYLAND_PROTOCOLS = xdg-shell primary-selection-unstable-v1 viewporter \
 	fractional-scale-v1 xdg-activation-v1 text-input-unstable-v3 \
-	xdg-toplevel-icon-v1 idle-inhibit-unstable-v1
+	xdg-toplevel-icon-v1 idle-inhibit-unstable-v1 xdg-output-unstable-v1
 
 WAYLAND_PROTOCOL_OBJS = $(WAYLAND_PROTOCOLS:%=%-protocol.o)
 
@@ -1501,6 +1501,8 @@ WAYLAND_PROTOCOL_xdg-toplevel-icon-v1 = \
 	staging/xdg-toplevel-icon/xdg-toplevel-icon-v1.xml
 WAYLAND_PROTOCOL_idle-inhibit-unstable-v1 = \
 	unstable/idle-inhibit/idle-inhibit-unstable-v1.xml
+WAYLAND_PROTOCOL_xdg-output-unstable-v1 = \
+	unstable/xdg-output/xdg-output-unstable-v1.xml
 
 # Shared files which include tkXemuInt.h, and with it tkWaylandInt.h on
 # Wayland, need the protocol headers (the variable is empty for the other

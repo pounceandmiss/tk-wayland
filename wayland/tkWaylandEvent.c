@@ -41,7 +41,9 @@ static void		RepeatProc(void *clientData);
  * Outputs --
  *
  *	The size of the screen is that of the first output, in logical
- *	pixels.
+ *	pixels: its size in the layout from xdg-output, which knows
+ *	fractional scales (the scale of wl_output is an integer), or else the
+ *	size of its mode divided by its scale.
  *
  *----------------------------------------------------------------------
  */
@@ -69,8 +71,15 @@ UpdateScreenSize(void)
     TkWlOutput *outPtr = tkXeDisplay->outputs;
     int scale;
 
-    if (outPtr == NULL || tkXeDisplay->display == NULL
-	    || outPtr->width <= 0) {
+    if (outPtr == NULL || tkXeDisplay->display == NULL) {
+	return;
+    }
+    if (outPtr->logicalWidth > 0 && outPtr->logicalHeight > 0) {
+	TkXeSetScreenSize(tkXeDisplay->display, outPtr->logicalWidth,
+		outPtr->logicalHeight, outPtr->mmWidth, outPtr->mmHeight);
+	return;
+    }
+    if (outPtr->width <= 0) {
 	return;
     }
     scale = (outPtr->scale > 0) ? outPtr->scale : 1;
@@ -189,6 +198,110 @@ static const struct wl_output_listener outputListener = {
     OutputDescription
 #endif
 };
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XdgOutputLogicalPosition, XdgOutputLogicalSize, XdgOutputDone,
+ * XdgOutputName, XdgOutputDescription --
+ *
+ *	The events of the zxdg_output_v1 of an output, whose size in the
+ *	layout is recorded. From version 3, the done event of the wl_output
+ *	follows them.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The logical size of the output changes; XdgOutputDone updates the
+ *	size of the screen.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static void
+XdgOutputLogicalPosition(
+    TCL_UNUSED(void *),
+    TCL_UNUSED(struct zxdg_output_v1 *),
+    TCL_UNUSED(int32_t),	/* x */
+    TCL_UNUSED(int32_t))	/* y */
+{
+}
+
+static void
+XdgOutputLogicalSize(
+    void *data,
+    TCL_UNUSED(struct zxdg_output_v1 *),
+    int32_t width,
+    int32_t height)
+{
+    TkWlOutput *outPtr = (TkWlOutput *)data;
+
+    outPtr->logicalWidth = width;
+    outPtr->logicalHeight = height;
+}
+
+static void
+XdgOutputDone(
+    TCL_UNUSED(void *),
+    TCL_UNUSED(struct zxdg_output_v1 *))
+{
+    UpdateScreenSize();
+}
+
+static void
+XdgOutputName(
+    TCL_UNUSED(void *),
+    TCL_UNUSED(struct zxdg_output_v1 *),
+    TCL_UNUSED(const char *))
+{
+}
+
+static void
+XdgOutputDescription(
+    TCL_UNUSED(void *),
+    TCL_UNUSED(struct zxdg_output_v1 *),
+    TCL_UNUSED(const char *))
+{
+}
+
+static const struct zxdg_output_v1_listener xdgOutputListener = {
+    XdgOutputLogicalPosition,
+    XdgOutputLogicalSize,
+    XdgOutputDone,
+    XdgOutputName,
+    XdgOutputDescription
+};
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * WatchXdgOutput --
+ *
+ *	Get the zxdg_output_v1 of an output, once both the output and the
+ *	manager of xdg-output are bound (in either order).
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The compositor sends the logical size of the output.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static void
+WatchXdgOutput(
+    TkWlOutput *outPtr)
+{
+    if (tkXeDisplay->xdgOutputManager == NULL || outPtr->xdgOutput) {
+	return;
+    }
+    outPtr->xdgOutput = zxdg_output_manager_v1_get_xdg_output(
+	    tkXeDisplay->xdgOutputManager, outPtr->output);
+    zxdg_output_v1_add_listener(outPtr->xdgOutput, &xdgOutputListener,
+	    outPtr);
+}
 
 /*
  *----------------------------------------------------------------------
@@ -1604,6 +1717,15 @@ RegistryGlobal(
 	tkXeDisplay->wmBase = (struct xdg_wm_base *)wl_registry_bind(
 		registry, name, &xdg_wm_base_interface, 1);
 	xdg_wm_base_add_listener(tkXeDisplay->wmBase, &wmBaseListener, NULL);
+    } else if (!strcmp(interface, zxdg_output_manager_v1_interface.name)) {
+	TkWlOutput *outPtr;
+
+	tkXeDisplay->xdgOutputManager = (struct zxdg_output_manager_v1 *)
+		wl_registry_bind(registry, name,
+		&zxdg_output_manager_v1_interface, MIN(version, 3));
+	for (outPtr = tkXeDisplay->outputs; outPtr; outPtr = outPtr->nextPtr) {
+	    WatchXdgOutput(outPtr);
+	}
     } else if (!strcmp(interface, wl_output_interface.name)) {
 	TkWlOutput *outPtr = (TkWlOutput *)Tcl_Alloc(sizeof(TkWlOutput));
 	TkWlOutput **lastPtrPtr = &tkXeDisplay->outputs;
@@ -1614,6 +1736,7 @@ RegistryGlobal(
 	outPtr->output = (struct wl_output *)wl_registry_bind(registry, name,
 		&wl_output_interface, MIN(version, OUTPUT_VERSION));
 	wl_output_add_listener(outPtr->output, &outputListener, outPtr);
+	WatchXdgOutput(outPtr);
 	while (*lastPtrPtr) {
 	    lastPtrPtr = &(*lastPtrPtr)->nextPtr;
 	}
@@ -1653,6 +1776,9 @@ RegistryGlobalRemove(
 
 	if (outPtr->name == name) {
 	    *outPtrPtr = outPtr->nextPtr;
+	    if (outPtr->xdgOutput) {
+		zxdg_output_v1_destroy(outPtr->xdgOutput);
+	    }
 	    wl_output_release(outPtr->output);
 	    Tcl_Free(outPtr);
 	    UpdateScreenSize();

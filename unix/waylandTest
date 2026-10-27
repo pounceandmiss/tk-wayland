@@ -8,7 +8,11 @@
 #
 #	    waylandTest sway|gnome|kde|weston command ?arg ...?
 #
-#	The output of the compositor is 1366x768. On sway, the tests of input
+#	The output of the compositor is 1366x768 pixels, with the scale in
+#	the environment variable TK_WAYLAND_TEST_SCALE if it is set: on sway,
+#	any scale (as 1.5), which makes the layout smaller (910x512 at 1.5);
+#	on Weston, an integer, the output being 1366x768 logical pixels; GNOME
+#	and KWin only at the scale 1. On sway, the tests of input
 #	in wayland.test are enabled if wtype, wl-clipboard and grim are
 #	installed: the seat gets the virtual keyboard built in the current
 #	directory (vkeyboard, or else a keyboard from wtype), and the virtual
@@ -24,6 +28,7 @@
 
 WIDTH=1366
 HEIGHT=768
+SCALE=${TK_WAYLAND_TEST_SCALE:-1}
 
 if [ $# -lt 2 ]; then
     echo "usage: $0 sway|gnome|kde|weston command ?arg ...?" >&2
@@ -39,6 +44,25 @@ case $compositor in
     weston) need=weston ;;
     *)	    echo "$0: unknown compositor \"$compositor\"" >&2; exit 2 ;;
 esac
+if ! expr "$SCALE" : '[0-9][0-9.]*$' > /dev/null; then
+    echo "$0: bad scale \"$SCALE\"" >&2
+    exit 2
+fi
+case $compositor/$SCALE in
+    gnome/1|gnome/1.0|kde/1|kde/1.0) ;;
+    gnome/*|kde/*)
+	echo "$0: $compositor is only tested at the scale 1" >&2
+	exit 2
+	;;
+    weston/*.*)
+	echo "$0: Weston takes only integer scales" >&2
+	exit 2
+	;;
+esac
+
+# The size of the layout, in logical pixels.
+
+LAYOUT=`awk "BEGIN {printf \"%d %d\", $WIDTH / $SCALE, $HEIGHT / $SCALE}"`
 for program in $need; do
     if ! command -v $program >/dev/null 2>&1; then
 	echo "$0: $program is not installed" >&2
@@ -96,7 +120,7 @@ case $compositor in
 	# session: the Wayland display and the socket of swaymsg.
 
 	cat > "$work/config" <<EOF
-output HEADLESS-1 resolution ${WIDTH}x$HEIGHT
+output HEADLESS-1 resolution ${WIDTH}x$HEIGHT scale $SCALE
 for_window [all] floating enable
 exec env > "$work/env.tmp" && mv "$work/env.tmp" "$work/env"
 EOF
@@ -134,7 +158,7 @@ EOF
 	    TK_WAYLAND_TEST_INPUT=1
 	    export TK_WAYLAND_TEST_INPUT
 	    if [ -x ./vpointer ]; then
-		TK_WAYLAND_VPOINTER="`pwd`/vpointer $WIDTH $HEIGHT"
+		TK_WAYLAND_VPOINTER="`pwd`/vpointer $LAYOUT"
 		export TK_WAYLAND_VPOINTER
 	    fi
 	    if [ -x ./vinputmethod ]; then
@@ -172,7 +196,8 @@ EOF
 	else
 	    backend="--backend=headless-backend.so --use-pixman"
 	fi
-	weston $backend --width=$WIDTH --height=$HEIGHT --socket=$socket \
+	weston $backend --width=$WIDTH --height=$HEIGHT --scale=$SCALE \
+		--socket=$socket \
 		--idle-time=0 > "$work/log" 2>&1 &
 	pids="$pids $!"
 	waitFile "$XDG_RUNTIME_DIR/$socket"
