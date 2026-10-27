@@ -866,6 +866,10 @@ test-gnome: $(TKTEST_EXE)
 	$(SHELL) $(UNIX_DIR)/waylandTest gnome \
 		$(MAKE) test "TESTFLAGS=$(TESTFLAGS)"
 
+test-kde: $(TKTEST_EXE)
+	$(SHELL) $(UNIX_DIR)/waylandTest kde \
+		$(MAKE) test "TESTFLAGS=$(TESTFLAGS)"
+
 test-weston: $(TKTEST_EXE)
 	$(SHELL) $(UNIX_DIR)/waylandTest weston \
 		$(MAKE) test "TESTFLAGS=$(TESTFLAGS)"

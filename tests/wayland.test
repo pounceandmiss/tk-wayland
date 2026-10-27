@@ -3,9 +3,9 @@
 # sensitive to), drawing, window attributes, cursors, icons, bidirectional
 # text and selections.
 #
-# "make test-sway", "make test-gnome" and "make test-weston" run the tests in a
-# headless compositor started for them (see unix/waylandTest), which sets up
-# what the tests of input need on sway.
+# "make test-sway", "make test-gnome", "make test-kde" and "make test-weston"
+# run the tests in a headless compositor started for them (see
+# unix/waylandTest), which sets up what the tests of input need on sway.
 #
 # Some tests drive the compositor from outside, and need additional tools:
 # - waylandInput: wtype (virtual keyboard), wl-copy and wl-paste
