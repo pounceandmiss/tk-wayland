@@ -215,7 +215,9 @@ test winfo-5.5 {"winfo interps" command} -constraints {unix notMacCI} -body {
     lappend res [expr {[lsearch -exact [winfo interps -displayof .] $appname] >= 0}]
     set res
 } -result {1 0}
-test winfo-5.6 {"winfo interps" command} -constraints {unix notMacCI} -body {
+test winfo-5.6 {"winfo interps" command} -constraints {
+    unix notMacCI otherProcesses
+} -body {
     childTkProcess create
     set appname [childTkProcess eval [list tk appname]]
     set res [expr {[lsearch -exact [winfo interps] $appname] >= 0}]
@@ -223,7 +225,9 @@ test winfo-5.6 {"winfo interps" command} -constraints {unix notMacCI} -body {
     lappend res [expr {[lsearch -exact [winfo interps] $appname] >= 0}]
     set res
 } -result {1 0}
-test winfo-5.7 {"winfo interps" command} -constraints {unix notMacCI} -body {
+test winfo-5.7 {"winfo interps" command} -constraints {
+    unix notMacCI otherProcesses
+} -body {
     childTkProcess create
     set appname [childTkProcess eval [list tk appname]]
     set res [expr {[lsearch -exact [winfo interps -displayof .] $appname] >= 0}]

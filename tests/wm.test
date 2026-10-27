@@ -559,7 +559,9 @@ test wm-colormapwindows-1.4 {usage} -returnCodes error -body {
     wm colormapwindows . foo
 } -result {bad window path name "foo"}
 
-test wm-colormapwindows-2.1 {reading values} -body {
+test wm-colormapwindows-2.1 {reading values} -constraints {
+    multipleColormaps
+} -body {
     toplevel .t2 -width 200 -height 200 -colormap new
     wm geom .t2 +0+0
     frame .t2.a -width 100 -height 30

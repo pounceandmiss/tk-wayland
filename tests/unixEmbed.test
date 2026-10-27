@@ -88,7 +88,7 @@ test unixEmbed-1.4 {Tk_UseWindow procedure, inheriting colormap} -constraints {
 } -result 1
 
 test unixEmbed-1.5 {Tk_UseWindow procedure, creating Container records} -constraints {
-    unix testembed notAqua
+    unix testembed notAqua otherProcesses
 } -setup {
     deleteWindows
 } -body {
@@ -126,7 +126,7 @@ test unixEmbed-1.5a {Tk_UseWindow procedure, creating Container records} -constr
     deleteWindows
 } -result {{{XXX {} {} .t}} 0}
 test unixEmbed-1.6 {Tk_UseWindow procedure, creating Container records} -constraints {
-    unix testembed notAqua
+    unix testembed notAqua otherProcesses
 } -setup {
     deleteWindows
 } -body {
@@ -233,7 +233,7 @@ test unixEmbed-2.1a {EmbeddedEventProc procedure} -constraints {
     deleteWindows
 } -result {}
 test unixEmbed-2.2 {EmbeddedEventProc procedure} -constraints {
-    unix testembed notAqua
+    unix testembed notAqua otherProcesses
 } -setup {
     deleteWindows
 } -body {
@@ -353,7 +353,7 @@ test unixEmbed-3.2 {ContainerEventProc procedure, set size on creation} -constra
     deleteWindows
 } -result {200x200+0+0}
 test unixEmbed-3.3 {ContainerEventProc procedure, disallow position changes} -constraints {
-    unix notAqua
+    unix notAqua otherProcesses
 } -setup {
     deleteWindows
 } -body {
@@ -397,7 +397,7 @@ test unixEmbed-3.3a {ContainerEventProc procedure, disallow position changes} -c
     deleteWindows
 } -result {200x200+0+0}
 test unixEmbed-3.4 {ContainerEventProc procedure, disallow position changes} -constraints {
-    unix notAqua
+    unix notAqua otherProcesses
 } -setup {
     deleteWindows
 } -body {
@@ -441,7 +441,7 @@ test unixEmbed-3.4a {ContainerEventProc procedure, disallow position changes} -c
     deleteWindows
 } -result {300x100+0+0}
 test unixEmbed-3.5 {ContainerEventProc procedure, geometry requests} -constraints {
-    unix notAqua
+    unix notAqua otherProcesses
 } -setup {
     deleteWindows
 } -body {
@@ -484,7 +484,7 @@ test unixEmbed-3.5a {ContainerEventProc procedure, geometry requests} -constrain
     deleteWindows
 } -result {300 80 300x80+0+0}
 test unixEmbed-3.6 {ContainerEventProc procedure, map requests} -constraints {
-    unix notAqua
+    unix notAqua otherProcesses
 } -setup {
     deleteWindows
 } -body {
@@ -532,7 +532,7 @@ test unixEmbed-3.6a {ContainerEventProc procedure, map requests} -constraints {
     deleteWindows
 } -result {mapped}
 test unixEmbed-3.7 {ContainerEventProc procedure, destroy events} -constraints {
-    unix notAqua
+    unix notAqua otherProcesses
 } -setup {
     deleteWindows
 } -body {
@@ -581,7 +581,7 @@ test unixEmbed-3.7a {ContainerEventProc procedure, destroy events} -constraints 
 } -result {dead 0}
 
 test unixEmbed-4.1 {EmbedStructureProc procedure, configure events} -constraints {
-    unix notAqua
+    unix notAqua otherProcesses
 } -setup {
     deleteWindows
 } -body {
@@ -627,7 +627,7 @@ test unixEmbed-4.1a {EmbedStructureProc procedure, configure events} -constraint
     deleteWindows
 } -result {180x100+0+0}
 test unixEmbed-4.2 {EmbedStructureProc procedure, destroy events} -constraints {
-    unix testembed notAqua
+    unix testembed notAqua otherProcesses
 } -setup {
     deleteWindows
 } -body {
@@ -672,7 +672,7 @@ test unixEmbed-4.2a {EmbedStructureProc procedure, destroy events} -constraints 
 
 
 test unixEmbed-5.1 {EmbedFocusProc procedure, FocusIn events} -constraints {
-    unix notAqua
+    unix notAqua otherProcesses
 } -setup {
     deleteWindows
 } -body {
@@ -769,7 +769,7 @@ test unixEmbed-5.2a {EmbedFocusProc procedure, focusing on dead window} -constra
     deleteWindows
 } -result {}
 test unixEmbed-5.3 {EmbedFocusProc procedure, FocusOut events} -constraints {
-    unix notAqua
+    unix notAqua otherProcesses
 } -setup {
     deleteWindows
 } -body {
@@ -826,7 +826,7 @@ test unixEmbed-5.3a {EmbedFocusProc procedure, FocusOut events} -constraints {
 
 
 test unixEmbed-6.1 {EmbedGeometryRequest procedure, window changes size} -constraints {
-    unix notAqua
+    unix notAqua otherProcesses
 } -setup {
     deleteWindows
 } -body {
@@ -872,7 +872,7 @@ test unixEmbed-6.1a {EmbedGeometryRequest procedure, window changes size} -const
     deleteWindows
 } -result {{configure .t1 300 120} 300x120+0+0}
 test unixEmbed-6.2 {EmbedGeometryRequest procedure, window changes size} -constraints {
-    unix notAqua
+    unix notAqua otherProcesses
 } -setup {
     deleteWindows
 } -body {
@@ -922,7 +922,7 @@ test unixEmbed-6.2a {EmbedGeometryRequest procedure, window changes size} -const
 # Can't think up any tests for Tk_GetOtherWindow procedure.
 
 test unixEmbed-7.1 {TkpRedirectKeyEvent procedure, forward keystroke} -constraints {
-    unix notAqua
+    unix notAqua otherProcesses
 } -setup {
     deleteWindows
 } -body {
@@ -986,7 +986,7 @@ test unixEmbed-7.1a {TkpRedirectKeyEvent procedure, forward keystroke} -constrai
     bind . <Key> {}
 } -result {{{key a 1}} {}}
 test unixEmbed-7.2 {TkpRedirectKeyEvent procedure, don't forward keystroke width} -constraints {
-    unix notAqua
+    unix notAqua otherProcesses
 } -setup {
     deleteWindows
 } -body {
@@ -1051,7 +1051,7 @@ test unixEmbed-7.2a {TkpRedirectKeyEvent procedure, don't forward keystroke widt
 } -result {{} {{key b}}}
 
 test unixEmbed-8.1 {TkpClaimFocus procedure} -constraints {
-    unix notAqua
+    unix notAqua otherProcesses
 } -setup {
     deleteWindows
     # Without a window manager the focus follows the pointer, so the pointer
@@ -1160,7 +1160,7 @@ test unixEmbed-9.1 {EmbedWindowDeleted procedure, check parentPtr} -constraints 
     deleteWindows
 } -result {{{XXX .f4 {} {}} {XXX .f3 {} {}} {XXX .f2 {} {}} {XXX .f1 {} {}}} {{XXX .f4 {} {}} {XXX .f2 {} {}} {XXX .f1 {} {}}} {{XXX .f2 {} {}} {XXX .f1 {} {}}} {{XXX .f2 {} {}}} {}}
 test unixEmbed-9.2 {EmbedWindowDeleted procedure, check embeddedPtr} -constraints {
-    unix testembed notAqua
+    unix testembed notAqua otherProcesses
 } -setup {
     deleteWindows
 } -body {
@@ -1203,7 +1203,7 @@ test unixEmbed-9.2a {EmbedWindowDeleted procedure, check embeddedPtr} -constrain
     deleteWindows
 } -result {{{XXX {} {} .t1}} {}}
 test unixEmbed-9.3 {embedded window redrawn after the container was destroyed} -constraints {
-    unix notAqua
+    unix notAqua otherProcesses
 } -setup {
     deleteWindows
 } -body {

@@ -592,7 +592,9 @@ test unixWm-13.3 {Tk_WmCmd procedure, "client" option, unmapped window} unix {
 test unixWm-14.1 {Tk_WmCmd procedure, "colormapwindows" option} unix {
     list [catch {wm colormapwindows .t 12 13} msg] $msg
 } {1 {wrong # args: should be "wm colormapwindows window ?windowList?"}}
-test unixWm-14.2 {Tk_WmCmd procedure, "colormapwindows" option} unix {
+test unixWm-14.2 {Tk_WmCmd procedure, "colormapwindows" option} {
+    unix multipleColormaps
+} {
     destroy .t2
     toplevel .t2 -width 200 -height 200 -colormap new
     wm geom .t2 +0+0
@@ -1893,7 +1895,9 @@ if {[tk windowingsystem] eq "aqua"} {
     after 1000; # Give Apple's _windowserver some time to catch up.
 }
 
-test unixWm-50.1 {Tk_CoordsToWindow procedure, finding a toplevel, x-coords, title bar} {unix withWindowManager} {
+test unixWm-50.1 {Tk_CoordsToWindow procedure, finding a toplevel, x-coords, title bar} {
+    unix withWindowManager placedToplevels
+} {
     update
     toplevel .t -width 300 -height 400 -bg green
     wm geom .t +100+100
@@ -2276,7 +2280,7 @@ test unixWm-52.1 {TkWmAddToColormapWindows procedure} unix {
     update
     wm colormap .t
 } {}
-test unixWm-52.2 {TkWmAddToColormapWindows procedure} unix {
+test unixWm-52.2 {TkWmAddToColormapWindows procedure} {unix multipleColormaps} {
     destroy .t
     toplevel .t -colormap new -relief raised -bd 2
     wm geom .t +0+0
@@ -2285,7 +2289,7 @@ test unixWm-52.2 {TkWmAddToColormapWindows procedure} unix {
     update
     wm colormap .t
 } {.t.f .t}
-test unixWm-52.3 {TkWmAddToColormapWindows procedure} unix {
+test unixWm-52.3 {TkWmAddToColormapWindows procedure} {unix multipleColormaps} {
     destroy .t
     toplevel .t -colormap new
     wm geom .t +0+0
@@ -2310,7 +2314,9 @@ test unixWm-52.4 {TkWmAddToColormapWindows procedure} unix {
     wm colormapwindows .t
 } {.t.f}
 
-test unixWm-53.1 {TkWmRemoveFromColormapWindows procedure} unix {
+test unixWm-53.1 {TkWmRemoveFromColormapWindows procedure} {
+    unix multipleColormaps
+} {
     destroy .t
     toplevel .t -colormap new
     wm geom .t +0+0
@@ -2322,7 +2328,9 @@ test unixWm-53.1 {TkWmRemoveFromColormapWindows procedure} unix {
     destroy .t.f2
     wm colormap .t
 } {.t.f .t}
-test unixWm-53.2 {TkWmRemoveFromColormapWindows procedure} unix {
+test unixWm-53.2 {TkWmRemoveFromColormapWindows procedure} {
+    unix multipleColormaps
+} {
     destroy .t
     toplevel .t -colormap new
     wm geom .t +0+0

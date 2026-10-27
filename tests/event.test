@@ -1141,7 +1141,8 @@ test event-8.9 {event generate with a non-Latin keysym on Windows - bug 52e9b0f5
     deleteWindows
 } -result "{Cyrillic_shorti \u0439} {Cyrillic_SHORTI \u0419} {Cyrillic_shorti \u0439} {\u10E6 \u10E6}"
 
-test event-9.1 {enter . window by destroying a toplevel - bug b1d115fa60} -setup {
+test event-9.1 {enter . window by destroying a toplevel - bug b1d115fa60} \
+	-constraints pointerWarp -setup {
     set EnterBind [bind . <Enter>]
 } -body {
     wm geometry . 200x200+300+300
@@ -1171,7 +1172,7 @@ test event-9.1 {enter . window by destroying a toplevel - bug b1d115fa60} -setup
 # not seem to fail on real computers.  It is not needed since the same
 # thing is tested by 9.13.  So it is simpler to constrain it as notAqua.
 test event-9.2 {enter toplevel window by destroying a toplevel - bug b1d115fa60} \
--constraints { notAqua} \
+-constraints { notAqua pointerWarp} \
 -setup {
     set iconified false
     if {[winfo ismapped .]} {
@@ -1206,7 +1207,9 @@ test event-9.2 {enter toplevel window by destroying a toplevel - bug b1d115fa60}
     }
 } -result {.top1}
 
-test event-9.11 {pointer window container = parent} -setup {
+test event-9.11 {pointer window container = parent} -constraints {
+    pointerWarp
+} -setup {
     setup_win_mousepointer .one
     wm withdraw .one
     create_and_pack_frames .one
@@ -1228,7 +1231,9 @@ test event-9.11 {pointer window container = parent} -setup {
     unset -nocomplain result
 } -result {|<Enter> NotifyInferior .one.f1|}
 
-test event-9.12 {pointer window container != parent} -setup {
+test event-9.12 {pointer window container != parent} -constraints {
+    pointerWarp
+} -setup {
     setup_win_mousepointer .one
     wm withdraw .one
     create_and_pack_frames .one
@@ -1252,7 +1257,8 @@ test event-9.12 {pointer window container != parent} -setup {
     unset -nocomplain result
 } -result {|<Enter> NotifyNonlinearVirtual .one.f1|<Enter> NotifyNonlinear .one.f1.f2|}
 
-test event-9.13 {pointer window is a toplevel, toplevel destination} -setup {
+test event-9.13 {pointer window is a toplevel, toplevel destination} \
+	-constraints pointerWarp -setup {
     setup_win_mousepointer .one
     toplevel .two
     wm geometry .two 300x300+150+150
@@ -1275,7 +1281,8 @@ test event-9.13 {pointer window is a toplevel, toplevel destination} -setup {
     unset -nocomplain result
 } -result {|<Enter> NotifyNonlinear .one|}
 
-test event-9.14 {pointer window is a toplevel, tk internal destination} -setup {
+test event-9.14 {pointer window is a toplevel, tk internal destination} \
+	-constraints pointerWarp -setup {
     setup_win_mousepointer .one
     wm withdraw .one
     create_and_pack_frames .one
@@ -1301,7 +1308,7 @@ test event-9.14 {pointer window is a toplevel, tk internal destination} -setup {
 
 test event-9.15 {pointer window is a toplevel, destination is screen root.
     Due to a malfunction on macOS Sequoia and older (see bug #c494cc25c4), this test is skipped on those OS versions.  It also fails sporadically on the macOS CI runner.
-} -constraints {notMacosSequoiaOrOlder notMacCI} -setup {
+} -constraints {notMacosSequoiaOrOlder notMacCI pointerWarp} -setup {
     setup_win_mousepointer .one; # ensure the mouse pointer is where we want it to be (the .one toplevel is not itself used in this test)
 #    destroy .one
     toplevel .two
@@ -1325,7 +1332,8 @@ test event-9.15 {pointer window is a toplevel, destination is screen root.
     unset -nocomplain result
 } -result {|}
 
-test event-9.16 {Successive destructions (pointer window + parent), single generation of crossing events} -setup {
+test event-9.16 {Successive destructions (pointer window + parent), single generation of crossing events} \
+	-constraints pointerWarp -setup {
     # Tests correctness of overwriting the dead window struct in
     # TkPointerDeadWindow() and subsequent reading in GenerateEnterLeave().
     setup_win_mousepointer .one
@@ -1354,7 +1362,8 @@ if {[tk windowingsystem] eq "aqua"} {
     update
 }
 
-test event-9.17 {Successive destructions (pointer window + parent), separate crossing events} -setup {
+test event-9.17 {Successive destructions (pointer window + parent), separate crossing events} \
+	-constraints pointerWarp -setup {
     # Tests correctness of overwriting the dead window struct in
     # TkPointerDeadWindow() and subsequent reading in GenerateEnterLeave().
     setup_win_mousepointer .one
@@ -1380,7 +1389,8 @@ test event-9.17 {Successive destructions (pointer window + parent), separate cro
     unset -nocomplain result
 } -result {|<Enter> NotifyInferior .one.f1|<Enter> NotifyInferior .one|}
 
-test event-9.18 {Successive destructions (pointer window + ancestors including its toplevel), destination is non-root toplevel} -setup {
+test event-9.18 {Successive destructions (pointer window + ancestors including its toplevel), destination is non-root toplevel} \
+	-constraints pointerWarp -setup {
     setup_win_mousepointer .one
     toplevel .two
     pack propagate .two 0
@@ -1402,7 +1412,8 @@ test event-9.18 {Successive destructions (pointer window + ancestors including i
     unset -nocomplain result
 } -result {|<Enter> NotifyNonlinear .one|}
 
-test event-9.19 {Successive destructions (pointer window + ancestors including its toplevel), destination is internal window, bypass root win} -setup {
+test event-9.19 {Successive destructions (pointer window + ancestors including its toplevel), destination is internal window, bypass root win} \
+	-constraints pointerWarp -setup {
     setup_win_mousepointer .one; # ensure the mouse pointer is where we want it to be (the .one toplevel is not itself used in this test)
     wm geometry . +500+500; # avoid an extraneous <Leave> event
     update idletasks
@@ -1438,7 +1449,7 @@ test event-9.19 {Successive destructions (pointer window + ancestors including i
 
 test event-9.20 {Successive destructions (pointer window + ancestors including its toplevel), destination is screen root.
     Due to a malfunction on macOS Sequoia and older (see bug #c494cc25c4), this test is skipped on those OS versions.  It also fails sporadically on macOS CI runners.
-} -constraints {notMacosSequoiaOrOlder notMacCI} -setup {
+} -constraints {notMacosSequoiaOrOlder notMacCI pointerWarp} -setup {
     setup_win_mousepointer .one; # ensure the mouse pointer is where we want it to be (the .one toplevel is not itself used in this test)
     destroy .one
     toplevel .two
@@ -1460,7 +1471,8 @@ test event-9.20 {Successive destructions (pointer window + ancestors including i
     unset -nocomplain result
 } -result {|}
 
-test event-86299fe7ce {Generate window crossing events immediately upon pointer warp. See ticket #86299fe7ce} -setup {
+test event-86299fe7ce {Generate window crossing events immediately upon pointer warp. See ticket #86299fe7ce} \
+	-constraints pointerWarp -setup {
     deleteWindows
     wm geometry . 200x200+100+100
     wm deiconify .
@@ -1498,7 +1510,8 @@ test event-86299fe7ce {Generate window crossing events immediately upon pointer 
     bind all <Enter> {}
 } -result "|<Leave> .|<Enter> .|"
 
-test event-8a88a19654-1 {Don't consider unmapped windows for the new pointer window after toplevel destroy (outside). See ticket #8a88a19654} -setup {
+test event-8a88a19654-1 {Don't consider unmapped windows for the new pointer window after toplevel destroy (outside). See ticket #8a88a19654} \
+	-constraints pointerWarp -setup {
     setup_win_mousepointer .one
     wm geometry . 200x200+500+100; # the screen pointer is outside the area of the candidate window
     update
@@ -1518,7 +1531,8 @@ test event-8a88a19654-1 {Don't consider unmapped windows for the new pointer win
     unset -nocomplain result
 } -result "|"
 
-test event-8a88a19654-2 {Don't consider unmapped windows for the new pointer window after toplevel destroy (inside). See ticket #8a88a19654} -setup {
+test event-8a88a19654-2 {Don't consider unmapped windows for the new pointer window after toplevel destroy (inside). See ticket #8a88a19654} \
+	-constraints pointerWarp -setup {
     setup_win_mousepointer .one
     wm geometry . 200x200+100+100; # the screen pointer is inside the area of the candidate window
     update
@@ -1538,7 +1552,8 @@ test event-8a88a19654-2 {Don't consider unmapped windows for the new pointer win
     unset -nocomplain result
 } -result "|"
 
-test event-c3f5c85322 {Aqua: incorrect crossing events upon pointer warp. See ticket #c3f5c85322} -setup {
+test event-c3f5c85322 {Aqua: incorrect crossing events upon pointer warp. See ticket #c3f5c85322} \
+	-constraints pointerWarp -setup {
     wm geometry . 200x200+100+100
     pack [frame .f -width 100 -height 200 -bg blue] -side right
     update

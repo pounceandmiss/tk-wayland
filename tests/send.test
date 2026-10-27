@@ -237,7 +237,9 @@ test send-7.4 {Tk_SetAppName procedure, name in use} {secureserver testsend} {
 
 # This passes on real macOS systems but fails on macOS CI runners because
 # AppleScript cannot be enabled on the runner.
-test send-8.1 {Tk_SendCmd procedure, options} {secureserver notMacCI} {
+test send-8.1 {Tk_SendCmd procedure, options} {
+    secureserver notMacCI otherProcesses
+} {
     childTkProcess create
     set app [childTkProcess eval {tk appname}]
     set a 66
@@ -386,7 +388,9 @@ if {[testConstraint aqua]} {
 
 # This passes on real macOS systems but fails on macOS CI runners because
 # AppleScript cannot be enabled on the runner.
-test send-8.18 {Tk_SendCmd procedure, error in remote app} {secureserver notMacCI} {
+test send-8.18 {Tk_SendCmd procedure, error in remote app} {
+    secureserver notMacCI otherProcesses
+} {
     childTkProcess create
     set app [childTkProcess eval {tk appname}]
     set result [string tolower [list [catch {send $app open bad_name} msg] \
@@ -407,7 +411,9 @@ if {[tk windowingsystem] eq "aqua"} {
     set result_8_19 {{x y z} no yes}
 }
 
-test send-8.19 {Tk_SendCmd, using modal timeouts} {secureserver notMacCI} {
+test send-8.19 {Tk_SendCmd, using modal timeouts} {
+    secureserver notMacCI otherProcesses
+} {
     childTkProcess create
     set app [childTkProcess eval {tk appname}]
     set x no
@@ -575,14 +581,18 @@ test send-10.17 {SendEventProc procedure, errorCode and errorInfo} {secureserver
     set errorInfo oldErrorInfo
     list [catch {send dummy foo} msg] $msg $errorInfo $errorCode
 } {4 {} oldErrorInfo oldErrorCode}
-test send-10.18 {SendEventProc procedure, send kills application} {secureserver testsend} {
+test send-10.18 {SendEventProc procedure, send kills application} {
+    secureserver testsend otherProcesses
+} {
     childTkProcess create
     childTkProcess eval {tk appname t_s_3}
     set x [list [catch {send t_s_3 destroy .} msg] $msg]
     childTkProcess exit
     set x
 } {0 {}}
-test send-10.19 {SendEventProc procedure, send exits} {secureserver testsend} {
+test send-10.19 {SendEventProc procedure, send exits} {
+    secureserver testsend otherProcesses
+} {
     childTkProcess create
     childTkProcess eval {tk appname t_s_3}
     set x [list [catch {send t_s_3 exit} msg] $msg]
@@ -623,7 +633,7 @@ test send-12.1 {TimeoutProc procedure} -constraints {secureserver testsend} -set
 
 catch {testsend prop root InterpRegistry ""}
 
-test send-12.2 {TimeoutProc procedure} {secureserver} {
+test send-12.2 {TimeoutProc procedure} {secureserver otherProcesses} {
     winfo interps
     tk appname tktest
     update
@@ -721,7 +731,9 @@ test send-16.1 {set variable - app in child interpreter} {unix notMacCI} {
 
 # This passes on real macOS systems but fails on macOS CI runners because
 # AppleScript cannot be enabled on the runner.
-test send-16.2 {recursive send - app in child process} {unix notMacCI} {
+test send-16.2 {recursive send - app in child process} {
+    unix notMacCI otherProcesses
+} {
     childTkProcess create
     set a no
     set this [tk appname]
@@ -733,7 +745,9 @@ test send-16.2 {recursive send - app in child process} {unix notMacCI} {
 
 # This passes on real macOS systems but fails on macOS CI runners because
 # AppleScript cannot be enabled on the runner.
-test send-17.1 {set variable - app in child process} {unix notMacCI} {
+test send-17.1 {set variable - app in child process} {
+    unix notMacCI otherProcesses
+} {
     set a "a"
     childTkProcess create
     set app [childTkProcess eval {tk appname}]

@@ -6908,7 +6908,9 @@ test bind-33.21 {simulate use of the keyboard to trigger a pattern sequence with
     destroy .t.f
 } -result {1_Button1 1_Button1_2}
 
-test bind-34.1 {-warp works relatively to a window} -setup {
+test bind-34.1 {-warp works relatively to a window} -constraints {
+    pointerWarp
+} -setup {
     toplevel .top
     wm geometry .top +100+100
     after 10 ; update
@@ -6939,7 +6941,9 @@ test bind-34.1 {-warp works relatively to a window} -setup {
 } -cleanup {
     destroy .top
 } -result 1
-test bind-34.2 {-warp works relatively to the screen} -setup {
+test bind-34.2 {-warp works relatively to the screen} -constraints {
+    pointerWarp
+} -setup {
 } -body {
     # Contrary to bind-34.1, we're directly checking screen coordinates
     event generate {} <Motion> -x 20 -y 20 -warp 1
@@ -6986,7 +6990,8 @@ test bind-34.3 {-warp works with null or negative coordinates} -setup {
     set res
 } -cleanup {
 } -result {ok ok ok ok}
-test bind-34.4 {Pointer warp relative to the root window of the screen when the Tk root window is unmapped. (Ticket e2418ce5fe)} -setup {
+test bind-34.4 {Pointer warp relative to the root window of the screen when the Tk root window is unmapped. (Ticket e2418ce5fe)} \
+	-constraints pointerWarp -setup {
     deleteWindows
     if {! [winfo ismapped .]} {
 	wm deiconify .
@@ -7004,7 +7009,8 @@ test bind-34.4 {Pointer warp relative to the root window of the screen when the 
 } -cleanup {
     wm deiconify .
 } -result {360 250}
-test bind-34.5 {Pointer warp relative to an arbitrary toplevel when the Tk root window is unmapped. (Ticket e2418ce5fe)} -setup {
+test bind-34.5 {Pointer warp relative to an arbitrary toplevel when the Tk root window is unmapped. (Ticket e2418ce5fe)} \
+	-constraints pointerWarp -setup {
     deleteWindows
     if {! [winfo ismapped .]} {
 	wm deiconify .
@@ -7107,7 +7113,8 @@ test bind-35.3 {Events agree for modifier keys} -constraints {aqua} -setup {
 } -cleanup {
 } -result pass
 
-test bind-36.1 {pointer warp with grab on toplevel, bug [e3888d5820]} -setup {
+test bind-36.1 {pointer warp with grab on toplevel, bug [e3888d5820]} \
+	-constraints pointerWarp -setup {
     event generate {} <Motion> -warp 1 -x 50 -y 50
     controlPointerWarpTiming
     toplevel .top

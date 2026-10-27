@@ -29,6 +29,15 @@ testConstraint aquaOrWin32 [expr {
     ([tk windowingsystem] eq "win32") || [testConstraint aqua]
 }]
 testConstraint haveDISPLAY [expr {[info exists env(DISPLAY)] && [testConstraint x11]}]
+
+# The X server emulation of the Wayland and Android ports serves only the
+# process: other processes cannot reach its windows (send, embedding) or take
+# the keyboard focus from it. The pointer cannot be warped, there is a single
+# colormap, and the compositor places the toplevels.
+foreach c {otherProcesses pointerWarp multipleColormaps placedToplevels} {
+    testConstraint $c [expr {[tk windowingsystem] ni {wayland android}}]
+}
+unset c
 testConstraint altDisplay  [info exists env(TK_ALT_DISPLAY)]
 
 # constraint for tests that need a window manager, e.g. to iconify a toplevel.
