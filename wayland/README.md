@@ -12,6 +12,9 @@ libdecor. No X11 library or header is used: like the Aqua and Windows ports,
 the port compiles against the X11 headers in `../xlib` and implements the part
 of Xlib which Tk uses (`tkIntXlibDecls.h`).
 
+What the compositors and libdecor do which the port has to live with (and
+which versions) is in `COMPOSITORS.md`.
+
 ## Design
 
 Tk's generic code and most of the X11 code (`../unix`) draw and manage
