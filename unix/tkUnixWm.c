@@ -4047,11 +4047,15 @@ ConfigureEvent(
 		    winPtr->pathName, configEventPtr->width,
 		    configEventPtr->height);
 	}
-	if ((wmPtr->width == -1)
-		&& (configEventPtr->width == winPtr->reqWidth)) {
+	if ((configEventPtr->width == wmPtr->configWidth)
+		|| ((wmPtr->width == -1)
+		&& (configEventPtr->width == winPtr->reqWidth))) {
 	    /*
 	     * Don't set external width, since the user didn't change it from
-	     * what the widgets asked for.
+	     * what was last asked of the window manager (the request may have
+	     * changed since, as the height of a menubar which wraps when the
+	     * window manager changes the width), or from what the widgets
+	     * asked for.
 	     */
 	} else {
 	    /*
@@ -4076,9 +4080,9 @@ ConfigureEvent(
 		}
 	    }
 	}
-	if ((wmPtr->height == -1)
-		&& (configEventPtr->height ==
-			(winPtr->reqHeight + wmPtr->menuHeight))) {
+	if ((configEventPtr->height == wmPtr->configHeight)
+		|| ((wmPtr->height == -1) && (configEventPtr->height ==
+			(winPtr->reqHeight + wmPtr->menuHeight)))) {
 	    /*
 	     * Don't set external height, since the user didn't change it from
 	     * what the widgets asked for.
