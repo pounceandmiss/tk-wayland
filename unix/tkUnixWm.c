@@ -2017,6 +2017,8 @@ WmGridCmd(
 	if (wmPtr->width != -1) {
 	    wmPtr->width = winPtr->reqWidth + (wmPtr->width
 		    - wmPtr->reqGridWidth)*wmPtr->widthInc;
+	}
+	if (wmPtr->height != -1) {
 	    wmPtr->height = winPtr->reqHeight + (wmPtr->height
 		    - wmPtr->reqGridHeight)*wmPtr->heightInc;
 	}
@@ -3970,9 +3972,17 @@ Tk_UnsetGrid(
 
     wmPtr->gridWin = NULL;
     wmPtr->sizeHintsFlags &= ~PBaseSize;
+
+    /*
+     * The width and the height are set separately: a window manager may have
+     * changed only one of them (see ConfigureEvent).
+     */
+
     if (wmPtr->width != -1) {
 	wmPtr->width = winPtr->reqWidth + (wmPtr->width
 		- wmPtr->reqGridWidth)*wmPtr->widthInc;
+    }
+    if (wmPtr->height != -1) {
 	wmPtr->height = winPtr->reqHeight + (wmPtr->height
 		- wmPtr->reqGridHeight)*wmPtr->heightInc;
     }
