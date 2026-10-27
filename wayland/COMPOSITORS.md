@@ -89,8 +89,8 @@ or leaves it alone. The tests run on each with `make test-sway`,
 
 ## Debian 12 (bookworm, oldstable): not tested
 
-Debian 12 is oldstable (Debian LTS only) and is no longer in the matrix of
-distributions the port is tested on. It cannot build the port with its own
+Debian 12 is oldstable (Debian LTS only), and the port is not tested on it
+any more. It cannot build the port with its own
 wayland-protocols (1.31, without xdg-toplevel-icon); with wayland-protocols
 1.45 from source, these were seen and left alone:
 
