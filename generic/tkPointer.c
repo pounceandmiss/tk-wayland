@@ -485,7 +485,8 @@ XUngrabPointer(
  *	None.
  *
  * Side effects:
- *	May release the current capture window.
+ *	May release the current capture window, or forget the window
+ *	controlling the cursor.
  *
  *----------------------------------------------------------------------
  */
@@ -505,6 +506,15 @@ TkPointerDeadWindow(
     }
     if (winPtr == tsdPtr->restrictWinPtr) {
 	tsdPtr->restrictWinPtr = NULL;
+    }
+
+    /*
+     * XDefineCursor follows the parents of the window controlling the
+     * cursor, which must not be a dead one.
+     */
+
+    if (winPtr == tsdPtr->cursorWinPtr) {
+	tsdPtr->cursorWinPtr = NULL;
     }
     if (!(tsdPtr->restrictWinPtr || tsdPtr->grabWinPtr)) {
 
