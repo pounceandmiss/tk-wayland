@@ -158,7 +158,9 @@ LogOutput(void)
  *
  *	Fontconfig is configured with a file written in the data directory:
  *	the fonts of the system, a cache in the data directory, and aliases
- *	of the generic families Tk uses to the fonts of Android.
+ *	of the generic families Tk uses to the fonts of Android. The aliases
+ *	of the families of other systems come first, since fontconfig applies
+ *	the rules in order.
  *
  * Results:
  *	None.
@@ -187,14 +189,6 @@ WriteFontConfig(void)
 	"  <dir>/system/fonts</dir>\n"
 	"  <dir>/product/fonts</dir>\n"
 	"  <cachedir>%s/fontconfig</cachedir>\n"
-	"  <alias><family>sans-serif</family>\n"
-	"    <prefer><family>Roboto</family><family>Noto Sans</family>"
-	"</prefer></alias>\n"
-	"  <alias><family>serif</family>\n"
-	"    <prefer><family>Noto Serif</family></prefer></alias>\n"
-	"  <alias><family>monospace</family>\n"
-	"    <prefer><family>Droid Sans Mono</family>"
-	"<family>Cutive Mono</family></prefer></alias>\n"
 	"  <alias><family>Helvetica</family>"
 	"<default><family>sans-serif</family></default></alias>\n"
 	"  <alias><family>Arial</family>"
@@ -203,6 +197,14 @@ WriteFontConfig(void)
 	"<default><family>serif</family></default></alias>\n"
 	"  <alias><family>Courier</family>"
 	"<default><family>monospace</family></default></alias>\n"
+	"  <alias><family>sans-serif</family>\n"
+	"    <prefer><family>Roboto</family><family>Noto Sans</family>"
+	"</prefer></alias>\n"
+	"  <alias><family>serif</family>\n"
+	"    <prefer><family>Noto Serif</family></prefer></alias>\n"
+	"  <alias><family>monospace</family>\n"
+	"    <prefer><family>Droid Sans Mono</family>"
+	"<family>Cutive Mono</family></prefer></alias>\n"
 	"  <match target=\"pattern\">\n"
 	"    <test qual=\"all\" name=\"family\" compare=\"not_eq\">"
 	"<string>sans-serif</string></test>\n"
