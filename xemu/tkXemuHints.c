@@ -412,7 +412,9 @@ XSetWMClientMachine(
  * RaiseTransients --
  *
  *	Raise the mapped transients of a toplevel above it, and theirs above
- *	them, as window managers and compositors keep them.
+ *	them, as window managers and compositors keep them. Transients can
+ *	make a cycle ([wm transient] does not prevent it): the depth is
+ *	limited to the number of toplevels.
  *
  * Results:
  *	None.
@@ -426,7 +428,8 @@ XSetWMClientMachine(
 static void
 RaiseTransients(
     Display *display,
-    TkXeWindow *winPtr)
+    TkXeWindow *winPtr,
+    int depth)			/* Number of toplevels raised above. */
 {
     TkXeWindow *childPtr, **transients;
     XWindowChanges changes;
@@ -438,6 +441,9 @@ RaiseTransients(
     for (childPtr = winPtr->parent->firstChild; childPtr;
 	    childPtr = childPtr->above) {
 	count++;
+    }
+    if (depth >= count) {
+	return;
     }
     transients = (TkXeWindow **)Tcl_Alloc((count + 1) * sizeof(TkXeWindow *));
     count = 0;
@@ -454,7 +460,7 @@ RaiseTransients(
     changes.stack_mode = Above;
     for (i = 0; i < count; i++) {
 	XConfigureWindow(display, transients[i]->id, CWStackMode, &changes);
-	RaiseTransients(display, transients[i]);
+	RaiseTransients(display, transients[i], depth + 1);
     }
     Tcl_Free(transients);
 }
@@ -502,7 +508,7 @@ XReconfigureWMWindow(
     }
     result = XConfigureWindow(display, w, mask, changes) == Success;
     if (raise) {
-	RaiseTransients(display, winPtr);
+	RaiseTransients(display, winPtr, 0);
     }
     return result;
 }
