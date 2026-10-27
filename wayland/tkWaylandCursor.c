@@ -26,95 +26,6 @@ typedef struct {
     int xHot, yHot;
 } TkWlCursor;
 
-/*
- * The cursors of the X cursor font, with CSS names to use if the theme does
- * not have the X name.
- */
-
-static const struct CursorName {
-    const char *name;
-    const char *cssName;
-} cursorNames[] = {
-    {"X_cursor",		"not-allowed"},
-    {"arrow",			"default"},
-    {"based_arrow_down",	"s-resize"},
-    {"based_arrow_up",		"n-resize"},
-    {"boat",			"default"},
-    {"bogosity",		"not-allowed"},
-    {"bottom_left_corner",	"sw-resize"},
-    {"bottom_right_corner",	"se-resize"},
-    {"bottom_side",		"s-resize"},
-    {"bottom_tee",		"s-resize"},
-    {"box_spiral",		"default"},
-    {"center_ptr",		"default"},
-    {"circle",			"not-allowed"},
-    {"clock",			"wait"},
-    {"coffee_mug",		"wait"},
-    {"cross",			"crosshair"},
-    {"cross_reverse",		"crosshair"},
-    {"crosshair",		"crosshair"},
-    {"diamond_cross",		"crosshair"},
-    {"dot",			"default"},
-    {"dotbox",			"default"},
-    {"double_arrow",		"ns-resize"},
-    {"draft_large",		"default"},
-    {"draft_small",		"default"},
-    {"draped_box",		"default"},
-    {"exchange",		"default"},
-    {"fleur",			"move"},
-    {"gobbler",			"default"},
-    {"gumby",			"default"},
-    {"hand1",			"pointer"},
-    {"hand2",			"pointer"},
-    {"heart",			"default"},
-    {"icon",			"default"},
-    {"iron_cross",		"crosshair"},
-    {"left_ptr",		"default"},
-    {"left_side",		"w-resize"},
-    {"left_tee",		"w-resize"},
-    {"leftbutton",		"default"},
-    {"ll_angle",		"sw-resize"},
-    {"lr_angle",		"se-resize"},
-    {"man",			"default"},
-    {"middlebutton",		"default"},
-    {"mouse",			"default"},
-    {"pencil",			"default"},
-    {"pirate",			"not-allowed"},
-    {"plus",			"cell"},
-    {"question_arrow",		"help"},
-    {"right_ptr",		"default"},
-    {"right_side",		"e-resize"},
-    {"right_tee",		"e-resize"},
-    {"rightbutton",		"default"},
-    {"rtl_logo",		"default"},
-    {"sailboat",		"default"},
-    {"sb_down_arrow",		"s-resize"},
-    {"sb_h_double_arrow",	"ew-resize"},
-    {"sb_left_arrow",		"w-resize"},
-    {"sb_right_arrow",		"e-resize"},
-    {"sb_up_arrow",		"n-resize"},
-    {"sb_v_double_arrow",	"ns-resize"},
-    {"shuttle",			"default"},
-    {"sizing",			"nwse-resize"},
-    {"spider",			"default"},
-    {"spraycan",		"default"},
-    {"star",			"default"},
-    {"target",			"crosshair"},
-    {"tcross",			"crosshair"},
-    {"top_left_arrow",		"default"},
-    {"top_left_corner",		"nw-resize"},
-    {"top_right_corner",	"ne-resize"},
-    {"top_side",		"n-resize"},
-    {"top_tee",			"n-resize"},
-    {"trek",			"default"},
-    {"ul_angle",		"nw-resize"},
-    {"umbrella",		"default"},
-    {"ur_angle",		"ne-resize"},
-    {"watch",			"wait"},
-    {"xterm",			"text"},
-    {NULL,			NULL}
-};
-
 static Cursor currentCursor = None;
 
 /*
@@ -334,9 +245,9 @@ TkGetCursorByName(
 	goto badString;
     }
     if (strcmp(argv[0], "none")) {
-	for (i = 0; cursorNames[i].name; i++) {
-	    if (!strcmp(cursorNames[i].name, argv[0])) {
-		name = cursorNames[i].name;
+	for (i = 0; tkXeCursorNames[i].name; i++) {
+	    if (!strcmp(tkXeCursorNames[i].name, argv[0])) {
+		name = tkXeCursorNames[i].name;
 		break;
 	    }
 	}
@@ -545,10 +456,10 @@ LoadCursor(
     if (cursor) {
 	return cursor;
     }
-    for (i = 0; cursorNames[i].name; i++) {
-	if (!strcmp(cursorNames[i].name, name)) {
+    for (i = 0; tkXeCursorNames[i].name; i++) {
+	if (!strcmp(tkXeCursorNames[i].name, name)) {
 	    cursor = wl_cursor_theme_get_cursor(tkXeDisplay->cursorTheme,
-		    cursorNames[i].cssName);
+		    tkXeCursorNames[i].cssName);
 	    break;
 	}
     }

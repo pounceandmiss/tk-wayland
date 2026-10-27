@@ -259,6 +259,14 @@ MODULE_SCOPE struct _FcPattern *TkXeXlfdParse(const char *name);
 MODULE_SCOPE void	TkXeError(Display *display, XID resource, int code,
 			    int request);
 
+/* tkXemuMisc.c */
+typedef struct {
+    const char *name;		/* The name in the X cursor font. */
+    const char *cssName;	/* The CSS name, for cursor themes which do
+				 * not have the X name. */
+} TkXeCursorName;
+MODULE_SCOPE const TkXeCursorName tkXeCursorNames[];
+
 /*
  * The codes of the X requests for which the emulation reports errors (as in
  * <X11/Xproto.h>).

@@ -46,12 +46,14 @@ NewCursor(void)
  *
  * TkGetCursorByName --
  *
- *	Make a cursor from a description: a name with optional colors, or
- *	files.
+ *	Make a cursor from a description: a name of the X cursor font with
+ *	optional colors, "none", or "@sourceFile fg" or "@sourceFile maskFile
+ *	fg bg" for a cursor made of bitmap files, as on X11. Android shows no
+ *	pointer cursor, so the description is only checked.
  *
  * Results:
  *	The cursor, or NULL with an error in the interpreter if the
- *	description is not a list of 1 to 4 elements.
+ *	description is not valid.
  *
  * Side effects:
  *	None.
@@ -67,12 +69,28 @@ TkGetCursorByName(
 {
     const char **argv = NULL;
     Tcl_Size argc;
+    bool valid = false;
+    int i;
 
     if (Tcl_SplitList(interp, string, &argc, &argv) != TCL_OK) {
 	return NULL;
     }
+    if (argc >= 1 && argv[0][0] == '@') {
+	if (argc == 2 || argc == 4) {
+	    Tcl_Obj *pathPtr = Tcl_NewStringObj(argv[0] + 1, -1);
+
+	    Tcl_IncrRefCount(pathPtr);
+	    valid = (Tcl_FSAccess(pathPtr, R_OK) == 0);
+	    Tcl_DecrRefCount(pathPtr);
+	}
+    } else if (argc >= 1 && argc <= 3) {
+	valid = !strcmp(argv[0], "none");
+	for (i = 0; !valid && tkXeCursorNames[i].name; i++) {
+	    valid = !strcmp(tkXeCursorNames[i].name, argv[0]);
+	}
+    }
     Tcl_Free(argv);
-    if (argc < 1 || argc > 4) {
+    if (!valid) {
 	Tcl_SetObjResult(interp, Tcl_ObjPrintf("bad cursor spec \"%s\"",
 		string));
 	Tcl_SetErrorCode(interp, "TK", "VALUE", "CURSOR", (char *)NULL);
