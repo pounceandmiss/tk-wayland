@@ -12,8 +12,8 @@
 #   (wl-clipboard), on a compositor which supports the protocols they use
 #   (such as sway). Enabled by setting the environment variable
 #   TK_WAYLAND_TEST_INPUT. The seat must have a keyboard, which headless
-#   compositors do not have: keep "wtype -s 3600000" running in the
-#   background (in a loop; longer times overflow in wtype).
+#   compositors do not have: keep a virtual keyboard with a full keymap
+#   running (wayland/tools/vkeyboard.c, as "make test-sway" does).
 # - swayPointer: swaymsg, to find windows on sway, and a virtual pointer
 #   (a program reading the commands "move X Y", "press N" and "release N",
 #   such as wayland/tools/vpointer.c), whose command is
@@ -23,6 +23,9 @@
 #   "deactivate" when the compositor activates or deactivates it (such as
 #   wayland/tools/vinputmethod.c), whose command is given in the
 #   environment variable TK_WAYLAND_INPUT_METHOD.
+# - swayRects: sway 1.11 or later, whose tree gives where windows without
+#   a border are (sway 1.10 gives the rectangle of a bordered window, 1.12
+#   the right one; 1.11 was not tried).
 #
 # The random sequences of operations (wayland-13.*) start from the seed in the
 # environment variable TK_WAYLAND_TEST_SEED, if it is set, so that other
@@ -57,6 +60,11 @@ testConstraint swayInputMethod [expr {[testConstraint swayPointer]
 	&& [info exists env(TK_WAYLAND_INPUT_METHOD)]}]
 testConstraint sway [expr {[testConstraint wayland]
 	&& [info exists env(SWAYSOCK)]}]
+testConstraint swayRects [expr {[testConstraint swayPointer]
+	&& ![catch {exec swaymsg -t get_version} version]
+	&& [regexp {"major": (\d+),\s*"minor": (\d+)} $version -> major minor]
+	&& [package vsatisfies $major.$minor 1.11-]}]
+unset -nocomplain version major minor
 # Sway does not maximize windows.
 testConstraint maximize [expr {[testConstraint wayland]
 	&& ![testConstraint sway]}]
@@ -1509,7 +1517,8 @@ test wayland-14.8 {app_id, decorations and idle inhibition in sway} -constraints
     ::tk::wayland::decorations .t server
     ::tk::wayland::inhibitidle .t 0
     ::tk::wayland::appid .t org.example.Other
-    waitFor {[swayField wlcmds border] eq "normal"}
+    waitFor {[swayField wlcmds border] eq "normal"
+	    && [swayField wlcmds app_id] eq "org.example.Other"}
     lappend result [swayField wlcmds app_id] [swayField wlcmds border] \
 	[swayField wlcmds inhibit_idle]
 } -cleanup {
@@ -1623,7 +1632,7 @@ test wayland-14.11 {rounded corners: values, and with other settings} -constrain
     destroy .t
 } -result {0 10 1 {bad radius "-1": must be a non-negative distance} 1 12 1}
 test wayland-14.12 {rounded corners are transparent} -constraints {
-    swayPointer
+    swayRects
 } -setup {
     # The main window could be over the window.
     wm withdraw .

@@ -29,7 +29,12 @@ or leaves it alone. The tests run on each with `make test-sway`,
   does not change is not taken as a resize, and the window keeps the size the
   application gave it. A stale size can still win after a gridded window is
   resized (`listbox.test` run alone, open).
-- Sway 1.11 ignores the maximization of a floating window (`wayland-4.14`).
+- Sway 1.9, 1.10 and 1.12 ignore the maximization of a floating window
+  (`wayland-4.14`).
+- Sway 1.10 gives in its tree (`swaymsg -t get_tree`) the rectangle of a
+  bordered window for a window without a border, so that tests cannot find
+  its pixels (`wayland-14.12` needs the constraint `swayRects`); sway 1.12
+  gives the right one (1.11 was not tried).
 
 ## Mutter (GNOME)
 
