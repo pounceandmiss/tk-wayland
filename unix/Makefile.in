@@ -854,6 +854,22 @@ valgrind: $(TKTEST_EXE)
 valgrindshell: $(TKTEST_EXE)
 	$(SHELL_ENV) valgrind $(VALGRINDARGS) ./$(TKTEST_EXE) $(SCRIPT)
 
+# Tests of the Wayland port in a headless compositor started for them (see
+# unix/waylandTest), with TESTFLAGS as for "make test". On sway, the tests of
+# input run too, if wtype, wl-clipboard and grim are installed.
+
+test-sway: $(TKTEST_EXE) vpointer vinputmethod
+	$(SHELL) $(UNIX_DIR)/waylandTest sway \
+		$(MAKE) test "TESTFLAGS=$(TESTFLAGS)"
+
+test-gnome: $(TKTEST_EXE)
+	$(SHELL) $(UNIX_DIR)/waylandTest gnome \
+		$(MAKE) test "TESTFLAGS=$(TESTFLAGS)"
+
+test-weston: $(TKTEST_EXE)
+	$(SHELL) $(UNIX_DIR)/waylandTest weston \
+		$(MAKE) test "TESTFLAGS=$(TESTFLAGS)"
+
 INSTALL_BASE_TARGETS = install-binaries ${INSTALL_LIBRARIES}
 INSTALL_DOC_TARGETS = install-doc
 INSTALL_DEV_TARGETS = install-headers
@@ -1056,7 +1072,7 @@ clean:
 	rm -rf *.vfs
 	rm -f *.a *.o libtk* libtcl9tk* cygtcl9tk* core errs *~ \#* TAGS *.E a.out \
 		errors ${WISH_EXE} $(TKTEST_EXE) lib.exp Tk *.rsrc \
-		 *.zip
+		 *.zip vpointer vinputmethod vp-* im-*
 
 distclean: clean
 	rm -rf Makefile config.status config.cache config.log tkConfig.sh \
@@ -1508,6 +1524,34 @@ tkWayland%.o: $(WAYLAND_DIR)/tkWayland%.c $(WAYLAND_DIR)/tkWaylandInt.h \
 		$(@TK_WINDOWINGSYSTEM@_PROTOCOL_HDRS)
 	$(CC) -c $(CC_SWITCHES) $(WAYLAND_DIR)/tkWayland$*.c
 
+# The virtual pointer and input method of the tests of input on sway, with
+# the protocols of wlroots in wayland/tools.
+
+vp-client.h:
+	$(WAYLAND_SCANNER) client-header \
+		$(WAYLAND_DIR)/tools/wlr-virtual-pointer-unstable-v1.xml $@
+
+vp-protocol.c:
+	$(WAYLAND_SCANNER) private-code \
+		$(WAYLAND_DIR)/tools/wlr-virtual-pointer-unstable-v1.xml $@
+
+im-client.h:
+	$(WAYLAND_SCANNER) client-header \
+		$(WAYLAND_DIR)/tools/input-method-unstable-v2.xml $@
+
+im-protocol.c:
+	$(WAYLAND_SCANNER) private-code \
+		$(WAYLAND_DIR)/tools/input-method-unstable-v2.xml $@
+
+vpointer: $(WAYLAND_DIR)/tools/vpointer.c vp-client.h vp-protocol.c
+	$(CC) $(CFLAGS) -I. -o $@ $(WAYLAND_DIR)/tools/vpointer.c \
+		vp-protocol.c -lwayland-client
+
+vinputmethod: $(WAYLAND_DIR)/tools/vinputmethod.c im-client.h \
+		im-protocol.c
+	$(CC) $(CFLAGS) -I. -o $@ $(WAYLAND_DIR)/tools/vinputmethod.c \
+		im-protocol.c -lwayland-client
+
 tkAndroid%.o: $(ANDROID_DIR)/tkAndroid%.c $(ANDROID_DIR)/tkAndroidInt.h \
 		$(XEMU_DIR)/tkXemuInt.h $(XEMU_DIR)/tkXemuPort.h
 	$(CC) -c $(CC_SWITCHES) $(ANDROID_DIR)/tkAndroid$*.c
@@ -1859,7 +1903,8 @@ dist: $(UNIX_DIR)/configure $(UNIX_DIR)/tkConfig.h.in $(UNIX_DIR)/tk.pc.in \
 		$(UNIX_DIR)/tkConfig.sh.in $(UNIX_DIR)/README \
 		$(UNIX_DIR)/tkConfig.h.in $(UNIX_DIR)/tk.pc.in $(DISTDIR)/unix
 	$(DIST_INSTALL_SCRIPT) $(UNIX_DIR)/configure $(UNIX_DIR)/install-sh \
-		$(UNIX_DIR)/installManPage $(DISTDIR)/unix
+		$(UNIX_DIR)/installManPage $(UNIX_DIR)/waylandTest \
+		$(DISTDIR)/unix
 	$(INSTALL_DATA_DIR) $(DISTDIR)/unix/bidi
 	@echo cp -r $(UNIX_DIR)/bidi $(DISTDIR)/unix/bidi
 	@( cd $(UNIX_DIR)/bidi; find . -type f -print ) \

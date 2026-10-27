@@ -14,13 +14,9 @@
  *
  *	Usage: vpointer WIDTH HEIGHT (the size of the layout).
  *
- *	Build it with the wlr-virtual-pointer-unstable-v1 protocol of
- *	wlr-protocols:
- *
- *	    P=/usr/share/wlr-protocols/unstable/wlr-virtual-pointer-unstable-v1.xml
- *	    wayland-scanner client-header $P vp-client.h
- *	    wayland-scanner private-code $P vp-protocol.c
- *	    cc -o vpointer vpointer.c vp-protocol.c -lwayland-client
+ *	"make vpointer" builds it in the build directory of Tk, with the
+ *	wlr-virtual-pointer-unstable-v1 protocol of wlr-protocols in this
+ *	directory; "make test-sway" uses it.
  */
 
 #include <stdio.h>

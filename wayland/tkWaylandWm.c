@@ -850,6 +850,85 @@ TkWlWmSurfaceCommitted(
 /*
  *----------------------------------------------------------------------
  *
+ * MapWaitingPopups --
+ *
+ *	Map the popups which waited for the popup which grabs the input to be
+ *	shown, at idle time, after the popup was shown or destroyed.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The popups may get their role, or wait again.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static bool waitingPopupsScheduled = false;
+
+static void
+MapWaitingPopups(
+    TCL_UNUSED(void *))
+{
+    TkXeSurface *p;
+
+    waitingPopupsScheduled = false;
+    for (p = tkXeDisplay->surfaces; p; p = p->nextPtr) {
+	if (p->popupWaiting) {
+	    p->popupWaiting = false;
+	    if (p->winPtr->mapped && p->xdgSurface == NULL) {
+		MapPopup(p);
+	    }
+	}
+    }
+}
+
+static void
+ScheduleWaitingPopups(void)
+{
+    TkXeSurface *p;
+
+    if (waitingPopupsScheduled) {
+	return;
+    }
+    for (p = tkXeDisplay->surfaces; p; p = p->nextPtr) {
+	if (p->popupWaiting) {
+	    waitingPopupsScheduled = true;
+	    Tcl_DoWhenIdle(MapWaitingPopups, NULL);
+	    return;
+	}
+    }
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWlWmSurfacePresented --
+ *
+ *	Called when a surface was shown for the first time since it got its
+ *	role: the popups waiting for it can be attached to it.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	May map the waiting popups at idle time.
+ *
+ *----------------------------------------------------------------------
+ */
+
+void
+TkWlWmSurfacePresented(
+    TkXeSurface *surfPtr)
+{
+    if (surfPtr->popupGrab) {
+	ScheduleWaitingPopups();
+    }
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
  * TkXeWmMapSurface --
  *
  *	Called when a child of the root window is mapped: give it the role of
@@ -1025,6 +1104,8 @@ TkWlSurfaceSetFrame(
     surfPtr->minimizePending = false;
     surfPtr->boundWidth = surfPtr->boundHeight = 0;
     surfPtr->frameHasContent = false;
+    surfPtr->configWidth = surfPtr->configHeight = 0;
+    surfPtr->maximizeRequest = MAXIMIZE_NONE;
 }
 
 /*
@@ -1284,6 +1365,19 @@ TkXeWmClientMessage(
 		}
 	    } else if (state == atoms._NET_WM_STATE_MAXIMIZED_VERT
 		    || state == atoms._NET_WM_STATE_MAXIMIZED_HORZ) {
+		/*
+		 * The vertical and horizontal maximizations of X11, which Tk
+		 * changes together, are one in Wayland, which is requested
+		 * once until the compositor answers: Mutter restores a window
+		 * which is unmaximized twice to the size of the screen.
+		 */
+
+		int request = on ? MAXIMIZE_SET : MAXIMIZE_UNSET;
+
+		if (surfPtr->maximizeRequest == request) {
+		    continue;
+		}
+		surfPtr->maximizeRequest = request;
 		if (on) {
 		    libdecor_frame_set_maximized(surfPtr->frame);
 		} else {
@@ -1478,6 +1572,16 @@ PopupDone(
     TkXeSurface *surfPtr = (TkXeSurface *)data;
     unsigned int state = tkXeDisplay->modState;
 
+    /*
+     * A dismissed popup can no longer be the parent of a popup (Mutter ends
+     * the connection), and no longer grabs the input.
+     */
+
+    surfPtr->popupDismissed = true;
+    if (surfPtr->popupGrab) {
+	surfPtr->popupGrab = false;
+	ScheduleWaitingPopups();
+    }
     if (!surfPtr->winPtr->mapped || TkpGetCapture() == NULL) {
 	return;
     }
@@ -1610,7 +1714,8 @@ CanBeParent(
     TkXeSurface *p;
 
     if (parentPtr == NULL || !parentPtr->winPtr->mapped
-	    || !parentPtr->presented || RoleXdgSurface(parentPtr) == NULL) {
+	    || !parentPtr->presented || parentPtr->popupDismissed
+	    || RoleXdgSurface(parentPtr) == NULL) {
 	return false;
     }
     for (p = parentPtr; p; p = p->popupParent) {
@@ -1652,6 +1757,46 @@ FindPopupParent(
     }
     for (p = tkXeDisplay->surfaces; p; p = p->nextPtr) {
 	if (CanBeParent(p, surfPtr)) {
+	    return p;
+	}
+    }
+    return NULL;
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TopGrabbingPopup --
+ *
+ *	Find the top-most popup which grabs the input: the one no other
+ *	popup which grabs it is attached to.
+ *
+ * Results:
+ *	The popup, or NULL if no popup grabs the input.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static TkXeSurface *
+TopGrabbingPopup(
+    TkXeSurface *surfPtr)
+{
+    TkXeSurface *p, *q;
+
+    for (p = tkXeDisplay->surfaces; p; p = p->nextPtr) {
+	if (p == surfPtr || !p->popupGrab || p->xdgPopup == NULL) {
+	    continue;
+	}
+	for (q = tkXeDisplay->surfaces; q; q = q->nextPtr) {
+	    if (q != surfPtr && q->popupGrab && q->xdgPopup
+		    && q->popupParent == p) {
+		break;
+	    }
+	}
+	if (q == NULL) {
 	    return p;
 	}
     }
@@ -1725,6 +1870,25 @@ MapPopup(
     if (tkXeDisplay->wmBase == NULL) {
 	return;
     }
+
+    /*
+     * A popup which grabs the input must be attached to the top-most popup
+     * which grabs it (Mutter ends the connection otherwise), such as a
+     * cascade to its menu, which must have been shown: the popup waits for
+     * it.
+     */
+
+    if (PopupGrabs(winPtr) && tkXeDisplay->seat) {
+	TkXeSurface *topPtr = TopGrabbingPopup(surfPtr);
+
+	if (topPtr) {
+	    if (!topPtr->presented) {
+		surfPtr->popupWaiting = true;
+		return;
+	    }
+	    parentPtr = topPtr;
+	}
+    }
     TkWlSurfaceSetRole(surfPtr,
 	    parentPtr ? TKWL_ROLE_POPUP : TKWL_ROLE_TOPLEVEL);
     surfPtr->configured = false;
@@ -1778,6 +1942,7 @@ MapPopup(
 	if (PopupGrabs(winPtr) && tkXeDisplay->seat) {
 	    xdg_popup_grab(surfPtr->xdgPopup, tkXeDisplay->seat,
 		    tkXeDisplay->lastSerial);
+	    surfPtr->popupGrab = true;
 	}
     } else {
 	surfPtr->xdgToplevel = xdg_surface_get_toplevel(surfPtr->xdgSurface);
@@ -1845,6 +2010,16 @@ DestroyRole(
 	surfPtr->xdgSurface = NULL;
     }
     surfPtr->popupParent = NULL;
+    surfPtr->popupWaiting = false;
+    surfPtr->popupDismissed = false;
+    if (surfPtr->popupGrab) {
+	/*
+	 * The popups which waited for it are attached to the next one.
+	 */
+
+	surfPtr->popupGrab = false;
+	ScheduleWaitingPopups();
+    }
     TkWlCmdsSurfaceUnmapped(surfPtr);
     TkWlSurfaceSetFrame(surfPtr, NULL);
 }
@@ -1888,6 +2063,7 @@ FrameConfigure(
     int width, height, oldBoundWidth, oldBoundHeight;
 
     libdecor_configuration_get_window_state(configuration, &windowState);
+    surfPtr->maximizeRequest = MAXIMIZE_NONE;
     if (!libdecor_configuration_get_content_size(configuration, frame,
 	    &width, &height) || width <= 0 || height <= 0) {
 	width = height = 0;
@@ -1927,6 +2103,28 @@ FrameConfigure(
      * instance) would undo the resize.
      */
 
+    if (!(windowState & (LIBDECOR_WINDOW_STATE_MAXIMIZED
+	    | LIBDECOR_WINDOW_STATE_FULLSCREEN
+	    | LIBDECOR_WINDOW_STATE_TILED_LEFT
+	    | LIBDECOR_WINDOW_STATE_TILED_RIGHT
+	    | LIBDECOR_WINDOW_STATE_TILED_TOP
+	    | LIBDECOR_WINDOW_STATE_TILED_BOTTOM))) {
+	/*
+	 * Sway sends a floating window the size it gave it before in the
+	 * configures of other changes (activation, a maximization which it
+	 * ignores): a size which does not change is not a resize, and the
+	 * window keeps the size the application gave it.
+	 */
+
+	if (width == surfPtr->configWidth && height == surfPtr->configHeight) {
+	    width = height = 0;
+	} else {
+	    surfPtr->configWidth = width;
+	    surfPtr->configHeight = height;
+	}
+    } else {
+	surfPtr->configWidth = surfPtr->configHeight = 0;
+    }
     if ((surfPtr->resized || surfPtr->resizeSync)
 	    && !(windowState & (LIBDECOR_WINDOW_STATE_MAXIMIZED
 		| LIBDECOR_WINDOW_STATE_FULLSCREEN

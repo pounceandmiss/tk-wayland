@@ -78,6 +78,11 @@ struct TkXeSurface {
     struct xdg_toplevel *xdgToplevel;
     struct TkXeSurface *popupParent;
 				/* The surface a popup is attached to. */
+    bool popupGrab;		/* The popup grabs the input. */
+    bool popupDismissed;	/* The compositor dismissed the popup. */
+    bool popupWaiting;		/* The popup waits for the popup which
+				 * grabs the input to be shown, to be
+				 * attached to it. */
     bool configured;		/* The compositor has sent the first
 				 * configure event. */
     bool iconic;		/* The window was iconified: the X window is
@@ -117,6 +122,11 @@ struct TkXeSurface {
     bool boundExact;		/* Maximized (even if also fullscreen): the
 				 * window must have exactly that size. */
     int maxWidth, maxHeight;	/* Maximum size given to libdecor, or 0. */
+    int configWidth, configHeight;
+				/* Size the compositor last gave the floating
+				 * window, or 0. */
+    int maximizeRequest;	/* MAXIMIZE_*: the maximization requested
+				 * since the last configure. */
     bool frameHasContent;	/* The frame was committed with a size: the
 				 * visibility of its decorations can be set,
 				 * which libdecor before 0.2.3 crashes on
@@ -253,9 +263,18 @@ MODULE_SCOPE void	TkWlSurfaceSetOpacity(TkXeSurface *surfPtr,
 #define TKWL_ROLE_TOPLEVEL	1
 #define TKWL_ROLE_POPUP		2
 
+/*
+ * The maximizations requested from the compositor (maximizeRequest).
+ */
+
+#define MAXIMIZE_NONE		0
+#define MAXIMIZE_SET		1
+#define MAXIMIZE_UNSET		2
+
 /* tkWaylandWm.c */
 MODULE_SCOPE void	TkWlWmUnmapSurface(TkXeSurface *surfPtr);
 MODULE_SCOPE void	TkWlWmSurfaceCommitted(TkXeSurface *surfPtr);
+MODULE_SCOPE void	TkWlWmSurfacePresented(TkXeSurface *surfPtr);
 MODULE_SCOPE void	TkWlSurfaceSetFrame(TkXeSurface *surfPtr,
 			    struct libdecor_frame *frame);
 

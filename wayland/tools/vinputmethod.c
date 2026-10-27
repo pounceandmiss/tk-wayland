@@ -13,13 +13,9 @@
  *	It prints "ready" once it has its input method, and runs until its
  *	standard input is closed.
  *
- *	Build it with the input-method-unstable-v2 protocol of wlroots (in
- *	the protocol directory of its sources):
- *
- *	    P=input-method-unstable-v2.xml
- *	    wayland-scanner client-header $P im-client.h
- *	    wayland-scanner private-code $P im-protocol.c
- *	    cc -o vinputmethod vinputmethod.c im-protocol.c -lwayland-client
+ *	"make vinputmethod" builds it in the build directory of Tk, with the
+ *	input-method-unstable-v2 protocol of wlroots in this directory; "make
+ *	test-sway" uses it.
  */
 
 #include <poll.h>

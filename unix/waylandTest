@@ -1,0 +1,153 @@
+#!/bin/sh
+#
+# waylandTest --
+#
+#	Run a command (the tests of Tk, for "make test-sway", "make test-gnome"
+#	and "make test-weston") in a headless Wayland compositor started for
+#	it, which is stopped after:
+#
+#	    waylandTest sway|gnome|weston command ?arg ...?
+#
+#	The output of the compositor is 1366x768. On sway, the tests of input
+#	in wayland.test are enabled if wtype, wl-clipboard and grim are
+#	installed: the seat gets a keyboard from wtype, and the virtual
+#	pointer and input method built in the current directory (vpointer and
+#	vinputmethod) are given to the tests. On GNOME (mutter), the
+#	compositor has a session bus of its own, so that it does not meet the
+#	one of a running desktop.
+#
+# Copyright © 2026 The Tk developers.
+#
+# See the file "license.terms" for information on usage and redistribution of
+# this file, and for a DISCLAIMER OF ALL WARRANTIES.
+
+WIDTH=1366
+HEIGHT=768
+
+if [ $# -lt 2 ]; then
+    echo "usage: $0 sway|gnome|weston command ?arg ...?" >&2
+    exit 2
+fi
+compositor=$1
+shift
+
+case $compositor in
+    sway)   need=sway ;;
+    gnome)  need="mutter dbus-run-session" ;;
+    weston) need=weston ;;
+    *)	    echo "$0: unknown compositor \"$compositor\"" >&2; exit 2 ;;
+esac
+for program in $need; do
+    if ! command -v $program >/dev/null 2>&1; then
+	echo "$0: $program is not installed" >&2
+	exit 1
+    fi
+done
+
+# mutter gets a session bus of its own: the script runs again in one.
+
+if [ $compositor = gnome ] && [ -z "$TK_WAYLAND_TEST_BUS" ]; then
+    TK_WAYLAND_TEST_BUS=1
+    export TK_WAYLAND_TEST_BUS
+    exec dbus-run-session -- /bin/sh "$0" gnome "$@"
+fi
+
+if [ -z "$XDG_RUNTIME_DIR" ]; then
+    XDG_RUNTIME_DIR=`mktemp -d "${TMPDIR:-/tmp}/tkxdg.XXXXXX"` || exit 1
+    export XDG_RUNTIME_DIR
+fi
+work=`mktemp -d "${TMPDIR:-/tmp}/tkwayland.XXXXXX"` || exit 1
+socket=tk-test-$$
+pids=""
+cleanup() {
+    for pid in $pids; do
+	kill $pid 2>/dev/null
+    done
+    rm -rf "$work"
+}
+trap cleanup EXIT
+trap 'exit 1' INT TERM
+
+# Wait for a file to exist, for at most 10 seconds.
+
+waitFile() {
+    tries=0
+    while [ ! -e "$1" ]; do
+	tries=`expr $tries + 1`
+	if [ $tries -gt 100 ]; then
+	    echo "$0: $compositor did not start; its output:" >&2
+	    cat "$work/log" >&2
+	    exit 1
+	fi
+	sleep 0.1
+    done
+}
+
+case $compositor in
+    sway)
+	# The command of the configuration tells the environment of the
+	# session: the Wayland display and the socket of swaymsg.
+
+	cat > "$work/config" <<EOF
+output HEADLESS-1 resolution ${WIDTH}x$HEIGHT
+for_window [all] floating enable
+exec env > "$work/env.tmp" && mv "$work/env.tmp" "$work/env"
+EOF
+	WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 WLR_RENDERER=pixman \
+		sway -c "$work/config" > "$work/log" 2>&1 &
+	pids="$pids $!"
+	waitFile "$work/env"
+	WAYLAND_DISPLAY=`sed -n 's/^WAYLAND_DISPLAY=//p' "$work/env"`
+	SWAYSOCK=`sed -n 's/^SWAYSOCK=//p' "$work/env"`
+	export WAYLAND_DISPLAY SWAYSOCK
+
+	if command -v wtype >/dev/null && command -v wl-paste >/dev/null \
+		&& command -v grim >/dev/null; then
+	    # The headless seat has no keyboard: wtype keeps one (longer
+	    # times overflow in wtype).
+
+	    (while :; do wtype -s 3600000; done) > /dev/null 2>&1 &
+	    pids="$pids $!"
+	    TK_WAYLAND_TEST_INPUT=1
+	    export TK_WAYLAND_TEST_INPUT
+	    if [ -x ./vpointer ]; then
+		TK_WAYLAND_VPOINTER="`pwd`/vpointer $WIDTH $HEIGHT"
+		export TK_WAYLAND_VPOINTER
+	    fi
+	    if [ -x ./vinputmethod ]; then
+		TK_WAYLAND_INPUT_METHOD=`pwd`/vinputmethod
+		export TK_WAYLAND_INPUT_METHOD
+	    fi
+	else
+	    echo "$0: wtype, wl-clipboard or grim is not installed:" \
+		    "the tests of input are skipped" >&2
+	fi
+	;;
+    gnome)
+	mutter --headless --wayland --no-x11 \
+		--virtual-monitor ${WIDTH}x$HEIGHT \
+		--wayland-display $socket > "$work/log" 2>&1 &
+	pids="$pids $!"
+	waitFile "$XDG_RUNTIME_DIR/$socket"
+	WAYLAND_DISPLAY=$socket
+	export WAYLAND_DISPLAY
+	;;
+    weston)
+	# Weston before 11 names its backends by their modules.
+
+	if weston --help 2>&1 | grep -q -- --renderer; then
+	    backend="--backend=headless --renderer=pixman"
+	else
+	    backend="--backend=headless-backend.so --use-pixman"
+	fi
+	weston $backend --width=$WIDTH --height=$HEIGHT --socket=$socket \
+		--idle-time=0 > "$work/log" 2>&1 &
+	pids="$pids $!"
+	waitFile "$XDG_RUNTIME_DIR/$socket"
+	WAYLAND_DISPLAY=$socket
+	export WAYLAND_DISPLAY
+	;;
+esac
+
+unset DISPLAY
+"$@"

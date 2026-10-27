@@ -3,6 +3,10 @@
 # sensitive to), drawing, window attributes, cursors, icons, bidirectional
 # text and selections.
 #
+# "make test-sway", "make test-gnome" and "make test-weston" run the tests in a
+# headless compositor started for them (see unix/waylandTest), which sets up
+# what the tests of input need on sway.
+#
 # Some tests drive the compositor from outside, and need additional tools:
 # - waylandInput: wtype (virtual keyboard), wl-copy and wl-paste
 #   (wl-clipboard), on a compositor which supports the protocols they use
@@ -51,6 +55,11 @@ testConstraint swayPointer [expr {[testConstraint waylandInput]
 	&& [info exists env(TK_WAYLAND_VPOINTER)]}]
 testConstraint swayInputMethod [expr {[testConstraint swayPointer]
 	&& [info exists env(TK_WAYLAND_INPUT_METHOD)]}]
+testConstraint sway [expr {[testConstraint wayland]
+	&& [info exists env(SWAYSOCK)]}]
+# Sway does not maximize windows.
+testConstraint maximize [expr {[testConstraint wayland]
+	&& ![testConstraint sway]}]
 
 # Ensure a pristine initial window state
 resetWindows
@@ -701,7 +710,7 @@ test wayland-4.8 {fullscreen, then the size before} -constraints {
     unset -nocomplain result
 } -result {1 1 0 300 200}
 test wayland-4.9 {zoomed, then the size before} -constraints {
-    wayland
+    maximize
 } -setup {
     toplevel .t
     waitShown .t
@@ -812,6 +821,23 @@ test wayland-4.13 {iconify and deiconify keep the size} -constraints {
     destroy .t
     unset -nocomplain result
 } -result {iconic normal 260 180}
+test wayland-4.14 {a maximization ignored by sway keeps the size} -constraints {
+    sway
+} -setup {
+    toplevel .t
+    waitShown .t
+    wm geometry .t 300x200
+    waitFor {[winfo width .t] == 300 && [winfo height .t] == 200}
+} -body {
+    # Sway answers with the size it first gave the window.
+    wm attributes .t -zoomed 1
+    update
+    after 500
+    update
+    list [winfo width .t] [winfo height .t]
+} -cleanup {
+    destroy .t
+} -result {300 200}
 
 # Cursors
 
@@ -1518,11 +1544,14 @@ test wayland-14.9 {move a window by dragging it} -constraints {
     # works after the move.
     swayClick .t.b 5 5
     waitFor {$::wlclicked}
-    list [expr {$x1 - $x0}] [expr {$y1 - $y0}] $::wlclicked
+    # The compositor moves the window by the motion of the pointer, which
+    # it may round (sway 1.12 moves it 99 pixels).
+    list [expr {abs($x1 - $x0 - 100) <= 1}] [expr {abs($y1 - $y0 - 50) <= 1}] \
+	    $::wlclicked
 } -cleanup {
     destroy .t
     unset -nocomplain ::wlclicked
-} -result {100 50 1}
+} -result {1 1 1}
 test wayland-14.10 {resize a window by dragging its corner} -constraints {
     swayPointer
 } -setup {

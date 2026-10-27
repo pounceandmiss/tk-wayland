@@ -974,6 +974,10 @@ FrameDone(
 
     wl_callback_destroy(callback);
     surfPtr->frameCallback = NULL;
+    if (surfPtr->committed && !surfPtr->presented) {
+	surfPtr->presented = true;
+	TkWlWmSurfacePresented(surfPtr);
+    }
     surfPtr->presented = surfPtr->committed;
     if (pixman_region32_not_empty(&surfPtr->damage)) {
 	SchedulePresent(surfPtr);
