@@ -518,7 +518,14 @@ test wayland-3.2 {photo images are composited with their alpha channel} -constra
     toplevel .t -bg #0000ff
     image create photo wl32 -width 10 -height 10
     wl32 put #ff0000 -to 0 0 10 10
-    wl32 transparency set 5 5 1
+
+    # The transparent part is 3x3, so that its middle is not blended with
+    # the rest when the image is scaled (at a fractional scale).
+    foreach x {4 5 6} {
+	foreach y {4 5 6} {
+	    wl32 transparency set $x $y 1
+	}
+    }
     label .t.l -image wl32 -bd 0 -padx 0 -pady 0 -highlightthickness 0 \
 	    -bg #0000ff
     pack .t.l
@@ -1653,15 +1660,19 @@ test wayland-14.12 {rounded corners are transparent} -constraints {
 	return $rgb
     }
 } -body {
+    # The pixels are taken a pixel inside the edges, which are blended at a
+    # fractional scale.
     lassign [swayRect wlcorners] x y
     waitFor {[pixel [expr {$x + 100}] [expr {$y + 60}]] eq {255 0 0}}
-    set result [list [pixel $x $y] [pixel [expr {$x + 100}] [expr {$y + 60}]]]
+    set result [list [pixel [expr {$x + 1}] [expr {$y + 1}]] \
+	    [pixel [expr {$x + 100}] [expr {$y + 60}]]]
     ::tk::wayland::corners .t 16
     update
     after 200
     update
-    lappend result [pixel $x $y] [pixel [expr {$x + 199}] [expr {$y + 119}]] \
-	[pixel [expr {$x + 100}] [expr {$y + 1}]]
+    lappend result [pixel [expr {$x + 1}] [expr {$y + 1}]] \
+	    [pixel [expr {$x + 198}] [expr {$y + 118}]] \
+	    [pixel [expr {$x + 100}] [expr {$y + 1}]]
 
     # Square again when the window has decorations.
     ::tk::wayland::decorations .t server
@@ -1669,7 +1680,7 @@ test wayland-14.12 {rounded corners are transparent} -constraints {
     after 200
     update
     lassign [swayRect wlcorners] x y
-    lappend result [pixel $x $y]
+    lappend result [pixel [expr {$x + 1}] [expr {$y + 1}]]
 } -cleanup {
     destroy .t
     rename pixel {}

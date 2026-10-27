@@ -18,6 +18,12 @@ or leaves it alone. The tests run on each with `make test-sway`,
   `unixEmbed.test` assume X11 without a window manager, where focus changes
   are immediate: they are not expected to pass everywhere, and timing tuned
   for one compositor broke them on another.
+- **Fractional scales.** The scale of `wl_output` is an integer (2 for an
+  output at 1.5); the logical size of an output comes from xdg-output, and the
+  scale of a surface from fractional-scale-v1. Images and the edges of
+  windows are blended at fractional scales, so tests compare pixels away
+  from edges. Tested at 1.25, 1.5 and 2 on sway, and 2 on Weston
+  (`TK_WAYLAND_TEST_SCALE`).
 - **Toplevels are placed by the compositor.** `wm geometry +x+y` is not
   applied, and Tk does not know where its toplevels are (constraint
   `placedToplevels` in the tests).
@@ -51,6 +57,8 @@ or leaves it alone. The tests run on each with `make test-sway`,
 
 - Draws the decorations itself (server-side), so the minimum size of the
   decorations of libdecor does not apply.
+- `kwin_wayland --virtual --scale` makes the virtual output larger at the
+  scale 1 instead of scaling it, so KWin is only tested at the scale 1.
 - `kwin_wayland` has file capabilities (`CAP_SYS_RESOURCE` on Debian), so it
   does not start in a container which drops them.
 
