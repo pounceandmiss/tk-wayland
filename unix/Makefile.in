@@ -858,7 +858,7 @@ valgrindshell: $(TKTEST_EXE)
 # unix/waylandTest), with TESTFLAGS as for "make test". On sway, the tests of
 # input run too, if wtype, wl-clipboard and grim are installed.
 
-test-sway: $(TKTEST_EXE) vpointer vinputmethod
+test-sway: $(TKTEST_EXE) vpointer vkeyboard vinputmethod
 	$(SHELL) $(UNIX_DIR)/waylandTest sway \
 		$(MAKE) test "TESTFLAGS=$(TESTFLAGS)"
 
@@ -1076,7 +1076,7 @@ clean:
 	rm -rf *.vfs
 	rm -f *.a *.o libtk* libtcl9tk* cygtcl9tk* core errs *~ \#* TAGS *.E a.out \
 		errors ${WISH_EXE} $(TKTEST_EXE) lib.exp Tk *.rsrc \
-		 *.zip vpointer vinputmethod vp-* im-*
+		 *.zip vpointer vkeyboard vinputmethod vp-* vk-* im-*
 
 distclean: clean
 	rm -rf Makefile config.status config.cache config.log tkConfig.sh \
@@ -1539,6 +1539,14 @@ vp-protocol.c:
 	$(WAYLAND_SCANNER) private-code \
 		$(WAYLAND_DIR)/tools/wlr-virtual-pointer-unstable-v1.xml $@
 
+vk-client.h:
+	$(WAYLAND_SCANNER) client-header \
+		$(WAYLAND_DIR)/tools/virtual-keyboard-unstable-v1.xml $@
+
+vk-protocol.c:
+	$(WAYLAND_SCANNER) private-code \
+		$(WAYLAND_DIR)/tools/virtual-keyboard-unstable-v1.xml $@
+
 im-client.h:
 	$(WAYLAND_SCANNER) client-header \
 		$(WAYLAND_DIR)/tools/input-method-unstable-v2.xml $@
@@ -1550,6 +1558,10 @@ im-protocol.c:
 vpointer: $(WAYLAND_DIR)/tools/vpointer.c vp-client.h vp-protocol.c
 	$(CC) $(CFLAGS) -I. -o $@ $(WAYLAND_DIR)/tools/vpointer.c \
 		vp-protocol.c -lwayland-client
+
+vkeyboard: $(WAYLAND_DIR)/tools/vkeyboard.c vk-client.h vk-protocol.c
+	$(CC) $(CFLAGS) -I. -o $@ $(WAYLAND_DIR)/tools/vkeyboard.c \
+		vk-protocol.c -lxkbcommon -lwayland-client
 
 vinputmethod: $(WAYLAND_DIR)/tools/vinputmethod.c im-client.h \
 		im-protocol.c
