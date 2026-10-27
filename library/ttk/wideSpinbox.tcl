@@ -71,10 +71,11 @@ proc ttk::wideSpinbox::CreateElements theme {
     CreateElem WideSpinbox.downarrow image [list $img \
 	    disabled $dImg  pressed $pImg  active $aImg]
 
-    # Create the WideSpinbox.gap element
+    # Create the WideSpinbox.gap element.  Its image is created for each
+    # theme, since the one of an earlier theme may have been deleted.
 
-    variable gapImg
-    CreateElem WideSpinbox.gap image $gapImg
+    CreateElem WideSpinbox.gap image [CreateImg -data {
+<svg width="4" height="16" version="1.1" xmlns="http://www.w3.org/2000/svg"/>}]
 
     # Create the Wide.TSpinbox layout
 
@@ -245,8 +246,6 @@ proc ttk::wideSpinbox::CondMakeElements {} {
 
 	interp alias {} ::ttk::wideSpinbox::CreateImg \
 		     {} image create photo -format $::tk::svgFmt
-	variable gapImg [CreateImg -data {
-<svg width="4" height="16" version="1.1" xmlns="http://www.w3.org/2000/svg"/>}]
 
 	set theme [ttk::style theme use]
 	CreateElements $theme

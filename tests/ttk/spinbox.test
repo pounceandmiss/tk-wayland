@@ -489,6 +489,26 @@ test spinbox-6.4 {arrows of a tall spinbox take half of its height} -constraints
 
 rename tallSpinbox {}
 
+test spinbox-7.1 {Wide.TSpinbox in a new theme after all images are deleted} -setup {
+    interp create child
+    load {} Tk child
+} -body {
+    child eval {
+	set errors {}
+	interp bgerror {} {apply {{msg opts} {lappend ::errors $msg}}}
+	ttk::spinbox .sb -style Wide.TSpinbox
+	pack .sb
+	update
+	image delete {*}[image names]
+	ttk::style theme create spinboxTest -parent default
+	ttk::style theme use spinboxTest
+	update
+	set errors
+    }
+} -cleanup {
+    interp delete child
+} -result {}
+
 #
 # TESTFILE CLEANUP
 #
