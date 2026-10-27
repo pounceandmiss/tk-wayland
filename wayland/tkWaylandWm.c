@@ -332,6 +332,19 @@ ApplySizeHints(
 	    maxHeight = (int)hints[SH_MAX_HEIGHT];
 	}
     }
+
+    /*
+     * libdecor fails for good when the minimum size is larger than the
+     * maximum size, which window managers of X11 accept: the minimum size
+     * wins, as in the geometry management of Tk.
+     */
+
+    if (maxWidth > 0 && maxWidth < minWidth) {
+	maxWidth = minWidth;
+    }
+    if (maxHeight > 0 && maxHeight < minHeight) {
+	maxHeight = minHeight;
+    }
     libdecor_frame_set_min_content_size(surfPtr->frame, minWidth, minHeight);
     libdecor_frame_set_max_content_size(surfPtr->frame, maxWidth, maxHeight);
     if (maxWidth > 0 && maxWidth == minWidth && maxHeight == minHeight) {
@@ -367,9 +380,22 @@ ApplyTransient(
     long *container = GetLongs(surfPtr->winPtr, XA_WM_TRANSIENT_FOR, 1);
     TkXeSurface *parentPtr = container
 	    ? TkXeGetSurface((Window)container[0]) : NULL;
+    struct xdg_toplevel *toplevel;
 
-    libdecor_frame_set_parent(surfPtr->frame,
-	    (parentPtr && parentPtr->frame) ? parentPtr->frame : NULL);
+    if (parentPtr && parentPtr->frame) {
+	libdecor_frame_set_parent(surfPtr->frame, parentPtr->frame);
+	return;
+    }
+
+    /*
+     * libdecor before 0.2.3 crashes when the parent is NULL: the parent is
+     * unset on the xdg_toplevel itself.
+     */
+
+    toplevel = libdecor_frame_get_xdg_toplevel(surfPtr->frame);
+    if (toplevel) {
+	xdg_toplevel_set_parent(toplevel, NULL);
+    }
 }
 
 /*
@@ -801,7 +827,8 @@ TkXeWmMapSurface(
  * MapToplevel --
  *
  *	Give a surface the role of a toplevel decorated by libdecor, at idle
- *	time, and apply the hints in the properties of its window.
+ *	time, and apply the hints in the properties of its window. If libdecor
+ *	failed, the toplevel is undecorated.
  *
  * Results:
  *	None.
@@ -829,6 +856,15 @@ MapToplevel(
     surfPtr->committed = false;
     surfPtr->frame = libdecor_decorate(tkXeDisplay->decor, surfPtr->surface,
 	    &frameInterface, surfPtr);
+    if (surfPtr->frame == NULL) {
+	/*
+	 * libdecor gives no more frames after an error: the toplevel is
+	 * undecorated, as without libdecor.
+	 */
+
+	MapPopup(surfPtr);
+	return;
+    }
     ApplyTitle(surfPtr);
     ApplyClass(surfPtr);
     ApplySizeHints(surfPtr);
@@ -890,7 +926,8 @@ TkWlWmUnmapSurface(
  *	None.
  *
  * Side effects:
- *	The previous frame is released; the surface is no longer iconic.
+ *	The previous frame is released; the surface is no longer iconic, and
+ *	no longer has the size of a maximized or fullscreen window.
  *
  *----------------------------------------------------------------------
  */
@@ -906,6 +943,7 @@ TkWlSurfaceSetFrame(
     surfPtr->frame = frame;
     surfPtr->iconic = false;
     surfPtr->minimizePending = false;
+    surfPtr->boundWidth = surfPtr->boundHeight = 0;
 }
 
 /*
@@ -914,13 +952,16 @@ TkWlSurfaceSetFrame(
  * ClampSize --
  *
  *	Raise a size to the minimum size of the decorations (the header bar of
- *	the GTK plugin of libdecor), which the window cannot be smaller than.
+ *	the GTK plugin of libdecor), which the window cannot be smaller than,
+ *	then lower it to the size the compositor gave a maximized or
+ *	fullscreen window, which it must not exceed (the compositor ends the
+ *	connection otherwise).
  *
  * Results:
  *	None.
  *
  * Side effects:
- *	*widthPtr and *heightPtr may be increased.
+ *	*widthPtr and *heightPtr may change.
  *
  *----------------------------------------------------------------------
  */
@@ -939,6 +980,12 @@ ClampSize(
     }
     if (*heightPtr < minHeight) {
 	*heightPtr = minHeight;
+    }
+    if (surfPtr->boundWidth > 0 && *widthPtr > surfPtr->boundWidth) {
+	*widthPtr = surfPtr->boundWidth;
+    }
+    if (surfPtr->boundHeight > 0 && *heightPtr > surfPtr->boundHeight) {
+	*heightPtr = surfPtr->boundHeight;
     }
 }
 
@@ -1742,6 +1789,13 @@ FrameConfigure(
     if (!libdecor_configuration_get_content_size(configuration, frame,
 	    &width, &height) || width <= 0 || height <= 0) {
 	width = height = 0;
+    }
+    if (windowState & (LIBDECOR_WINDOW_STATE_MAXIMIZED
+	    | LIBDECOR_WINDOW_STATE_FULLSCREEN)) {
+	surfPtr->boundWidth = width;
+	surfPtr->boundHeight = height;
+    } else {
+	surfPtr->boundWidth = surfPtr->boundHeight = 0;
     }
 
     /*

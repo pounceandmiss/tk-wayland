@@ -598,6 +598,61 @@ test wayland-4.3 {window title with any characters} -constraints {
 } -cleanup {
     destroy .t
 } -result 1
+test wayland-4.4 {minimum size larger than the maximum size} -constraints {
+    wayland
+} -setup {
+    toplevel .t
+    waitShown .t
+} -body {
+    wm maxsize .t 100 100
+    wm minsize .t 300 300
+    update
+    wm minsize .t 50 50
+    wm maxsize .t 40 40
+    update
+    stillConnected
+} -cleanup {
+    destroy .t
+} -result 1
+test wayland-4.5 {fullscreen window with a minimum size larger than the screen} -constraints {
+    wayland
+} -setup {
+    toplevel .t
+    waitShown .t
+} -body {
+    wm attributes .t -fullscreen 1
+    update
+    after 100
+    update
+    wm minsize .t 10000 10000
+    update
+    wm geometry .t 12000x12000
+    update
+    wm attributes .t -fullscreen 0
+    update
+    stillConnected
+} -cleanup {
+    destroy .t
+} -result 1
+test wayland-4.6 {transient set and unset} -constraints {
+    wayland
+} -setup {
+    toplevel .t
+    toplevel .d
+    waitShown .d
+} -body {
+    wm transient .d .t
+    update
+    wm transient .d {}
+    update
+    wm withdraw .d
+    update
+    wm deiconify .d
+    waitShown .d
+    stillConnected
+} -cleanup {
+    destroy .d .t
+} -result 1
 
 # Cursors
 

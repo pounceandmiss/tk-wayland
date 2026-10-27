@@ -110,6 +110,10 @@ struct TkXeSurface {
     int floatingWidth, floatingHeight;
 				/* Size before being maximized or made
 				 * fullscreen, restored after. */
+    int boundWidth, boundHeight;
+				/* Size the compositor gave the window when
+				 * maximized or fullscreen, which it must not
+				 * exceed, or 0. */
     bool inConfigure;		/* The window is being resized by the
 				 * compositor. */
     bool committed;		/* A buffer was attached. */
