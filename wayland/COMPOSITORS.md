@@ -29,11 +29,7 @@ or leaves it alone. The tests run on each with `make test-sway`,
   does not change is not taken as a resize, and the window keeps the size the
   application gave it. A stale size can still win after a gridded window is
   resized (`listbox.test` run alone, open).
-- Sway 1.11 ignores the maximization of a floating window (`wayland-4.14`);
-  sway 1.7 (Debian 12) maximizes it, and does not make a window fullscreen at
-  the size of the output (`wayland-4.8`, `wayland-4.12`).
-- Open: with sway 1.7 the connection is lost after `wayland-4.14` when the
-  whole of `wayland.test` runs; the test after it passes alone.
+- Sway 1.11 ignores the maximization of a floating window (`wayland-4.14`).
 
 ## Mutter (GNOME)
 
@@ -64,13 +60,6 @@ or leaves it alone. The tests run on each with `make test-sway`,
 - Toplevels cannot be minimized before they are shown: a toplevel iconified
   before its first buffer is unmapped for Tk at once, and minimized after its
   first buffer.
-- Weston 10 (Debian 12), not worked around: when a fullscreen window whose
-  size changed is maximized and leaves fullscreen, it sends a maximized
-  configure of 0x0, and ends the connection if the committed geometry changes
-  ("xdg_surface geometry does not match the configured maximized state
-  (0 x 0)"). The random test `wayland-13.2` hits it now and then. Not
-  acknowledging the configure leaves an ordinary window fullscreen, and
-  answering with the last size given triggers the error.
 - The move which `unixWm.test` makes to measure the offsets of the window
   manager is sometimes applied late, and then all of `unixWm-2.*` and
   `unixWm-3.*` fail together.
@@ -97,3 +86,25 @@ or leaves it alone. The tests run on each with `make test-sway`,
   maximum size; the maximum size is raised as well.
 - libdecor 0.1.0 (Ubuntu 22.04) lacks `libdecor_frame_get_min_content_size`,
   so the port does not build with it.
+
+## Debian 12 (bookworm, oldstable): not tested
+
+Debian 12 is oldstable (Debian LTS only) and is no longer in the matrix of
+distributions the port is tested on. It cannot build the port with its own
+wayland-protocols (1.31, without xdg-toplevel-icon); with wayland-protocols
+1.45 from source, these were seen and left alone:
+
+- KWin 5.27 with libdecor 0.1.1: Tk sometimes crashes (SIGSEGV in
+  `wl_display_read_events`, called by the dispatch of libdecor's cairo
+  plugin) at the start of the tests; not with `WAYLAND_DEBUG` set.
+- Sway 1.7: the connection is lost after `wayland-4.14` when the whole of
+  `wayland.test` runs; it maximizes a floating window, and does not make a
+  window fullscreen at the size of the output (`wayland-4.8`,
+  `wayland-4.12`).
+- Weston 10: when a fullscreen window whose size changed is maximized and
+  leaves fullscreen, it sends a maximized configure of 0x0, and ends the
+  connection if the committed geometry changes ("xdg_surface geometry does
+  not match the configured maximized state (0 x 0)"; the random test
+  `wayland-13.2` hits it now and then). Not acknowledging the configure
+  leaves an ordinary window fullscreen, and answering with the last size
+  given triggers the error.
