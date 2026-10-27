@@ -117,6 +117,10 @@ struct TkXeSurface {
     bool boundExact;		/* Maximized (even if also fullscreen): the
 				 * window must have exactly that size. */
     int maxWidth, maxHeight;	/* Maximum size given to libdecor, or 0. */
+    bool frameHasContent;	/* The frame was committed with a size: the
+				 * visibility of its decorations can be set,
+				 * which libdecor before 0.2.3 crashes on
+				 * before. */
     bool inConfigure;		/* The window is being resized by the
 				 * compositor. */
     bool committed;		/* A buffer was attached. */

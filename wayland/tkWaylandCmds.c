@@ -337,8 +337,8 @@ ApplyCorners(
  *	None.
  *
  * Side effects:
- *	The decorations, the corners and the idle inhibitor of the toplevel
- *	are set.
+ *	The decorations (once the frame has a size), the corners and the idle
+ *	inhibitor of the toplevel are set.
  *
  *----------------------------------------------------------------------
  */
@@ -353,7 +353,7 @@ TkWlCmdsSurfaceMapped(
     if (infoPtr == NULL) {
 	return;
     }
-    if (surfPtr->frame) {
+    if (surfPtr->frame && surfPtr->frameHasContent) {
 	libdecor_frame_set_visibility(surfPtr->frame, !infoPtr->undecorated);
     }
     ApplyCorners(infoPtr);
@@ -576,7 +576,7 @@ DecorationsCmd(
 	}
 	infoPtr->undecorated = (mode == 1);
 	surfPtr = ToplevelSurface(winPtr);
-	if (surfPtr && surfPtr->frame) {
+	if (surfPtr && surfPtr->frame && surfPtr->frameHasContent) {
 	    libdecor_frame_set_visibility(surfPtr->frame,
 		    !infoPtr->undecorated);
 	}

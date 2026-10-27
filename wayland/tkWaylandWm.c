@@ -1024,6 +1024,7 @@ TkWlSurfaceSetFrame(
     surfPtr->iconic = false;
     surfPtr->minimizePending = false;
     surfPtr->boundWidth = surfPtr->boundHeight = 0;
+    surfPtr->frameHasContent = false;
 }
 
 /*
@@ -1962,18 +1963,22 @@ FrameConfigure(
 	surfPtr->floatingWidth = surfPtr->floatingHeight = 0;
     }
 
-    /*
-     * Whether the compositor decorates the window is set again when the
-     * decoration mode is known: libdecor ignores it before.
-     */
-
-    if (!surfPtr->configured) {
-	TkWlCmdsSurfaceMapped(surfPtr);
-    }
     ClampSize(surfPtr, &width, &height);
     state = libdecor_state_new(width, height);
     libdecor_frame_commit(frame, state, configuration);
     libdecor_state_free(state);
+
+    /*
+     * Whether the compositor decorates the window is set again when the
+     * decoration mode is known, and the frame has a size: libdecor ignores
+     * it before, and draws the decorations of a frame without a size before
+     * 0.2.3, which the cairo plugin crashes on.
+     */
+
+    if (!surfPtr->configured) {
+	surfPtr->frameHasContent = true;
+	TkWlCmdsSurfaceMapped(surfPtr);
+    }
 
     /*
      * Drawing the decorations can raise their minimum size. The cairo
