@@ -1765,6 +1765,88 @@ test wayland-15.3 {the on-screen keyboard stays up between text widgets} -constr
     close $im
     unset -nocomplain ::wlim
 } -result {activate (.t.a) (.t.b) (.t.a) (.t.e) (.t.a) (.t.x) deactivate activate (.t.b)}
+
+# Several outputs (sway creates and unplugs headless outputs)
+
+# The names of the outputs of sway.
+proc swayOutputs {} {
+    lmap {- name} [regexp -all -inline {"name": "([^"]+)"} \
+	    [exec swaymsg -t get_outputs -r]] {set name}
+}
+
+# Create an output of sway of 1280x720 pixels, at the right of the others,
+# at the scale 2 unless the window .t has that scale already (then 1), and
+# return its name and scale.
+proc swayNewOutput {} {
+    set scale [expr {[::tk::wayland::scale .t] == 2 ? 1.5 : 2}]
+    set before [swayOutputs]
+    exec swaymsg create_output
+    foreach name [swayOutputs] {
+	if {$name ni $before} {
+	    exec swaymsg output $name resolution 1280x720 position 4000 0 \
+		    scale $scale
+	    return [list $name $scale]
+	}
+    }
+    return -code error "no new output"
+}
+
+test wayland-16.1 {a window moved to another output takes its scale} \
+	-constraints {
+    swayPointer
+} -setup {
+    toplevel .t
+    wm title .t wlout
+    wm geometry .t 300x200
+    waitShown .t
+    lassign [swayNewOutput] output scale
+} -body {
+    exec swaymsg "\[title=\"wlout\"\] move to output $output"
+    waitFor {[::tk::wayland::scale .t] == $scale}
+    set result [list [expr {[::tk::wayland::scale .t] == $scale}] \
+	    [winfo width .t] [winfo height .t]]
+    wm attributes .t -fullscreen 1
+    set w [expr {round(1280 / $scale)}]
+    set h [expr {round(720 / $scale)}]
+    waitFor {[winfo width .t] == $w && [winfo height .t] == $h}
+    lappend result [expr {[winfo width .t] == $w && [winfo height .t] == $h}]
+    wm attributes .t -fullscreen 0
+    waitFor {[winfo width .t] == 300 && [winfo height .t] == 200}
+    lappend result [winfo width .t] [winfo height .t]
+} -cleanup {
+    destroy .t
+    exec swaymsg output $output unplug
+    unset -nocomplain output scale w h result
+} -result {1 300 200 1 300 200}
+
+# The scale is not checked: when the output is unplugged, sway 1.12 tells the
+# surface neither the output it is moved to nor its scale if that output has
+# an integer scale of 2 or more.
+test wayland-16.2 {a fullscreen window whose output is unplugged} -constraints {
+    swayPointer
+} -setup {
+    toplevel .t
+    wm title .t wlout
+    wm geometry .t 300x200
+    waitShown .t
+    lassign [swayNewOutput] output scale
+    exec swaymsg "\[title=\"wlout\"\] move to output $output"
+    waitFor {[::tk::wayland::scale .t] == $scale}
+    wm attributes .t -fullscreen 1
+    waitFor {[winfo width .t] == round(1280 / $scale)}
+} -body {
+    exec swaymsg output $output unplug
+    waitFor {[winfo width .t] == [winfo screenwidth .]}
+    set result [list [wm attributes .t -fullscreen] \
+	    [expr {[winfo width .t] == [winfo screenwidth .]
+	    && [winfo height .t] == [winfo screenheight .]}]]
+    wm attributes .t -fullscreen 0
+    waitFor {[winfo width .t] == 300 && [winfo height .t] == 200}
+    lappend result [winfo width .t] [winfo height .t]
+} -cleanup {
+    destroy .t
+    unset -nocomplain output scale result
+} -result {1 1 300 200}
 }
 
 #

@@ -41,6 +41,10 @@ or leaves it alone. The tests run on each with `make test-sway`,
   bordered window for a window without a border, so that tests cannot find
   its pixels (`wayland-14.12` needs the constraint `swayRects`); sway 1.12
   gives the right one (1.11 was not tried).
+- When the output of a window is unplugged, sway 1.12 sends neither
+  `wl_surface.enter` nor a preferred scale for the output it moves the window
+  to if that output has an integer scale of 2 or more (it does at 1.5): the
+  window keeps the scale of the unplugged output (`wayland-16.2`).
 
 ## Mutter (GNOME)
 
@@ -89,6 +93,11 @@ or leaves it alone. The tests run on each with `make test-sway`,
 - The GTK plugin prints `Gdk-CRITICAL ... gdk_seat_get_keyboard` on stderr
   when the seat has no keyboard (the headless Weston and GNOME of the tests),
   which makes the tests that check stderr fail.
+- libdecor 0.2.4 (Fedora 42) includes the title bar of its plugin in the
+  window geometry when the compositor draws the decorations (libdecor issues
+  80 and 81, fixed in 0.2.5): on sway, windows are 37 pixels higher than they
+  should be when sway resizes them, as when they are moved to another output
+  (`wayland-16.*`) or leave fullscreen (`wayland-4.8`, at times). Left alone.
 - libdecor 0.2.2 and older crashed with a NULL parent, and fails for good when
   the minimum size is larger than the maximum size, which X11 window managers
   accept.

@@ -1971,6 +1971,31 @@ dist: $(UNIX_DIR)/configure $(UNIX_DIR)/tkConfig.h.in $(UNIX_DIR)/tk.pc.in \
 	$(INSTALL_DATA_DIR) $(DISTDIR)/xlib/X11
 	$(DIST_INSTALL_DATA) $(XLIB_DIR)/X11/*.h $(DISTDIR)/xlib/X11
 	$(DIST_INSTALL_DATA) $(TOP_DIR)/license.terms $(DISTDIR)/xlib/X11
+	$(INSTALL_DATA_DIR) $(DISTDIR)/xemu/X11/Xft
+	$(DIST_INSTALL_DATA) $(XEMU_DIR)/*.[ch] $(XEMU_DIR)/README.md \
+		$(TOP_DIR)/license.terms $(DISTDIR)/xemu
+	$(DIST_INSTALL_DATA) $(XEMU_DIR)/X11/Xft/*.h $(DISTDIR)/xemu/X11/Xft
+	$(INSTALL_DATA_DIR) $(DISTDIR)/wayland/demos
+	$(INSTALL_DATA_DIR) $(DISTDIR)/wayland/tools
+	$(DIST_INSTALL_DATA) $(WAYLAND_DIR)/*.[ch] $(WAYLAND_DIR)/*.md \
+		$(TOP_DIR)/license.terms $(DISTDIR)/wayland
+	$(DIST_INSTALL_DATA) $(WAYLAND_DIR)/demos/*.tcl $(DISTDIR)/wayland/demos
+	$(DIST_INSTALL_DATA) $(WAYLAND_DIR)/tools/*.c $(WAYLAND_DIR)/tools/*.xml \
+		$(WAYLAND_DIR)/tools/*.tcl $(DISTDIR)/wayland/tools
+	$(INSTALL_DATA_DIR) $(DISTDIR)/android/build
+	$(INSTALL_DATA_DIR) $(DISTDIR)/android/java/tk/android
+	$(INSTALL_DATA_DIR) $(DISTDIR)/android/res/values
+	$(DIST_INSTALL_DATA) $(ANDROID_DIR)/*.[ch] $(ANDROID_DIR)/*.md \
+		$(ANDROID_DIR)/AndroidManifest.xml $(TOP_DIR)/license.terms \
+		$(DISTDIR)/android
+	$(DIST_INSTALL_DATA) $(ANDROID_DIR)/build/Dockerfile \
+		$(ANDROID_DIR)/build/Makefile $(DISTDIR)/android/build
+	$(DIST_INSTALL_SCRIPT) $(ANDROID_DIR)/build/build.sh \
+		$(DISTDIR)/android/build
+	$(DIST_INSTALL_DATA) $(ANDROID_DIR)/java/tk/android/*.java \
+		$(DISTDIR)/android/java/tk/android
+	$(DIST_INSTALL_DATA) $(ANDROID_DIR)/res/values/*.xml \
+		$(DISTDIR)/android/res/values
 	$(INSTALL_DATA_DIR) $(DISTDIR)/library
 	$(DIST_INSTALL_DATA) $(TOP_DIR)/license.terms $(TOP_DIR)/library/*.tcl \
 		$(TOP_DIR)/library/tclIndex \
