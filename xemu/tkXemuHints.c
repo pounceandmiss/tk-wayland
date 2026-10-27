@@ -409,17 +409,71 @@ XSetWMClientMachine(
 /*
  *----------------------------------------------------------------------
  *
+ * RaiseTransients --
+ *
+ *	Raise the mapped transients of a toplevel above it, and theirs above
+ *	them, as window managers and compositors keep them.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The transients are restacked.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static void
+RaiseTransients(
+    Display *display,
+    TkXeWindow *winPtr)
+{
+    TkXeWindow *childPtr, **transients;
+    XWindowChanges changes;
+    int i, count = 0;
+
+    if (winPtr->parent == NULL) {
+	return;
+    }
+    for (childPtr = winPtr->parent->firstChild; childPtr;
+	    childPtr = childPtr->above) {
+	count++;
+    }
+    transients = (TkXeWindow **)Tcl_Alloc((count + 1) * sizeof(TkXeWindow *));
+    count = 0;
+    for (childPtr = winPtr->parent->firstChild; childPtr;
+	    childPtr = childPtr->above) {
+	TkXeProperty *propPtr = TkXeGetProperty(childPtr, XA_WM_TRANSIENT_FOR);
+
+	if (childPtr != winPtr && childPtr->mapped && propPtr
+		&& propPtr->format == 32 && propPtr->nitems > 0
+		&& (Window)((long *)propPtr->data)[0] == winPtr->id) {
+	    transients[count++] = childPtr;
+	}
+    }
+    changes.stack_mode = Above;
+    for (i = 0; i < count; i++) {
+	XConfigureWindow(display, transients[i]->id, CWStackMode, &changes);
+	RaiseTransients(display, transients[i]);
+    }
+    Tcl_Free(transients);
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
  * XReconfigureWMWindow --
  *
  *	Reconfigure a toplevel, which X window managers are asked to do.
  *	Raising a toplevel above the others ("raise") asks the window manager
- *	to activate it.
+ *	to activate it, and its transients stay above it.
  *
  * Results:
  *	True if the window was reconfigured.
  *
  * Side effects:
- *	Configures the window, and may request its activation.
+ *	Configures the window, and may request its activation and restack
+ *	its transients.
  *
  *----------------------------------------------------------------------
  */
@@ -433,18 +487,24 @@ XReconfigureWMWindow(
     XWindowChanges *changes)
 {
     TkXeWindow *winPtr = TkXeGetWindow(w);
+    bool raise = winPtr && winPtr->surface && winPtr->mapped
+	    && (mask & CWStackMode) && !(mask & CWSibling)
+	    && changes->stack_mode == Above;
+    Status result;
 
     /*
      * Raising a toplevel above the others ("raise") asks the window manager
-     * to activate it.
+     * to activate it, and its transients stay above it.
      */
 
-    if (winPtr && winPtr->surface && winPtr->mapped
-	    && (mask & CWStackMode) && !(mask & CWSibling)
-	    && changes->stack_mode == Above) {
+    if (raise) {
 	TkXeWmActivate(winPtr->surface);
     }
-    return XConfigureWindow(display, w, mask, changes) == Success;
+    result = XConfigureWindow(display, w, mask, changes) == Success;
+    if (raise) {
+	RaiseTransients(display, winPtr);
+    }
+    return result;
 }
 
 /*
