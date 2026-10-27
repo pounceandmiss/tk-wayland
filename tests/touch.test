@@ -957,9 +957,12 @@ test touch-5.29 {dragging the end handle in an entry with -show} -setup {
     destroy .e
 } -result {6 14 {1 1}}
 test touch-5.30 {toolbar above the selection} -setup {
+    # Room above the entry for the toolbar, taller with the padding of
+    # touchscreens; the toplevel may not be wider than the screen of a
+    # phone.
     entry .e
     .e insert end "hello touch world"
-    pack .e -padx 300 -pady 100
+    pack .e -padx 50 -pady 150
     update
 } -body {
     press .e 8
