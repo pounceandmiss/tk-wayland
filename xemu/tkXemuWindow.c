@@ -1106,7 +1106,11 @@ XDestroyWindow(
     TkXeWindow *parentPtr;
 
     TkXeNextRequest(display);
-    if (winPtr == NULL || winPtr->parent == NULL) {
+    if (winPtr == NULL) {
+	TkXeError(display, w, BadWindow, X_DestroyWindow);
+	return BadWindow;
+    }
+    if (winPtr->parent == NULL) {
 	return BadWindow;
     }
     parentPtr = winPtr->parent;
@@ -1156,6 +1160,7 @@ XMapWindow(
 
     TkXeNextRequest(display);
     if (winPtr == NULL) {
+	TkXeError(display, w, BadWindow, X_MapWindow);
 	return BadWindow;
     }
     if (winPtr->mapped || winPtr->parent == NULL) {
@@ -1233,6 +1238,7 @@ XUnmapWindow(
 
     TkXeNextRequest(display);
     if (winPtr == NULL) {
+	TkXeError(display, w, BadWindow, X_UnmapWindow);
 	return BadWindow;
     }
     if (!winPtr->mapped) {
@@ -1349,6 +1355,7 @@ XConfigureWindow(
 
     TkXeNextRequest(display);
     if (winPtr == NULL) {
+	TkXeError(display, w, BadWindow, X_ConfigureWindow);
 	return BadWindow;
     }
     if (winPtr->mapped) {
@@ -1552,7 +1559,11 @@ XReparentWindow(
     XEvent event;
 
     TkXeNextRequest(display);
-    if (winPtr == NULL || parentPtr == NULL || winPtr->parent == NULL) {
+    if (winPtr == NULL) {
+	TkXeError(display, w, BadWindow, X_ReparentWindow);
+	return BadWindow;
+    }
+    if (parentPtr == NULL || winPtr->parent == NULL) {
 	return BadWindow;
     }
     wasMapped = winPtr->mapped;
@@ -1622,6 +1633,7 @@ XChangeWindowAttributes(
 
     TkXeNextRequest(display);
     if (winPtr == NULL) {
+	TkXeError(display, w, BadWindow, X_ChangeWindowAttributes);
 	return BadWindow;
     }
     ChangeAttributes(winPtr, valueMask, attrPtr);
@@ -1789,6 +1801,7 @@ XClearWindow(
 
     TkXeNextRequest(display);
     if (winPtr == NULL) {
+	TkXeError(display, w, BadWindow, X_ClearArea);
 	return BadWindow;
     }
     if (winPtr->parent && winPtr->parent->parent == NULL) {

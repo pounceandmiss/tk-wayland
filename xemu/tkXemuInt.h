@@ -256,6 +256,26 @@ MODULE_SCOPE void	TkXeSetScreenSize(Display *display, int width,
 MODULE_SCOPE pixman_region32_t *TkXePixmanRegion(Region r);
 MODULE_SCOPE unsigned long TkXeNextRequest(Display *display);
 MODULE_SCOPE struct _FcPattern *TkXeXlfdParse(const char *name);
+MODULE_SCOPE void	TkXeError(Display *display, XID resource, int code,
+			    int request);
+
+/*
+ * The codes of the X requests for which the emulation reports errors (as in
+ * <X11/Xproto.h>).
+ */
+
+#ifndef X_ChangeWindowAttributes
+#define X_ChangeWindowAttributes	2
+#define X_DestroyWindow			4
+#define X_ReparentWindow		7
+#define X_MapWindow			8
+#define X_UnmapWindow			10
+#define X_ConfigureWindow		12
+#define X_ChangeProperty		18
+#define X_DeleteProperty		19
+#define X_GetProperty			20
+#define X_ClearArea			61
+#endif
 
 /*
  * Functions given by the port.

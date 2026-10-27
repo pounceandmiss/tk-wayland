@@ -486,7 +486,11 @@ XChangeProperty(
     unsigned long nitems;
 
     TkXeNextRequest(display);
-    if (winPtr == NULL || nelements < 0) {
+    if (winPtr == NULL) {
+	TkXeError(display, w, BadWindow, X_ChangeProperty);
+	return BadWindow;
+    }
+    if (nelements < 0) {
 	return BadWindow;
     }
     propPtr = TkXeGetProperty(winPtr, property);
@@ -584,6 +588,7 @@ XGetWindowProperty(
     *bytesAfterPtr = 0;
     *propPtrPtr = NULL;
     if (winPtr == NULL) {
+	TkXeError(display, w, BadWindow, X_GetProperty);
 	return BadWindow;
     }
     propPtr = TkXeGetProperty(winPtr, property);
@@ -656,6 +661,7 @@ XDeleteProperty(
 
     TkXeNextRequest(display);
     if (winPtr == NULL) {
+	TkXeError(display, w, BadWindow, X_DeleteProperty);
 	return BadWindow;
     }
     for (prevPtrPtr = &winPtr->properties; *prevPtrPtr;
@@ -1845,15 +1851,77 @@ XQueryColor(
  *----------------------------------------------------------------------
  */
 
-static XErrorHandler errorHandler = NULL;
+/*
+ *----------------------------------------------------------------------
+ *
+ * IgnoreError --
+ *
+ *	The error handler before one is set: errors are ignored, where Xlib
+ *	would print them and exit.
+ *
+ * Results:
+ *	0.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static int
+IgnoreError(
+    TCL_UNUSED(Display *),
+    TCL_UNUSED(XErrorEvent *))
+{
+    return 0;
+}
+
+static XErrorHandler errorHandler = IgnoreError;
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkXeError --
+ *
+ *	Report an error of the last request to the error handler, as Xlib
+ *	does with the errors the X server sends (here at once).
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Calls the error handler (Tk's, which calls the handlers created with
+ *	Tk_CreateErrorHandler).
+ *
+ *----------------------------------------------------------------------
+ */
+
+void
+TkXeError(
+    Display *display,
+    XID resource,
+    int code,
+    int request)
+{
+    XErrorEvent event;
+
+    memset(&event, 0, sizeof(XErrorEvent));
+    event.type = 0;
+    event.display = display;
+    event.resourceid = resource;
+    event.serial = display->request;
+    event.error_code = (unsigned char)code;
+    event.request_code = (unsigned char)request;
+    event.minor_code = 0;
+    errorHandler(display, &event);
+}
 
 /*
  *----------------------------------------------------------------------
  *
  * XSetErrorHandler --
  *
- *	Set the error handler. There is no server to report errors, so it is
- *	only stored.
+ *	Set the error handler, which TkXeError calls.
  *
  * Results:
  *	The previous handler.
