@@ -91,6 +91,43 @@ static const KeyInfo specialKeys[] = {
     {0, NoSymbol}
 };
 
+/*
+ * The keys which produce punctuation, with the characters they produce
+ * without and with Shift on the keyboards of the United States, for the keys
+ * of [event generate] and of keyboards which do not give the character.
+ */
+
+typedef struct {
+    int keyCode;		/* AKEYCODE_*. */
+    KeySym keysym;		/* Without Shift. */
+    KeySym shifted;		/* With Shift. */
+} PunctKey;
+
+static const PunctKey punctKeys[] = {
+    {AKEYCODE_GRAVE, XK_grave, XK_asciitilde},
+    {AKEYCODE_1, XK_1, XK_exclam},
+    {AKEYCODE_2, XK_2, XK_at},
+    {AKEYCODE_3, XK_3, XK_numbersign},
+    {AKEYCODE_4, XK_4, XK_dollar},
+    {AKEYCODE_5, XK_5, XK_percent},
+    {AKEYCODE_6, XK_6, XK_asciicircum},
+    {AKEYCODE_7, XK_7, XK_ampersand},
+    {AKEYCODE_8, XK_8, XK_asterisk},
+    {AKEYCODE_9, XK_9, XK_parenleft},
+    {AKEYCODE_0, XK_0, XK_parenright},
+    {AKEYCODE_MINUS, XK_minus, XK_underscore},
+    {AKEYCODE_EQUALS, XK_equal, XK_plus},
+    {AKEYCODE_LEFT_BRACKET, XK_bracketleft, XK_braceleft},
+    {AKEYCODE_RIGHT_BRACKET, XK_bracketright, XK_braceright},
+    {AKEYCODE_BACKSLASH, XK_backslash, XK_bar},
+    {AKEYCODE_SEMICOLON, XK_semicolon, XK_colon},
+    {AKEYCODE_APOSTROPHE, XK_apostrophe, XK_quotedbl},
+    {AKEYCODE_COMMA, XK_comma, XK_less},
+    {AKEYCODE_PERIOD, XK_period, XK_greater},
+    {AKEYCODE_SLASH, XK_slash, XK_question},
+    {0, NoSymbol, NoSymbol}
+};
+
 static void		InitNames(void);
 
 /*
@@ -222,6 +259,7 @@ TkAndroidKeySym(
     int unicode)		/* The character of the key, or 0 if unknown. */
 {
     const KeyInfo *infoPtr;
+    const PunctKey *punctPtr;
 
     if (keyCode == AKEYCODE_TAB && (metaState & AMETA_SHIFT_ON)) {
 	return XK_ISO_Left_Tab;
@@ -240,8 +278,11 @@ TkAndroidKeySym(
     if (keyCode >= AKEYCODE_A && keyCode <= AKEYCODE_Z) {
 	return ((metaState & AMETA_SHIFT_ON) ? 'A' : 'a') + keyCode - AKEYCODE_A;
     }
-    if (keyCode >= AKEYCODE_0 && keyCode <= AKEYCODE_9) {
-	return '0' + keyCode - AKEYCODE_0;
+    for (punctPtr = punctKeys; punctPtr->keysym != NoSymbol; punctPtr++) {
+	if (punctPtr->keyCode == keyCode) {
+	    return (metaState & AMETA_SHIFT_ON) ? punctPtr->shifted
+		    : punctPtr->keysym;
+	}
     }
     return NoSymbol;
 }
@@ -268,6 +309,7 @@ TkAndroidKeyCode(
     KeySym keysym)		/* The keysym. */
 {
     const KeyInfo *infoPtr;
+    const PunctKey *punctPtr;
 
     for (infoPtr = specialKeys; infoPtr->keysym != NoSymbol; infoPtr++) {
 	if (infoPtr->keysym == keysym) {
@@ -280,8 +322,10 @@ TkAndroidKeyCode(
     if (keysym >= 'A' && keysym <= 'Z') {
 	return (KeyCode)(AKEYCODE_A + keysym - 'A' + 8);
     }
-    if (keysym >= '0' && keysym <= '9') {
-	return (KeyCode)(AKEYCODE_0 + keysym - '0' + 8);
+    for (punctPtr = punctKeys; punctPtr->keysym != NoSymbol; punctPtr++) {
+	if (punctPtr->keysym == keysym || punctPtr->shifted == keysym) {
+	    return (KeyCode)(punctPtr->keyCode + 8);
+	}
     }
     return 0;
 }
