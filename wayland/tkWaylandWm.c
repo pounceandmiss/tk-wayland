@@ -805,8 +805,9 @@ static const struct wl_callback_listener minimizeSyncListener = {
  *	None.
  *
  * Side effects:
- *	Asks the compositor to minimize the toplevel and unmaps its X window,
- *	or else marks the minimization pending until the first commit.
+ *	Unmaps the X window of the toplevel, and asks the compositor to
+ *	minimize it, or else marks the minimization pending until the first
+ *	commit.
  *
  *----------------------------------------------------------------------
  */
@@ -816,7 +817,16 @@ Minimize(
     TkXeSurface *surfPtr)
 {
     if (!surfPtr->committed) {
+	/*
+	 * The compositor minimizes only a toplevel which has a buffer, which
+	 * it can show again: the frame is minimized after its first buffer
+	 * (see TkWlWmSurfaceCommitted). The X window is unmapped at once, as
+	 * X window managers do, and the first buffer is committed anyway.
+	 */
+
 	surfPtr->minimizePending = true;
+	surfPtr->iconic = true;
+	XUnmapWindow(surfPtr->winPtr->display, surfPtr->winPtr->id);
 	return;
     }
 
@@ -987,12 +997,17 @@ TkXeWmMapSurface(
     InitAtoms(winPtr->display);
     if (surfPtr->iconic) {
 	/*
-	 * Deiconified: the surface kept its role.
+	 * Deiconified: the surface kept its role, unless it was iconified
+	 * before it got one. A minimization waiting for the first buffer is
+	 * forgotten.
 	 */
 
 	surfPtr->iconic = false;
-	TkXeWmActivate(surfPtr);
-	return;
+	surfPtr->minimizePending = false;
+	if (surfPtr->frame || surfPtr->xdgSurface || surfPtr->rolePending) {
+	    TkXeWmActivate(surfPtr);
+	    return;
+	}
     }
     if (surfPtr->frame || surfPtr->xdgSurface) {
 	return;
@@ -1041,7 +1056,7 @@ MapToplevel(
     long *hints;
 
     surfPtr->rolePending = false;
-    if (!winPtr->mapped || surfPtr->frame) {
+    if ((!winPtr->mapped && !surfPtr->minimizePending) || surfPtr->frame) {
 	return;
     }
     TkWlSurfaceSetRole(surfPtr, TKWL_ROLE_TOPLEVEL);

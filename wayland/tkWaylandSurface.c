@@ -1101,7 +1101,12 @@ Present(
 
     TkXeProcessExposures(surfPtr);
     if (!surfPtr->configured || surfPtr->backing == NULL
-	    || !surfPtr->winPtr->mapped) {
+	    || (!surfPtr->winPtr->mapped && !surfPtr->minimizePending)) {
+	/*
+	 * A toplevel iconified before its first buffer is committed with it
+	 * anyway, to be minimized (see Minimize in tkWaylandWm.c).
+	 */
+
 	return;
     }
     if (surfPtr->frameCallback) {
