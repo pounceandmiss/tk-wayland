@@ -90,9 +90,9 @@ or leaves it alone. The tests run on each with `make test-sway`,
 ## Debian 12 (bookworm, oldstable): not tested
 
 Debian 12 is oldstable (Debian LTS only), and the port is not tested on it
-any more. It cannot build the port with its own
-wayland-protocols (1.31, without xdg-toplevel-icon); with wayland-protocols
-1.45 from source, these were seen and left alone:
+any more. It cannot build the port with its own wayland-protocols (1.31,
+without xdg-toplevel-icon); with wayland-protocols 1.45 from source, these
+were seen and left alone:
 
 - KWin 5.27 with libdecor 0.1.1: Tk sometimes crashes (SIGSEGV in
   `wl_display_read_events`, called by the dispatch of libdecor's cairo
