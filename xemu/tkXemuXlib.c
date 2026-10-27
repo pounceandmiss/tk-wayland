@@ -1898,8 +1898,8 @@ XSetErrorHandler(
  *	Requests which have no effect without an X server.
  *
  * Results:
- *	XSynchronize returns NULL, XListHosts NULL with no hosts, the others
- *	Success or nothing.
+ *	XSynchronize returns NULL, XListHosts NULL with no hosts and access
+ *	control on, the others Success or nothing.
  *
  * Side effects:
  *	The request is counted.
@@ -1963,8 +1963,13 @@ XListHosts(
     int *nhostsPtr,
     Bool *statePtr)
 {
+    /*
+     * Only the process can reach the emulated server: access control is on,
+     * with no hosts allowed, which [send] takes for a secure server.
+     */
+
     *nhostsPtr = 0;
-    *statePtr = False;
+    *statePtr = True;
     return NULL;
 }
 
