@@ -110,9 +110,18 @@ EOF
 	if command -v wtype >/dev/null && command -v wl-paste >/dev/null \
 		&& command -v grim >/dev/null; then
 	    # The headless seat has no keyboard: wtype keeps one (longer
-	    # times overflow in wtype).
+	    # times overflow in wtype). The loop kills its wtype when it is
+	    # killed, or the wtype would stay after the compositor.
 
-	    (while :; do wtype -s 3600000; done) > /dev/null 2>&1 &
+	    (
+		child=""
+		trap 'if [ -n "$child" ]; then kill $child; fi; exit' TERM
+		while :; do
+		    wtype -s 3600000 &
+		    child=$!
+		    wait $child
+		done
+	    ) > /dev/null 2>&1 &
 	    pids="$pids $!"
 	    TK_WAYLAND_TEST_INPUT=1
 	    export TK_WAYLAND_TEST_INPUT
