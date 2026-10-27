@@ -121,7 +121,12 @@ struct TkXeSurface {
 				 * exceed, or 0. */
     bool boundExact;		/* Maximized (even if also fullscreen): the
 				 * window must have exactly that size. */
+    int minWidth, minHeight;	/* Minimum size given to libdecor. */
     int maxWidth, maxHeight;	/* Maximum size given to libdecor, or 0. */
+    int decorWidth, decorHeight;
+				/* Minimum size the plugin of libdecor raised
+				 * the minimum size to for its decorations,
+				 * or 0. */
     int configWidth, configHeight;
 				/* Size the compositor last gave the floating
 				 * window, or 0. */

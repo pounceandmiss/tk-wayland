@@ -735,10 +735,13 @@ test wayland-4.10 {wm minsize and wm maxsize limit the size} -constraints {
     toplevel .t
     waitShown .t
 } -body {
+    # The minimum width is above the one of the decorations (the header
+    # bar of the GTK plugin of libdecor is 168 pixels wide on weston).
+
     set result {}
-    wm minsize .t 150 100
+    wm minsize .t 250 100
     wm geometry .t 50x50
-    waitFor {[winfo width .t] == 150 && [winfo height .t] == 100}
+    waitFor {[winfo width .t] == 250 && [winfo height .t] == 100}
     lappend result [winfo width .t] [winfo height .t]
     wm minsize .t 1 1
     wm maxsize .t 200 150
@@ -752,7 +755,7 @@ test wayland-4.10 {wm minsize and wm maxsize limit the size} -constraints {
 } -cleanup {
     destroy .t
     unset -nocomplain result
-} -result {150 100 200 150 450 320}
+} -result {250 100 200 150 450 320}
 test wayland-4.11 {resized by the application when not resizable} -constraints {
     wayland
 } -setup {

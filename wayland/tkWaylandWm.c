@@ -339,6 +339,38 @@ SetSizeLimits(
     }
 
     /*
+     * The plugins of libdecor raise the minimum size to the one of their
+     * decorations when they draw them (the header bar of the GTK plugin),
+     * and setting the minimum size drops that until they draw them again:
+     * the window would be smaller than its decorations meanwhile, and its
+     * size would go to and fro between the two (a menubar which wraps at
+     * the smaller width makes Tk ask for it again and again). The minimum
+     * size of the decorations is kept while they are shown. It is read
+     * before the capabilities change, which replace it with the current
+     * size when the frame can no longer be resized.
+     */
+
+    if (libdecor_frame_is_visible(surfPtr->frame)) {
+	int width = 0, height = 0;
+
+	libdecor_frame_get_min_content_size(surfPtr->frame, &width, &height);
+	if (width > surfPtr->minWidth) {
+	    surfPtr->decorWidth = width;
+	}
+	if (height > surfPtr->minHeight) {
+	    surfPtr->decorHeight = height;
+	}
+    } else {
+	surfPtr->decorWidth = surfPtr->decorHeight = 0;
+    }
+    if (minWidth < surfPtr->decorWidth) {
+	minWidth = surfPtr->decorWidth;
+    }
+    if (minHeight < surfPtr->decorHeight) {
+	minHeight = surfPtr->decorHeight;
+    }
+
+    /*
      * libdecor fails for good when the minimum size is larger than the
      * maximum size, which window managers of X11 accept: the minimum size
      * wins, as in the geometry management of Tk.
@@ -380,6 +412,8 @@ SetSizeLimits(
     }
     libdecor_frame_set_min_content_size(surfPtr->frame, minWidth, minHeight);
     libdecor_frame_set_max_content_size(surfPtr->frame, maxWidth, maxHeight);
+    surfPtr->minWidth = minWidth;
+    surfPtr->minHeight = minHeight;
     surfPtr->maxWidth = maxWidth;
     surfPtr->maxHeight = maxHeight;
     *minWidthPtr = minWidth;
@@ -1103,6 +1137,8 @@ TkWlSurfaceSetFrame(
     surfPtr->iconic = false;
     surfPtr->minimizePending = false;
     surfPtr->boundWidth = surfPtr->boundHeight = 0;
+    surfPtr->minWidth = surfPtr->minHeight = 0;
+    surfPtr->decorWidth = surfPtr->decorHeight = 0;
     surfPtr->frameHasContent = false;
     surfPtr->configWidth = surfPtr->configHeight = 0;
     surfPtr->maximizeRequest = MAXIMIZE_NONE;
