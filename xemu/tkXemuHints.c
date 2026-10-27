@@ -259,11 +259,50 @@ XSetTransientForHint(
  *
  * XSetWMColormapWindows --
  *
- *	Set the colormap windows of a toplevel: there is only one colormap, so
- *	there is nothing to do.
+ *	Set the colormap windows of a toplevel (its WM_COLORMAP_WINDOWS
+ *	property). There is only one colormap, so the window manager has
+ *	nothing to do with them.
  *
  * Results:
- *	1 (success).
+ *	1 (success), or 0 if the window does not exist.
+ *
+ * Side effects:
+ *	The property is changed.
+ *
+ *----------------------------------------------------------------------
+ */
+
+Status
+XSetWMColormapWindows(
+    Display *display,
+    Window w,
+    Window *windows,
+    int count)
+{
+    long *data = (long *)Tcl_Alloc((count > 0 ? count : 1) * sizeof(long));
+    int i, result;
+
+    for (i = 0; i < count; i++) {
+	data[i] = (long)windows[i];
+    }
+    result = XChangeProperty(display, w,
+	    XInternAtom(display, "WM_COLORMAP_WINDOWS", False), XA_WINDOW, 32,
+	    PropModeReplace, (unsigned char *)data, count);
+    Tcl_Free(data);
+    return result == Success;
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XGetWMColormapWindows --
+ *
+ *	Get the colormap windows of a toplevel, from its WM_COLORMAP_WINDOWS
+ *	property.
+ *
+ * Results:
+ *	1 with the windows in *windowsPtr (to be freed with XFree) and their
+ *	number in *countPtr, or 0 if the window has no such property.
  *
  * Side effects:
  *	None.
@@ -272,13 +311,99 @@ XSetTransientForHint(
  */
 
 Status
-XSetWMColormapWindows(
-    TCL_UNUSED(Display *),
-    TCL_UNUSED(Window),
-    TCL_UNUSED(Window *),
-    TCL_UNUSED(int))
+XGetWMColormapWindows(
+    Display *display,
+    Window w,
+    Window **windowsPtr,
+    int *countPtr)
 {
+    Atom type;
+    int format;
+    unsigned long i, count, after;
+    unsigned char *data = NULL;
+    Window *windows;
+
+    *windowsPtr = NULL;
+    *countPtr = 0;
+    if (XGetWindowProperty(display, w,
+	    XInternAtom(display, "WM_COLORMAP_WINDOWS", False), 0, 0x7FFFFFFF,
+	    False, XA_WINDOW, &type, &format, &count, &after, &data)
+	    != Success || type != XA_WINDOW || format != 32) {
+	XFree(data);
+	return 0;
+    }
+    windows = (Window *)Tcl_Alloc((count > 0 ? count : 1) * sizeof(Window));
+    for (i = 0; i < count; i++) {
+	windows[i] = (Window)((long *)data)[i];
+    }
+    XFree(data);
+    *windowsPtr = windows;
+    *countPtr = (int)count;
     return 1;
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * XSetCommand, XSetIconName, XSetWMClientMachine --
+ *
+ *	Set the WM_COMMAND, WM_ICON_NAME and WM_CLIENT_MACHINE properties of
+ *	a toplevel. The window manager of the port does not use them.
+ *
+ * Results:
+ *	As XChangeProperty; XSetWMClientMachine returns nothing.
+ *
+ * Side effects:
+ *	The property is changed.
+ *
+ *----------------------------------------------------------------------
+ */
+
+int
+XSetCommand(
+    Display *display,
+    Window w,
+    char **argv,
+    int argc)
+{
+    Tcl_DString ds;
+    int i, result;
+
+    /*
+     * The arguments, each with its terminating null.
+     */
+
+    Tcl_DStringInit(&ds);
+    for (i = 0; i < argc; i++) {
+	Tcl_DStringAppend(&ds, argv[i], -1);
+	Tcl_DStringSetLength(&ds, Tcl_DStringLength(&ds) + 1);
+    }
+    result = XChangeProperty(display, w, XA_WM_COMMAND, XA_STRING, 8,
+	    PropModeReplace, (unsigned char *)Tcl_DStringValue(&ds),
+	    (int)Tcl_DStringLength(&ds));
+    Tcl_DStringFree(&ds);
+    return result;
+}
+
+int
+XSetIconName(
+    Display *display,
+    Window w,
+    const char *name)
+{
+    return XChangeProperty(display, w, XA_WM_ICON_NAME, XA_STRING, 8,
+	    PropModeReplace, (const unsigned char *)name, (int)strlen(name));
+}
+
+void
+XSetWMClientMachine(
+    Display *display,
+    Window w,
+    XTextProperty *textPtr)
+{
+    XChangeProperty(display, w, XA_WM_CLIENT_MACHINE, textPtr->encoding,
+	    textPtr->format, PropModeReplace, textPtr->value,
+	    (int)textPtr->nitems);
 }
 
 /*

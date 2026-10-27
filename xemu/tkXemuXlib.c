@@ -1203,15 +1203,13 @@ XQueryColors(
 /*
  *----------------------------------------------------------------------
  *
- * XFreeColors, XCreateColormap, XFreeColormap,
- * XGetWMColormapWindows --
+ * XFreeColors, XCreateColormap, XFreeColormap --
  *
  *	Colormaps: there is one, of the TrueColor visual, and colors are not
  *	allocated in it.
  *
  * Results:
- *	XCreateColormap returns the default colormap, XGetWMColormapWindows 0
- *	with no windows, the others Success.
+ *	XCreateColormap returns the default colormap, the others Success.
  *
  * Side effects:
  *	None.
@@ -1249,18 +1247,6 @@ XFreeColormap(
 {
     TkXeNextRequest(display);
     return Success;
-}
-
-Status
-XGetWMColormapWindows(
-    TCL_UNUSED(Display *),
-    TCL_UNUSED(Window),
-    Window **windowsPtr,
-    int *countPtr)
-{
-    *windowsPtr = NULL;
-    *countPtr = 0;
-    return 0;
 }
 
 /*
@@ -1892,8 +1878,7 @@ XSetErrorHandler(
  *----------------------------------------------------------------------
  *
  * XNoOp, XSynchronize, XGrabServer, XUngrabServer, XForceScreenSaver,
- * XResetScreenSaver, XListHosts, XSetCommand, XSetIconName,
- * XSetWMClientMachine --
+ * XResetScreenSaver, XListHosts --
  *
  *	Requests which have no effect without an X server.
  *
@@ -1971,36 +1956,6 @@ XListHosts(
     *nhostsPtr = 0;
     *statePtr = True;
     return NULL;
-}
-
-int
-XSetCommand(
-    Display *display,
-    TCL_UNUSED(Window),
-    TCL_UNUSED(char **),
-    TCL_UNUSED(int))
-{
-    TkXeNextRequest(display);
-    return Success;
-}
-
-int
-XSetIconName(
-    Display *display,
-    TCL_UNUSED(Window),
-    TCL_UNUSED(const char *))
-{
-    TkXeNextRequest(display);
-    return Success;
-}
-
-void
-XSetWMClientMachine(
-    Display *display,
-    TCL_UNUSED(Window),
-    TCL_UNUSED(XTextProperty *))
-{
-    TkXeNextRequest(display);
 }
 
 /*
