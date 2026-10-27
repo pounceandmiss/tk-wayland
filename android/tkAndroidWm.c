@@ -43,6 +43,7 @@ static int		Placement(TkXeSurface *surfPtr);
 static void		Place(TkXeSurface *surfPtr);
 static void		SetNetWmState(TkXeSurface *surfPtr);
 static TkXeSurface *	TopToplevel(TkXeSurface *exceptPtr);
+static void		IconifyIdle(void *clientData);
 
 /*
  *----------------------------------------------------------------------
@@ -378,7 +379,9 @@ TopToplevel(
  * TkXeWmMapSurface --
  *
  *	Called when a child of the root window is mapped: place it, and give
- *	the keyboard to it unless it is override-redirect.
+ *	the keyboard to it unless it is override-redirect. A toplevel whose
+ *	initial state is iconic (iconified before it was mapped) is unmapped
+ *	again at idle time, as X window managers do.
  *
  * Results:
  *	None.
@@ -393,14 +396,49 @@ void
 TkXeWmMapSurface(
     TkXeSurface *surfPtr)	/* The surface of the mapped window. */
 {
+    long *hints;
+
     InitAtoms(surfPtr->winPtr->display);
     surfPtr->placement = Placement(surfPtr);
     if (surfPtr->placement == TKANDROID_PLACE_NONE) {
 	return;
     }
+    hints = GetLongs(surfPtr->winPtr, XA_WM_HINTS, 9);
+    if (hints && (hints[0] & StateHint) && hints[2] == IconicState) {
+	Tcl_DoWhenIdle(IconifyIdle,
+		(void *)(intptr_t)surfPtr->winPtr->id);
+	return;
+    }
     SetNetWmState(surfPtr);
     Place(surfPtr);
     TkAndroidSetKeyboardSurface(surfPtr);
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * IconifyIdle --
+ *
+ *	Unmap a toplevel mapped in the iconic state, if it is still mapped.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The window is unmapped.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static void
+IconifyIdle(
+    void *clientData)		/* The id of the window. */
+{
+    TkXeWindow *winPtr = TkXeGetWindow((Window)(intptr_t)clientData);
+
+    if (winPtr && winPtr->mapped) {
+	XUnmapWindow(winPtr->display, winPtr->id);
+    }
 }
 
 /*
