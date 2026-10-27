@@ -655,7 +655,9 @@ test send-12.2 {TimeoutProc procedure} {secureserver otherProcesses} {
 winfo interps
 tk appname tktest
 
-test send-13.1 {DeleteProc procedure} -constraints {secureserver} -body {
+test send-13.1 {DeleteProc procedure} -constraints {
+    secureserver childProcesses
+} -body {
     childTkProcess create
     set app [childTkProcess eval {rename send {}; tk appname}]
     set result [list [catch {send $app foo} msg] $msg [winfo interps]]

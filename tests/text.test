@@ -2726,7 +2726,8 @@ test text-10.40 {TextWidgetCmd procedure, "count" option} -setup {
 } -cleanup {
     destroy .t
 } -result 0
-test text-10.41 {TextWidgetCmd procedure, "count" option} -setup {
+test text-10.41 {TextWidgetCmd procedure, "count" option} \
+    -constraints sizedToplevels -setup {
     toplevel .mytop
     pack [text .mytop.t -font TkFixedFont -bd 0 -padx 0 -wrap char]
     set spec [font measure TkFixedFont "Line 1+++Line 1---Li"]  ; # 20 chars
@@ -6162,7 +6163,7 @@ test text-23.3 {TkTextGetTabs procedure} -setup {
 } -cleanup {
     destroy .t
 } -result {100 200}
-test text-23.4 {TkTextGetTabs procedure} -setup {
+test text-23.4 {TkTextGetTabs procedure} -constraints sizedToplevels -setup {
     text .t -highlightthickness 0 -bd 0 -relief flat -padx 0 -width 150
     pack .t
 } -body {
@@ -6176,7 +6177,7 @@ test text-23.4 {TkTextGetTabs procedure} -setup {
 } -cleanup {
     destroy .t
 } -result {100 200 300 400}
-test text-23.5 {TkTextGetTabs procedure} -setup {
+test text-23.5 {TkTextGetTabs procedure} -constraints sizedToplevels -setup {
     text .t -highlightthickness 0 -bd 0 -relief flat -padx 0 -width 150
     pack .t
 } -body {

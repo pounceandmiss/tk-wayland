@@ -38,6 +38,18 @@ foreach c {otherProcesses pointerWarp multipleColormaps placedToplevels} {
     testConstraint $c [expr {[tk windowingsystem] ni {wayland android}}]
 }
 unset c
+# Another process of the interpreter can be started (not on Android).
+testConstraint childProcesses [file executable [interpreter]]
+# Toplevels take the size and position they ask for (on Android, those which
+# can be resized fill the screen, and the others are centered).
+testConstraint sizedToplevels [expr {[tk windowingsystem] ne "android"}]
+# Scrolling copies pixels, and only the rest is redrawn: not at fractional
+# scales, where the X emulation of Wayland and Android redraws the whole area
+# (the emulator of the Android tests has 2.625 pixels per logical pixel).
+testConstraint copiedScrolling [expr {
+    [tk windowingsystem] ne "android"
+    || [::tk::android::scale] == round([::tk::android::scale])
+}]
 testConstraint altDisplay  [info exists env(TK_ALT_DISPLAY)]
 
 # constraint for tests that need a window manager, e.g. to iconify a toplevel.

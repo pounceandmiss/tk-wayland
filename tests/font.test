@@ -83,7 +83,8 @@ set defaultfontlist [font names]
 
 switch [tk windowingsystem] {
     x11		-
-    wayland	{set fixed "TkFixedFont"}
+    wayland	-
+    android	{set fixed "TkFixedFont"}
     win32	{set fixed "courier 12"}
     aqua	{set fixed "monaco 9"}
 }

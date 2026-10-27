@@ -62,7 +62,7 @@ set hidden_cmds [apply { {} {
 
 lappend hidden_cmds \
 	bell clipboard grab menu selection toplevel wm
-if {[tk windowingsystem] ni {x11 wayland}} {
+if {[tk windowingsystem] ni {x11 wayland android}} {
     lappend hidden_cmds tk_chooseColor tk_chooseDirectory \
 	tk_getOpenFile tk_getSaveFile tk_messageBox
 }

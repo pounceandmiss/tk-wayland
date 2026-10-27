@@ -517,6 +517,9 @@ proc press {w index} {
 }
 
 test touch-5.1 {touch adaptation: larger targets} -body {
+    # Adapted again, since earlier tests may have reset the option database
+    # and the bindings of all.
+    unset -nocomplain ::tk::touch::adapted
     ::tk::touch::Adapt
     button .b
     list [ttk::style configure TButton -padding] [.b cget -pady] \

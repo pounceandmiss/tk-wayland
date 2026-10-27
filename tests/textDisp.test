@@ -854,7 +854,8 @@ test textDisp-4.7 {UpdateDisplayInfo, filling in extra vertical space} {
     update
     set x
 } {8.0 {16.0 17.0 15.0 14.0 13.0 12.0 11.0 10.0 9.0 8.0} {8.0 9.0 10.0 11.0 12.0 13.0 14.0 15.0 16.0 17.0}}
-test textDisp-4.8 {UpdateDisplayInfo, filling in extra vertical space} {
+test textDisp-4.8 {UpdateDisplayInfo, filling in extra vertical space} \
+    copiedScrolling {
     .t delete 1.0 end
     .t insert end "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17"
     .t yview 16.0
@@ -872,7 +873,8 @@ test textDisp-4.9 {UpdateDisplayInfo, filling in extra vertical space} {
     list [.t bbox 7.0] [.t bbox 12.0]
 } [list [list [xchar 0] [yline 3] $fixedWidth $fixedHeight] \
 	[list [xchar 0] [yline 8] $fixedWidth $fixedHeight]]
-test textDisp-4.10 {UpdateDisplayInfo, filling in extra vertical space} {
+test textDisp-4.10 {UpdateDisplayInfo, filling in extra vertical space} \
+    copiedScrolling {
     .t delete 1.0 end
     .t insert end "1\n2\n3\n4\n5\nLine 6 is such a long line that it wraps around.\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17"
     .t yview end
@@ -881,7 +883,8 @@ test textDisp-4.10 {UpdateDisplayInfo, filling in extra vertical space} {
     update
     list [.t index @0,0] $tk_textRelayout $tk_textRedraw
 } {5.0 {12.0 7.0 6.40 6.20 6.0 5.0} {5.0 6.0 6.20 6.40 7.0 12.0}}
-test textDisp-4.11 {UpdateDisplayInfo, filling in extra vertical space} {
+test textDisp-4.11 {UpdateDisplayInfo, filling in extra vertical space} \
+    copiedScrolling {
     .t delete 1.0 end
     .t insert end "1\n2\n3\n4\n5\nLine 6 is such a long line that it wraps around, not once but really quite a few times.\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17"
     .t yview end
@@ -916,7 +919,8 @@ test textDisp-4.12 {UpdateDisplayInfo, filling in extra vertical space} {
 .t tag delete x
 .t tag configure x -relief raised -borderwidth 2 -background white
 
-test textDisp-4.13 {UpdateDisplayInfo, special handling for top/bottom lines} {
+test textDisp-4.13 {UpdateDisplayInfo, special handling for top/bottom lines} \
+    copiedScrolling {
     .t tag add x 1.0 end
     .t yview 1.0
     update
@@ -924,7 +928,8 @@ test textDisp-4.13 {UpdateDisplayInfo, special handling for top/bottom lines} {
     update
     list $tk_textRelayout $tk_textRedraw
 } {{11.0 12.0 13.0} {4.0 10.0 11.0 12.0 13.0}}
-test textDisp-4.14 {UpdateDisplayInfo, special handling for top/bottom lines} {
+test textDisp-4.14 {UpdateDisplayInfo, special handling for top/bottom lines} \
+    copiedScrolling {
     .t tag remove x 1.0 end
     .t yview 1.0
     update
@@ -932,7 +937,8 @@ test textDisp-4.14 {UpdateDisplayInfo, special handling for top/bottom lines} {
     update
     list $tk_textRelayout $tk_textRedraw
 } {{11.0 12.0 13.0} {11.0 12.0 13.0}}
-test textDisp-4.15 {UpdateDisplayInfo, special handling for top/bottom lines} {
+test textDisp-4.15 {UpdateDisplayInfo, special handling for top/bottom lines} \
+    copiedScrolling {
     .t tag add x 1.0 end
     .t yview 4.0
     update
@@ -940,7 +946,8 @@ test textDisp-4.15 {UpdateDisplayInfo, special handling for top/bottom lines} {
     update
     list $tk_textRelayout $tk_textRedraw
 } {{2.0 3.0} {2.0 3.0 4.0 11.0}}
-test textDisp-4.16 {UpdateDisplayInfo, special handling for top/bottom lines} {
+test textDisp-4.16 {UpdateDisplayInfo, special handling for top/bottom lines} \
+    copiedScrolling {
     .t tag remove x 1.0 end
     .t yview 4.0
     update
@@ -1074,7 +1081,7 @@ test textDisp-5.2 {DisplayDLine, line resizes during display} {
 
 .t configure -wrap char
 
-test textDisp-6.1 {scrolling in DisplayText, scroll up} {
+test textDisp-6.1 {scrolling in DisplayText, scroll up} copiedScrolling {
     .t delete 1.0 end
     .t insert 1.0 "Line 1"
     foreach i {2 3 4 5 6 7 8 9 10 11 12 13 14 15} {
@@ -1085,7 +1092,7 @@ test textDisp-6.1 {scrolling in DisplayText, scroll up} {
     update
     list $tk_textRelayout $tk_textRedraw
 } {{2.0 10.0} {2.0 10.0}}
-test textDisp-6.2 {scrolling in DisplayText, scroll down} {
+test textDisp-6.2 {scrolling in DisplayText, scroll down} copiedScrolling {
     .t delete 1.0 end
     .t insert 1.0 "Line 1"
     foreach i {2 3 4 5 6 7 8 9 10 11 12 13 14 15} {
@@ -1096,7 +1103,7 @@ test textDisp-6.2 {scrolling in DisplayText, scroll down} {
     update
     list $tk_textRelayout $tk_textRedraw
 } {{2.0 3.0} {2.0 3.0}}
-test textDisp-6.3 {scrolling in DisplayText, multiple scrolls} {
+test textDisp-6.3 {scrolling in DisplayText, multiple scrolls} copiedScrolling {
     .t configure -wrap char
     .t delete 1.0 end
     .t insert 1.0 "Line 1"
@@ -1109,7 +1116,8 @@ test textDisp-6.3 {scrolling in DisplayText, multiple scrolls} {
     update
     list $tk_textRelayout $tk_textRedraw
 } {{2.0 2.20 4.0 4.20} {2.0 2.20 4.0 4.20}}
-test textDisp-6.4 {scrolling in DisplayText, scrolls interfere} {
+test textDisp-6.4 {scrolling in DisplayText, scrolls interfere} \
+    copiedScrolling {
     .t configure -wrap char
     .t delete 1.0 end
     .t insert 1.0 "Line 1"
@@ -1122,7 +1130,7 @@ test textDisp-6.4 {scrolling in DisplayText, scrolls interfere} {
     update
     list $tk_textRelayout $tk_textRedraw
 } {{2.0 2.20 2.40 2.60 4.0 4.20} {2.0 2.20 2.40 2.60 4.0 4.20 6.0}}
-test textDisp-6.5 {scrolling in DisplayText, scroll source obscured} {aquaKnownBug} {
+test textDisp-6.5 {scrolling in DisplayText, scroll source obscured} {aquaKnownBug copiedScrolling} {
 # constrained by aquaKnownBug until ticket [aad0231f07] is fixed
     .t configure -wrap char
     frame .f2 -bg red
@@ -1138,7 +1146,7 @@ test textDisp-6.5 {scrolling in DisplayText, scroll source obscured} {aquaKnownB
     destroy .f2
     list $tk_textRelayout $tk_textRedraw
 } {{1.0 9.0 10.0} {1.0 4.0 5.0 9.0 10.0}}
-test textDisp-6.6 {scrolling in DisplayText, Expose events after scroll} {aquaKnownBug} {
+test textDisp-6.6 {scrolling in DisplayText, Expose events after scroll} {aquaKnownBug copiedScrolling} {
 # constrained by aquaKnownBug until ticket [aad0231f07] is fixed
     # this test depends on all of the expose events being handled at once
     .t configure -wrap char
@@ -1402,7 +1410,7 @@ test textDisp-8.6 {TkTextChanged} {
     update
     list $tk_textRelayout $tk_textRedraw
 } {{1.0 1.20 1.40} {1.0 1.20 1.40}}
-test textDisp-8.7 {TkTextChanged} {
+test textDisp-8.7 {TkTextChanged} copiedScrolling {
     .t delete 1.0 end
     .t insert 1.0 "Line 1 is so long that it wraps around, two times"
     foreach i {2 3 4 5 6 7 8 9 10 11 12 13 14 15} {
@@ -1424,7 +1432,7 @@ test textDisp-8.8 {TkTextChanged} {
     update
     list $tk_textRelayout $tk_textRedraw
 } {2.0 2.0}
-test textDisp-8.9 {TkTextChanged} {
+test textDisp-8.9 {TkTextChanged} copiedScrolling {
     .t delete 1.0 end
     .t insert 1.0 "Line 1 is so long that it wraps around, two times"
     foreach i {2 3 4 5 6 7 8 9 10 11 12 13 14 15} {
@@ -1435,7 +1443,8 @@ test textDisp-8.9 {TkTextChanged} {
     update
     list $tk_textRelayout $tk_textRedraw
 } {{2.0 8.0} {2.0 8.0}}
-test textDisp-8.10 {TkTextChanged} haveBigFontTwiceLargerThanTextFont {
+test textDisp-8.10 {TkTextChanged} \
+    {haveBigFontTwiceLargerThanTextFont copiedScrolling} {
     .t configure -wrap char
     .t delete 1.0 end
     .t insert 1.0 "Line 1\nLine 2 is long enough to wrap\nLine 3 is also long enough to wrap\nLine 4"
@@ -1496,7 +1505,7 @@ test textDisp-8.13 {TkTextChanged, used to crash, see [06c1433906]} {
 } {}
 
 test textDisp-9.1 {TkTextRedrawTag} -constraints {
-    haveBigFontTwiceLargerThanTextFont
+    haveBigFontTwiceLargerThanTextFont copiedScrolling
 } -body {
     .t configure -wrap char
     .t delete 1.0 end
@@ -1509,7 +1518,7 @@ test textDisp-9.1 {TkTextRedrawTag} -constraints {
 # while still testing what we want to test
 } -match glob -result {{2.0 2.1[78]} {2.0 2.1[78]}}
 test textDisp-9.2 {TkTextRedrawTag} -constraints {
-    haveBigFontTwiceLargerThanTextFont
+    haveBigFontTwiceLargerThanTextFont copiedScrolling
 } -body {
     .t configure -wrap char
     .t delete 1.0 end
@@ -1521,7 +1530,8 @@ test textDisp-9.2 {TkTextRedrawTag} -constraints {
 # glob matching is to have some tolerance on actually used font size
 # while still testing what we want to test
 } -match glob -result {{1.0 2.0 2.1[678]} {1.0 2.0 2.1[678]}}
-test textDisp-9.3 {TkTextRedrawTag} haveBigFontTwiceLargerThanTextFont {
+test textDisp-9.3 {TkTextRedrawTag} \
+    {haveBigFontTwiceLargerThanTextFont copiedScrolling} {
     .t configure -wrap char
     .t delete 1.0 end
     .t insert 1.0 "Line 1\nLine 2 is long enough to wrap around\nLine 3\nLine 4"
@@ -1532,7 +1542,8 @@ test textDisp-9.3 {TkTextRedrawTag} haveBigFontTwiceLargerThanTextFont {
     update
     list $tk_textRelayout $tk_textRedraw
 } {{2.0 2.20} {2.0 2.20 eof}}
-test textDisp-9.4 {TkTextRedrawTag} haveBigFontTwiceLargerThanTextFont {
+test textDisp-9.4 {TkTextRedrawTag} \
+    {haveBigFontTwiceLargerThanTextFont copiedScrolling} {
     .t configure -wrap char
     .t delete 1.0 end
     .t insert 1.0 "Line 1\nLine 2 is long enough to wrap around\nLine 3\nLine 4"
@@ -1544,7 +1555,7 @@ test textDisp-9.4 {TkTextRedrawTag} haveBigFontTwiceLargerThanTextFont {
     list $tk_textRelayout $tk_textRedraw
 } {{2.0 2.20} {2.0 2.20 eof}}
 test textDisp-9.5 {TkTextRedrawTag} -constraints {
-    haveBigFontTwiceLargerThanTextFont
+    haveBigFontTwiceLargerThanTextFont copiedScrolling
 } -setup {
     .t configure -wrap char -height [expr {[.t cget -height]+10}]
 } -body {
@@ -1572,7 +1583,7 @@ test textDisp-9.6 {TkTextRedrawTag} haveBigFontTwiceLargerThanTextFont {
     list $tk_textRelayout $tk_textRedraw
 } {{2.0 2.20 3.0 3.20} {2.0 2.20 3.0 3.20 eof}}
 test textDisp-9.7 {TkTextRedrawTag} \
-    -constraints haveBigFontTwiceLargerThanTextFont \
+    -constraints {haveBigFontTwiceLargerThanTextFont copiedScrolling} \
     -body {
 	.t configure -wrap char
 	.t delete 1.0 end
@@ -1584,7 +1595,7 @@ test textDisp-9.7 {TkTextRedrawTag} \
 	set tk_textRedraw
     } -result {2.0 2.20 eof}
 test textDisp-9.8 {TkTextRedrawTag} -constraints {
-    haveBigFontTwiceLargerThanTextFont
+    haveBigFontTwiceLargerThanTextFont copiedScrolling
 } -body {
     .t configure -wrap char
     .t delete 1.0 end
@@ -1598,7 +1609,7 @@ test textDisp-9.8 {TkTextRedrawTag} -constraints {
 # while still testing what we want to test
 } -match glob -result {2.0 2.1[678]}
 test textDisp-9.9 {TkTextRedrawTag} -constraints {
-    haveBigFontTwiceLargerThanTextFont
+    haveBigFontTwiceLargerThanTextFont copiedScrolling
 } -body {
     .t configure -wrap char
     .t delete 1.0 end
@@ -1632,7 +1643,7 @@ test textDisp-9.11 {TkTextRedrawTag} haveBigFontTwiceLargerThanTextFont {
     update
     set tk_textRedraw
 } {}
-test textDisp-9.12 {TkTextRedrawTag} {
+test textDisp-9.12 {TkTextRedrawTag} copiedScrolling {
     .t configure -wrap char
     .t delete 1.0 end
     for {set i 1} {$i < 5} {incr i} {
@@ -1645,7 +1656,7 @@ test textDisp-9.12 {TkTextRedrawTag} {
     update
     list $tk_textRelayout $tk_textRedraw
 } {2.0 {2.0 eof}}
-test textDisp-9.13 {TkTextRedrawTag} {
+test textDisp-9.13 {TkTextRedrawTag} copiedScrolling {
     .t configure -wrap none
     .t delete 1.0 end
     for {set i 1} {$i < 10} {incr i} {
@@ -1731,21 +1742,21 @@ test textDisp-11.1 {TkTextSetYView} {
     update
     .t index @0,0
 } {30.0}
-test textDisp-11.2 {TkTextSetYView} {
+test textDisp-11.2 {TkTextSetYView} copiedScrolling {
     .t yview 30.0
     update
     .t yview 32.0
     update
     list [.t index @0,0] $tk_textRedraw
 } {32.0 {40.0 41.0}}
-test textDisp-11.3 {TkTextSetYView} {
+test textDisp-11.3 {TkTextSetYView} copiedScrolling {
     .t yview 30.0
     update
     .t yview 28.0
     update
     list [.t index @0,0] $tk_textRedraw
 } {28.0 {28.0 29.0}}
-test textDisp-11.4 {TkTextSetYView} {
+test textDisp-11.4 {TkTextSetYView} copiedScrolling {
     .t yview 30.0
     update
     .t yview 31.4
@@ -1760,7 +1771,7 @@ test textDisp-11.5 {TkTextSetYView} {
     update
     list [.t index @0,0] $tk_textRedraw
 } {30.0 {}}
-test textDisp-11.6 {TkTextSetYView} {
+test textDisp-11.6 {TkTextSetYView} copiedScrolling {
     .t yview 30.0
     update
     set tk_textRedraw {}
@@ -1768,7 +1779,7 @@ test textDisp-11.6 {TkTextSetYView} {
     update
     list [.t index @0,0] $tk_textRedraw
 } {28.0 {28.0 29.0}}
-test textDisp-11.7 {TkTextSetYView} {
+test textDisp-11.7 {TkTextSetYView} copiedScrolling {
     .t yview 30.0
     update
     set tk_textRedraw {}
@@ -1776,7 +1787,7 @@ test textDisp-11.7 {TkTextSetYView} {
     update
     list [.t index @0,0] $tk_textRedraw
 } {21.0 {21.0 22.0 23.0 24.0 25.0 26.0 27.0 28.0 29.0}}
-test textDisp-11.8 {TkTextSetYView} {
+test textDisp-11.8 {TkTextSetYView} copiedScrolling {
     .t yview 30.0
     update
     set tk_textRedraw {}
@@ -1784,7 +1795,7 @@ test textDisp-11.8 {TkTextSetYView} {
     update
     list [.t index @0,0] $tk_textRedraw
 } {32.0 {40.0 41.0}}
-test textDisp-11.9 {TkTextSetYView} {
+test textDisp-11.9 {TkTextSetYView} copiedScrolling {
     .t yview 30.0
     update
     set tk_textRedraw {}
@@ -1808,7 +1819,8 @@ test textDisp-11.11 {TkTextSetYView} {
     update
     list [.t index @0,0] $tk_textRedraw
 } {191.0 {191.0 192.0 193.0 194.0 195.0 196.0}}
-test textDisp-11.12 {TkTextSetYView, wrapped line is off-screen} {
+test textDisp-11.12 {TkTextSetYView, wrapped line is off-screen} \
+    copiedScrolling {
     .t insert 10.0 "Long line with enough text to wrap\n"
     .t yview 1.0
     update
@@ -1823,7 +1835,8 @@ test textDisp-11.12 {TkTextSetYView, wrapped line is off-screen} {
 #
 .t delete 10.0 11.0
 
-test textDisp-11.13 {TkTestSetYView, partially visible last line} {
+test textDisp-11.13 {TkTestSetYView, partially visible last line} \
+    sizedToplevels {
     catch {destroy .top}
     toplevel .top
     wm geometry .top +0+0
@@ -3246,7 +3259,8 @@ test textDisp-19.11.24 {TextWidgetCmd procedure, "index +/-displaylines"} {
       [.t index "11.5 +0 disp lines"]
 } {10.5 12.5 12.5 10.5 10.5 12.5 11.5}
 
-test textDisp-19.12 {GetYView procedure, partially visible last line} {
+test textDisp-19.12 {GetYView procedure, partially visible last line} \
+    sizedToplevels {
     catch {destroy .top}
     toplevel .top
     wm geometry .top +0+0
@@ -3260,7 +3274,8 @@ test textDisp-19.12 {GetYView procedure, partially visible last line} {
     update
     .top.t yview
 } [list 0.0 [expr {(5.0 * $fixedHeight - 3.0)/ (5.0 * $fixedHeight)}]]
-test textDisp-19.13 {GetYView procedure, partially visible last line} {
+test textDisp-19.13 {GetYView procedure, partially visible last line} \
+    sizedToplevels {
     catch {destroy .top}
     toplevel .top
     wm geometry .top +0+0
@@ -4524,7 +4539,7 @@ test textDisp-27.7.1 {SizeOfTab procedure, center alignment, wrap -none (potenti
     .t configure -tabstyle tabular
     lset res 0 [expr {[lindex $res 0] - $tab}]
 } [list 0 [yline 2] $fixedWidth $fixedHeight]
-test textDisp-27.7.2 {SizeOfTab procedure, fractional tab interpolation problem} {
+test textDisp-27.7.2 {SizeOfTab procedure, fractional tab interpolation problem} sizedToplevels {
     .t delete 1.0 end
     set interpolatetab {1c 2c}
     set precisetab {}

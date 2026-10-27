@@ -479,7 +479,8 @@ test place-12.1 {PlaceObjCmd, forget command} -setup {
 } -result {1 0}
 
 
-test place-13.1 {test respect for internalborder} -setup {
+test place-13.1 {test respect for internalborder} \
+    -constraints sizedToplevels -setup {
     destroy .pack
 } -body {
     toplevel .pack

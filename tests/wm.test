@@ -677,7 +677,7 @@ test wm-deiconify-2.2 {a window that has already been\
 } -result 1
 test wm-deiconify-2.3 {geometry for an unmapped window\
 	should not be calculated by a call to deiconify,\
-	it should be done at idle time} -setup {
+	it should be done at idle time} -constraints sizedToplevels -setup {
     set results {}
 } -body {
     toplevel .t -width 200 -height 200
@@ -750,7 +750,7 @@ test wm-geometry-1.3 {usage} -returnCodes error -body {
     wm geometry . bogus
 } -result {bad geometry specifier "bogus"}
 
-test wm-geometry-2.1 {setting values} -body {
+test wm-geometry-2.1 {setting values} -constraints sizedToplevels -body {
     wm geometry .t 150x150+50+50
     update
     set result [wm geometry .t]
@@ -760,7 +760,7 @@ test wm-geometry-2.1 {setting values} -body {
 } -cleanup {
     unset result
 } -match glob -result [list 150x150+*+* 0]
-test wm-geometry-2.2 {setting only the size does not move the window - bug 2995339} -setup {
+test wm-geometry-2.2 {setting only the size does not move the window - bug 2995339} -constraints sizedToplevels -setup {
     destroy .geom
     toplevel .geom -width 200 -height 150
     update
@@ -1211,7 +1211,8 @@ test wm-maxsize-1.7 {toplevel windows must be <= display screen size\
 destroy .t
 
 test wm-maxsize-2.1 {setting the maxsize to a value smaller\
-	than the current size will resize a toplevel} -body {
+	than the current size will resize a toplevel} \
+	-constraints sizedToplevels -body {
     toplevel .t -width 300 -height 300
     update
     wm maxsize .t 200 150
@@ -1222,7 +1223,8 @@ test wm-maxsize-2.1 {setting the maxsize to a value smaller\
     destroy .t
 } -result {200 150}
 test wm-maxsize-2.2 {setting the maxsize to a value smaller\
-	than the current size will resize a gridded toplevel} -body {
+	than the current size will resize a gridded toplevel} \
+	-constraints sizedToplevels -body {
     toplevel .t
     wm grid .t 0 0 50 50
     wm geometry .t 6x6
@@ -1235,7 +1237,8 @@ test wm-maxsize-2.2 {setting the maxsize to a value smaller\
     destroy .t
 } -result {4 3}
 test wm-maxsize-2.3 {attempting to resize to a value\
-	bigger than the current maxsize will set it to the max size} -body {
+	bigger than the current maxsize will set it to the max size} \
+	-constraints sizedToplevels -body {
     toplevel .t -width 200 -height 200
     wm maxsize .t 300 250
     update
@@ -1246,7 +1249,8 @@ test wm-maxsize-2.3 {attempting to resize to a value\
     destroy .t
 } -result {300 250}
 test wm-maxsize-2.4 {attempting to resize to a value bigger than the\
-	current maxsize will set it to the max size when gridded} -body {
+	current maxsize will set it to the max size when gridded} \
+	-constraints sizedToplevels -body {
     toplevel .t
     wm grid .t 1 1 50 50
     wm geom .t 4x4
@@ -1259,7 +1263,8 @@ test wm-maxsize-2.4 {attempting to resize to a value bigger than the\
     destroy .t
 } -result {6 5}
 test wm-maxsize-2.5 {Use max size if window size is not explicitly set\
-	and the reqWidth/reqHeight are bigger than the max size} -body {
+	and the reqWidth/reqHeight are bigger than the max size} \
+	-constraints sizedToplevels -body {
     toplevel .t
     pack [frame .t.f -width 400 -height 400]
     update idletasks
@@ -1299,7 +1304,8 @@ test wm-minsize-1.6 {usage} -setup {
 } -result {300 200}
 
 test wm-minsize-2.1 {setting the minsize to a value larger\
-	than the current size will resize a toplevel} -body {
+	than the current size will resize a toplevel} \
+	-constraints sizedToplevels -body {
     toplevel .t -width 200 -height 200
     update
     wm minsize .t 400 300
@@ -1310,7 +1316,8 @@ test wm-minsize-2.1 {setting the minsize to a value larger\
     destroy .t
 } -result {400 300}
 test wm-minsize-2.2 {setting the minsize to a value larger\
-	than the current size will resize a gridded toplevel} -body {
+	than the current size will resize a gridded toplevel} \
+	-constraints sizedToplevels -body {
     toplevel .t
     wm grid .t 1 1 50 50
     wm geom .t 4x4
@@ -1323,7 +1330,8 @@ test wm-minsize-2.2 {setting the minsize to a value larger\
     destroy .t
 } -result {8 8}
 test wm-minsize-2.3 {attempting to resize to a value\
-	smaller than the current minsize will set it to the minsize} -body {
+	smaller than the current minsize will set it to the minsize} \
+	-constraints sizedToplevels -body {
     toplevel .t -width 400 -height 400
     wm minsize .t 300 300
     update
@@ -1334,7 +1342,8 @@ test wm-minsize-2.3 {attempting to resize to a value\
     destroy .t
 } -result {300 300}
 test wm-minsize-2.4 {attempting to resize to a value smaller than the\
-	current minsize will set it to the minsize when gridded} -body {
+	current minsize will set it to the minsize when gridded} \
+	-constraints sizedToplevels -body {
     toplevel .t
     wm grid .t 1 1 50 50
     wm geom .t 8x8
@@ -1347,7 +1356,8 @@ test wm-minsize-2.4 {attempting to resize to a value smaller than the\
     destroy .t
 } -result {6 6}
 test wm-minsize-2.5 {Use min size if window size is not explicitly set\
-	and the reqWidth/reqHeight are smaller than the min size} -setup {
+	and the reqWidth/reqHeight are smaller than the min size} \
+	-constraints sizedToplevels -setup {
     set result [list]
 } -body {
     toplevel .t

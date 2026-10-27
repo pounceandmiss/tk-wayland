@@ -919,7 +919,7 @@ test listbox-3.91 {ListboxWidgetCmd procedure, "see" option} -body {
     .l see 322
     .l index @0,0
 } -result 13
-test listbox-3.92 {ListboxWidgetCmd procedure, "see" option, partial last line} -body {
+test listbox-3.92 {ListboxWidgetCmd procedure, "see" option, partial last line} -constraints sizedToplevels -body {
     mkPartial
     .partial.l see 4
     .partial.l index @0,0
@@ -1161,7 +1161,7 @@ test listbox-3.125 {ListboxWidgetCmd procedure, "yview" option} -setup {
 } -cleanup {
     destroy .l2
 } -result {0.2 0.45}
-test listbox-3.126 {ListboxWidgetCmd procedure, "yview" option, partial last line} -setup {
+test listbox-3.126 {ListboxWidgetCmd procedure, "yview" option, partial last line} -constraints sizedToplevels -setup {
     destroy .l
     listbox .l -width 10 -height 5 -font $fixed
     pack .l
@@ -1847,7 +1847,7 @@ test listbox-7.12 {DeleteEls procedure} -body {
     .l delete 3 end
     .l index @0,0
 } -result 1
-test listbox-7.13 {DeleteEls procedure, updating view with partial last line} -body {
+test listbox-7.13 {DeleteEls procedure, updating view with partial last line} -constraints sizedToplevels -body {
     mkPartial
     .partial.l yview 8
     update
@@ -2287,7 +2287,8 @@ test listbox-11.5 {ChangeListboxView procedure} -setup {
 } -cleanup {
     destroy .l
 } -result {{0.3 0.8} {}}
-test listbox-11.6 {ChangeListboxView procedure, partial last line} -body {
+test listbox-11.6 {ChangeListboxView procedure, partial last line} \
+    -constraints sizedToplevels -body {
     mkPartial
     .partial.l yview 13
     .partial.l index @0,0
@@ -2386,7 +2387,8 @@ test listbox-13.3 {ListboxScanTo procedure} -constraints {
 } -result {{0.8 1} {0.75 1} {0.6 0.8} {0.25 0.5}}
 
 
-test listbox-14.1 {NearestListboxElement procedure, partial last line} -body {
+test listbox-14.1 {NearestListboxElement procedure, partial last line} \
+    -constraints sizedToplevels -body {
     mkPartial
     .partial.l nearest [winfo height .partial.l]
 } -result 4
@@ -2590,7 +2592,8 @@ test listbox-18.1 {ListboxUpdateVScrollbar procedure} -body {
     update
     set log
 } -result {{y 0 1} {y 0 0.625} {y 0 1}}
-test listbox-18.2 {ListboxUpdateVScrollbar procedure, partial last line} -body {
+test listbox-18.2 {ListboxUpdateVScrollbar procedure, partial last line} \
+    -constraints sizedToplevels -body {
     mkPartial
     .partial.l configure -yscrollcommand "record y"
     set log {}

@@ -645,7 +645,7 @@ test frame-3.8 {TkCreateFrame procedure} -setup {
     option clear
 } -result {Silly #122334}
 test frame-3.9 {TkCreateFrame procedure, -use option} -constraints {
-    unix
+    unix sizedToplevels
 } -setup {
     deleteWindows
 } -body {
@@ -660,7 +660,7 @@ test frame-3.9 {TkCreateFrame procedure, -use option} -constraints {
     deleteWindows
 } -result {0 0 140 300}
 test frame-3.10 {TkCreateFrame procedure, -use option} -constraints {
-    unix
+    unix sizedToplevels
 } -setup {
     deleteWindows
 } -body {

@@ -1448,7 +1448,7 @@ test grid-16.1 {layout centering} -body {
 } -cleanup {
     grid_reset 16.1
 } -result {37 50 225 150}
-test grid-16.2 {layout weights (expanding)} -body {
+test grid-16.2 {layout weights (expanding)} -constraints sizedToplevels -body {
     foreach i {0 1 2} {
 	frame .$i -bg gray  -width 75 -height 50 -bd 2 -relief ridge
 	grid .$i -row $i -column $i -sticky nswe
@@ -1618,7 +1618,7 @@ test grid-16.9 {layout uniform} -body {
 } -cleanup {
     grid_reset 16.9
 } -result {{0 0 135 75} {0 75 135 100} {0 175 135 75} {0 250 135 100} {0 350 135 40}}
-test grid-16.10 {layout uniform} -body {
+test grid-16.10 {layout uniform} -constraints sizedToplevels -body {
     grid [frame .f1 -width  75 -height  50] -row 0 -column 0
     grid [frame .f2 -width  60 -height  30] -row 1 -column 2
     grid [frame .f3 -width  95 -height  90] -row 2 -column 1
@@ -1866,7 +1866,8 @@ test grid-17.1 {forget and pending idle handlers} -body {
     set result ok
 } -result ok
 
-test grid-18.1 {test respect for internalborder} -body {
+test grid-18.1 {test respect for internalborder} \
+    -constraints sizedToplevels -body {
     toplevel .pack
     wm geometry .pack 200x200
     frame .pack.l -width 15 -height 10
@@ -1884,7 +1885,7 @@ test grid-18.1 {test respect for internalborder} -body {
     destroy .pack
     return $res
 } -result {196x188+2+10 177x186+5+7}
-test grid-18.2 {test support for minreqsize} -body {
+test grid-18.2 {test support for minreqsize} -constraints sizedToplevels -body {
     toplevel .pack
     wm geometry .pack {}
     frame .pack.l -width 150 -height 100

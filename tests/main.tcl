@@ -23,6 +23,9 @@ if {[tcltest::configure -singleproc] == 0} {
 }
 tk appname tktest
 wm title . tktest
+if {[tk windowingsystem] eq "android"} {
+    wm resizable . 0 0
+}
 
 #
 # IMPORT TCLTEST COMMANDS

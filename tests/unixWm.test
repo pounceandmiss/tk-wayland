@@ -83,7 +83,7 @@ if {[tk windowingsystem] eq "aqua"} {
 set i 1
 foreach geom "+$X+80 +80+$Y0 +$X+$Y0" {
     destroy .t
-    test unixWm-1.$i {initial window position} unix {
+    test unixWm-1.$i {initial window position} {unix sizedToplevels} {
 	toplevel .t -width 200 -height 150
 	wm geom .t $geom
 	update
@@ -112,7 +112,7 @@ set yerr [expr {150-$y}]
 
 set i 1
 foreach geom "+20+80 +80+$Y0 +0+$Y0 -0-0 +0-0 -0+$Y0 -10-5 -10+$Y5 +10-5" {
-    test unixWm-2.$i {moving window while mapped} unix {
+    test unixWm-2.$i {moving window while mapped} {unix sizedToplevels} {
 	wm geom .t $geom
 	update
 	scan [wm geom .t] %dx%d%1s%d%1s%d width height xsign x ysign y
@@ -124,7 +124,7 @@ foreach geom "+20+80 +80+$Y0 +0+$Y0 -0-0 +0-0 -0+$Y0 -10-5 -10+$Y5 +10-5" {
 
 set i 1
 foreach geom "+20+80 +80+$Y0 +0+$Y0 -0-0 +0-0 -0+$Y0 -10-5 -10+$Y5 +10-5" {
-    test unixWm-3.$i {moving window while iconified} unix {
+    test unixWm-3.$i {moving window while iconified} {unix sizedToplevels} {
 	update
 	wm iconify .t
 	update idletasks
@@ -141,7 +141,7 @@ foreach geom "+20+80 +80+$Y0 +0+$Y0 -0-0 +0-0 -0+$Y0 -10-5 -10+$Y5 +10-5" {
 
 set i 1
 foreach geom "+$X+80 +$X+40 +$X+$Y0" {
-    test unixWm-4.$i {moving window while withdrawn} unix {
+    test unixWm-4.$i {moving window while withdrawn} {unix sizedToplevels} {
 	wm withdraw .t
 	pause 10
 	wm geom .t $geom
@@ -232,18 +232,18 @@ wm geom .t +100+$Y0
 wm minsize .t 1 1
 update
 
-test unixWm-6.1 {size changes} unix {
+test unixWm-6.1 {size changes} {unix sizedToplevels} {
     .t config -width 180 -height 150
     update
     wm geom .t
 } 180x150+100+$Y0
-test unixWm-6.2 {size changes} unix {
+test unixWm-6.2 {size changes} {unix sizedToplevels} {
     wm geom .t 250x60
     .t config -width 170 -height 140
     update
     wm geom .t
 } 250x60+100+$Y0
-test unixWm-6.3 {size changes} unix {
+test unixWm-6.3 {size changes} {unix sizedToplevels} {
     wm geom .t 250x60
     .t config -width 170 -height 140
     wm geom .t {}
@@ -1425,7 +1425,7 @@ test unixWm-40.1 {Tk_SetGrid procedure, set grid dimensions before turning on gr
     update
     wm geometry .t
 } {30x10+0+0}
-test unixWm-40.2 {Tk_SetGrid procedure, turning on grid when dimensions already set} unix {
+test unixWm-40.2 {Tk_SetGrid procedure, turning on grid when dimensions already set} {unix sizedToplevels} {
     update
     destroy .t
     update
@@ -1439,7 +1439,7 @@ test unixWm-40.2 {Tk_SetGrid procedure, turning on grid when dimensions already 
     wm geometry .t
 } "20x20+100+$Y0"
 
-test unixWm-41.1 {ConfigureEvent procedure, internally generated size changes} unix {
+test unixWm-41.1 {ConfigureEvent procedure, internally generated size changes} {unix sizedToplevels} {
     destroy .t
     toplevel .t -width 400 -height 150
     tkwait visibility .t
@@ -1476,7 +1476,7 @@ test unixWm-41.2 {ConfigureEvent procedure, menubars} {nonPortable testmenubar} 
 	    [expr {[winfo rootx .t] - $x}] [expr {[winfo rooty .t] - $y}] \
 	    [winfo width .t] [winfo height .t]
 } {{.t.m: 200x20} {.t: 200x300} 0 0 200 20 0 20 200 300}
-test unixWm-41.3 {ConfigureEvent procedure, synthesized Configure events} unix {
+test unixWm-41.3 {ConfigureEvent procedure, synthesized Configure events} {unix sizedToplevels} {
     destroy .t
     toplevel .t -width 400 -height 150
     wm geometry .t +0+0
@@ -1487,7 +1487,7 @@ test unixWm-41.3 {ConfigureEvent procedure, synthesized Configure events} unix {
     update
     set result
 } {configured: 400 150}
-test unixWm-41.4 {ConfigureEvent procedure, synthesized Configure events} unix {
+test unixWm-41.4 {ConfigureEvent procedure, synthesized Configure events} {unix sizedToplevels} {
     destroy .t
     toplevel .t -width 400 -height 150
     wm geometry .t +0+0
@@ -1709,7 +1709,7 @@ test unixWm-45.2 {UpdateSizeHints procedure} {unix testwrapper} {
 	    [expr [lindex $property 7]] [expr [lindex $property 8]] \
 	    [expr [lindex $property 9]] [expr [lindex $property 10]]
 } {30 40 200 500 1 1}
-test unixWm-45.3 {UpdateSizeHints procedure, grid with menu} {testmenubar testwrapper} {
+test unixWm-45.3 {UpdateSizeHints procedure, grid with menu} {testmenubar testwrapper sizedToplevels} {
     destroy .t
     toplevel .t -width 80 -height 60
     frame .t.menu -height 23 -width 50
@@ -1791,7 +1791,7 @@ toplevel .t -width 300 -height 200
 wm geometry .t +0+0
 tkwait visibility .t
 
-test unixWm-48.1 {ParseGeometry procedure} unix {
+test unixWm-48.1 {ParseGeometry procedure} {unix sizedToplevels} {
     wm geometry .t =100x120
     update
     list [winfo width .t] [winfo height .t]
@@ -1829,7 +1829,7 @@ test unixWm-48.11 {ParseGeometry procedure} unix {
 test unixWm-48.12 {ParseGeometry procedure} unix {
     catch {wm geometry .t +30+-10}
 } 0
-test unixWm-48.13 {ParseGeometry procedure, resize causes window to move} unix {
+test unixWm-48.13 {ParseGeometry procedure, resize causes window to move} {unix sizedToplevels} {
     destroy .t
     toplevel .t -width 200 -height 200
     wm geom .t +0+0
@@ -1919,7 +1919,7 @@ test unixWm-50.1 {Tk_CoordsToWindow procedure, finding a toplevel, x-coords, tit
 	 [winfo containing [expr {$x + 200}] [expr {$y + 250}]] \
 	 [winfo containing [expr {$x + 220}] [expr {$y + 250}]] \
 } $result_50_1
-test unixWm-50.2 {Tk_CoordsToWindow procedure, finding a toplevel, y-coords and overrideredirect} unix {
+test unixWm-50.2 {Tk_CoordsToWindow procedure, finding a toplevel, y-coords and overrideredirect} {unix sizedToplevels} {
     deleteWindows
     toplevel .t -width 400 -height 300 -bg yellow
     tkwait visibility .t
@@ -2028,7 +2028,7 @@ test unixWm-50.6 {Tk_CoordsToWindow procedure, embedding within one app.} unix {
 	    [winfo containing [expr {$x +249}] [expr {$y +80}]] \
 	    [winfo containing [expr {$x +250}] [expr {$y +80}]]
 } {.t .t2 .t2 .t}
-test unixWm-50.7 {Tk_CoordsToWindow procedure, more basics} unix {
+test unixWm-50.7 {Tk_CoordsToWindow procedure, more basics} {unix sizedToplevels} {
     destroy .t
     toplevel .t -width 300 -height 400 -bg green
     wm geom .t +0+0
@@ -2376,7 +2376,7 @@ test unixWm-54.2 {TkpMakeMenuWindow procedure, setting override_redirect} {unix 
 
 # No tests for TkGetPointerCoords, CreateWrapper, or GetMaxSize.
 
-test unixWm-55.1 {TkUnixSetMenubar procedure} {unix testmenubar} {
+test unixWm-55.1 {TkUnixSetMenubar procedure} {unix testmenubar sizedToplevels} {
     destroy .t
     toplevel .t -width 300 -height 200 -bd 2 -relief raised
     wm geom .t +0+0
@@ -2388,7 +2388,7 @@ test unixWm-55.1 {TkUnixSetMenubar procedure} {unix testmenubar} {
 	    [expr {[winfo rootx .t] - [winfo rootx .t.f]}] \
 	    [expr {[winfo rooty .t] - [winfo rooty .t.f]}]
 } {1 300x30+0+0 0 30}
-test unixWm-55.2 {TkUnixSetMenubar procedure, removing menubar} {unix testmenubar} {
+test unixWm-55.2 {TkUnixSetMenubar procedure, removing menubar} {unix testmenubar sizedToplevels} {
     destroy .t
     destroy .f
     toplevel .t -width 300 -height 200 -bd 2 -relief raised
@@ -2424,7 +2424,7 @@ test unixWm-55.3 {TkUnixSetMenubar procedure, removing geometry manager} {unix t
     update
     lappend result [expr {[winfo rootx .t] - $x}] [expr {[winfo rooty .t] - $y}]
 } {0 0 0 0}
-test unixWm-55.4 {TkUnixSetMenubar procedure, toplevel not yet created} {unix testmenubar} {
+test unixWm-55.4 {TkUnixSetMenubar procedure, toplevel not yet created} {unix testmenubar sizedToplevels} {
     destroy .t
     toplevel .t -width 300 -height 200 -bd 2 -relief raised
     frame .t.f -width 400 -height 30 -bd 2 -relief raised -bg green
@@ -2454,7 +2454,7 @@ test unixWm-55.5 {TkUnixSetMenubar procedure, changing menubar} {unix testmenuba
     lappend result [winfo ismapped .f] [winfo ismapped .t.f]
     lappend result [expr {[winfo rooty .f] - $y}]
 } {0 1 0 1 0 0}
-test unixWm-55.6 {TkUnixSetMenubar procedure, changing menubar to self} {unix testmenubar} {
+test unixWm-55.6 {TkUnixSetMenubar procedure, changing menubar to self} {unix testmenubar sizedToplevels} {
     destroy .t
     toplevel .t -width 300 -height 200 -bd 2 -relief raised
     frame .t.f -width 400 -height 30 -bd 2 -relief raised -bg green
@@ -2566,7 +2566,7 @@ argumentNumber18
 
 # Test exit processing and cleanup:
 
-test unixWm-59.1 {exit processing} unix {
+test unixWm-59.1 {exit processing} {unix childProcesses} {
     set script [makeFile {
 	update
 	exit
@@ -2579,7 +2579,7 @@ test unixWm-59.1 {exit processing} unix {
     removeFile script
     list $error $msg
 } {0 {}}
-test unixWm-59.2 {exit processing} unix {
+test unixWm-59.2 {exit processing} {unix childProcesses} {
     set code [loadTkCommand]
     append code  {
 	interp create x
@@ -2598,7 +2598,7 @@ test unixWm-59.2 {exit processing} unix {
     removeFile script
     list $error $msg
 } {0 {}}
-test unixWm-59.3 {exit processing} unix {
+test unixWm-59.3 {exit processing} {unix childProcesses} {
     set code [loadTkCommand]
     append code  {
 	interp create x
