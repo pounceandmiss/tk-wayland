@@ -327,6 +327,10 @@ proc ::tk::systray::create {args} {
 		_systray create [dict get $values -image] [dict get $values -text] \
 			[dict get $values -button1] [dict get $values -button3]
 	    }
+	    default {
+		# No system tray (Wayland, Android): the image is only checked.
+		image type [dict get $values -image]
+	    }
 	}
     } on ok {} {
 	set _current $values
@@ -384,6 +388,11 @@ proc ::tk::systray::configure {args} {
 		    if {[dict exists $args $opt]} {
 			_systray modify $key [dict get $args $opt]
 		    }
+		}
+	    }
+	    default {
+		if {[dict exists $args -image]} {
+		    image type [dict get $args -image]
 		}
 	    }
 	}
