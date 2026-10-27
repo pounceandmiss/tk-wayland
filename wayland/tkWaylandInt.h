@@ -43,6 +43,7 @@
  */
 
 typedef struct TkWlBuffer {
+    TkXeSurface *surfPtr;	/* The surface the buffer is for. */
     struct wl_buffer *buffer;
     void *data;
     size_t size;

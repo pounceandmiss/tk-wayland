@@ -1858,12 +1858,23 @@ test wayland-16.2 {a fullscreen window whose output is unplugged} -constraints {
 test wayland-17.1 {random operations of stress.tcl} -constraints {
     stress
 } -body {
+    # The output is read with the event loop running, since a client which
+    # does not answer (in a blocking exec) can hold up the compositor and
+    # the accessibility bus, and so the process.
     set script [file join [testsDirectory] .. wayland tools stress.tcl]
-    set out [exec -ignorestderr [interpreter] $script \
-	    $::env(TK_WAYLAND_STRESS) [testSeed 31415]]
+    set f [open |[list [interpreter] $script $::env(TK_WAYLAND_STRESS) \
+	    [testSeed 31415] 2>@1] r]
+    fconfigure $f -blocking 0
+    set out {}
+    fileevent $f readable [namespace code {
+	append out [read $f]
+	if {[eof $f]} {
+	    set done 1
+	}
+    }]
+    vwait [namespace current]::done
+    close $f
     lindex [split [string trim $out] \n] end
-} -cleanup {
-    unset -nocomplain script out
 } -match glob -result {survived * operations, final window mapped: 1}
 }
 

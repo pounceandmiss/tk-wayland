@@ -995,7 +995,8 @@ FrameDone(
  *	None.
  *
  * Side effects:
- *	The buffer can be used again.
+ *	The buffer can be used again; its surface is presented if it was
+ *	drawn into meanwhile.
  *
  *----------------------------------------------------------------------
  */
@@ -1005,7 +1006,13 @@ BufferRelease(
     void *data,
     TCL_UNUSED(struct wl_buffer *))
 {
-    ((TkWlBuffer *)data)->busy = false;
+    TkWlBuffer *bufPtr = (TkWlBuffer *)data;
+
+    bufPtr->busy = false;
+    if (bufPtr->surfPtr
+	    && pixman_region32_not_empty(&bufPtr->surfPtr->damage)) {
+	SchedulePresent(bufPtr->surfPtr);
+    }
 }
 
 static const struct wl_buffer_listener bufferListener = {
@@ -1130,12 +1137,14 @@ Present(
     }
     if (bufPtr == NULL) {
 	/*
-	 * All buffers are used by the compositor. Try again later.
+	 * All buffers are used by the compositor: BufferRelease presents
+	 * again. (Not at idle time, which [update idletasks] would repeat
+	 * forever, since it does not read the release.)
 	 */
 
-	SchedulePresent(surfPtr);
 	return;
     }
+    bufPtr->surfPtr = surfPtr;
     if (bufPtr->buffer == NULL || bufPtr->width != width
 	    || bufPtr->height != height || bufPtr->format != format) {
 	FreeBuffer(bufPtr);
