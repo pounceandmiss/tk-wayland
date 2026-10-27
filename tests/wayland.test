@@ -29,7 +29,10 @@
 #
 # The random sequences of operations (wayland-13.*) start from the seed in the
 # environment variable TK_WAYLAND_TEST_SEED, if it is set, so that other
-# sequences can be tried, and a failing one repeated.
+# sequences can be tried, and a failing one repeated. The longer random
+# sequence of wayland/tools/stress.tcl (wayland-17.1, in another process) runs
+# only if the environment variable TK_WAYLAND_STRESS gives its number of
+# operations (constraint stress).
 #
 # Copyright © 2026 The Tk developers.
 
@@ -58,6 +61,8 @@ testConstraint swayPointer [expr {[testConstraint waylandInput]
 	&& [info exists env(TK_WAYLAND_VPOINTER)]}]
 testConstraint swayInputMethod [expr {[testConstraint swayPointer]
 	&& [info exists env(TK_WAYLAND_INPUT_METHOD)]}]
+testConstraint stress [expr {[testConstraint wayland]
+	&& [info exists env(TK_WAYLAND_STRESS)]}]
 testConstraint sway [expr {[testConstraint wayland]
 	&& [info exists env(SWAYSOCK)]}]
 testConstraint swayRects [expr {[testConstraint swayPointer]
@@ -1847,6 +1852,19 @@ test wayland-16.2 {a fullscreen window whose output is unplugged} -constraints {
     destroy .t
     unset -nocomplain output scale result
 } -result {1 1 300 200}
+
+# A long random sequence of operations on windows (stress.tcl)
+
+test wayland-17.1 {random operations of stress.tcl} -constraints {
+    stress
+} -body {
+    set script [file join [testsDirectory] .. wayland tools stress.tcl]
+    set out [exec -ignorestderr [interpreter] $script \
+	    $::env(TK_WAYLAND_STRESS) [testSeed 31415]]
+    lindex [split [string trim $out] \n] end
+} -cleanup {
+    unset -nocomplain script out
+} -match glob -result {survived * operations, final window mapped: 1}
 }
 
 #

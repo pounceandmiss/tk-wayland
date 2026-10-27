@@ -11,34 +11,37 @@
 # See the file "license.terms" for information on usage and redistribution
 # of this file, and for a DISCLAIMER OF ALL WARRANTIES.
 
-# The working directory of an application is /, which it cannot read.
+# The working directory of an application is /, which it cannot read. The
+# variables are in a namespace of their own, since the tests use globals.
 cd $env(TMPDIR)
-set dir [file dirname [info script]]
-set log [file join $env(HOME) tktest]
-file delete $log.log $log.err $log.done
+namespace eval ::tktest {
+    variable dir [file dirname [info script]]
+    variable log [file join $::env(HOME) tktest]
+    file delete $log.log $log.err $log.done
+}
 
 # tcltest exits at the end of the tests in Tk; tktest.done is written then.
-rename exit tktestExit
+rename exit ::tktest::Exit
 proc exit {{status 0}} {
     catch {
 	flush [tcltest::outputChannel]
 	flush [tcltest::errorChannel]
     }
-    close [open $::log.done w]
-    tktestExit $status
+    catch {close [open $::tktest::log.done w]}
+    ::tktest::Exit $status
 }
 
 if {[catch {
-    set f [open [file join $dir testflags]]
+    set f [open [file join $::tktest::dir testflags]]
     set flags [string trim [read $f]]
     close $f
-    set argv [list -tmpdir $env(TMPDIR) -outfile $log.log -errfile $log.err \
-	    {*}$flags]
+    set argv [list -tmpdir $env(TMPDIR) -outfile $::tktest::log.log \
+	    -errfile $::tktest::log.err {*}$flags]
     set argc [llength $argv]
-    set argv0 [file join $dir tests all.tcl]
+    set argv0 [file join $::tktest::dir tests all.tcl]
     source $argv0
 }]} {
-    set f [open $log.err a]
+    set f [open $::tktest::log.err a]
     puts $f $::errorInfo
     close $f
 }
