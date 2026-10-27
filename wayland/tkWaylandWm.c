@@ -29,6 +29,8 @@ static void		FrameCommit(struct libdecor_frame *frame, void *data);
 static void		FrameDismissPopup(struct libdecor_frame *frame,
 			    const char *seatName, void *data);
 
+static void		ClampSize(TkXeSurface *surfPtr, int *widthPtr,
+			    int *heightPtr);
 static void		DestroyRole(TkXeSurface *surfPtr);
 static void		MapToplevel(void *clientData);
 static void		MapPopup(TkXeSurface *surfPtr);
@@ -300,14 +302,15 @@ ApplyClass(
 /*
  *----------------------------------------------------------------------
  *
- * ApplySizeHints --
+ * SetSizeLimits --
  *
  *	Set the minimum and maximum sizes of the frame of a toplevel from its
  *	WM_NORMAL_HINTS property. A toplevel of fixed size cannot be resized
  *	or made fullscreen by the user.
  *
  * Results:
- *	None.
+ *	The limits given to libdecor, in *minWidthPtr and the others (0 for no
+ *	maximum).
  *
  * Side effects:
  *	Changes the size limits and the capabilities of the frame.
@@ -316,8 +319,10 @@ ApplyClass(
  */
 
 static void
-ApplySizeHints(
-    TkXeSurface *surfPtr)
+SetSizeLimits(
+    TkXeSurface *surfPtr,
+    int *minWidthPtr, int *minHeightPtr,
+    int *maxWidthPtr, int *maxHeightPtr)
 {
     long *hints = GetLongs(surfPtr->winPtr, XA_WM_NORMAL_HINTS, SH_NUM);
     int minWidth = 0, minHeight = 0, maxWidth = 0, maxHeight = 0;
@@ -345,8 +350,13 @@ ApplySizeHints(
     if (maxHeight > 0 && maxHeight < minHeight) {
 	maxHeight = minHeight;
     }
-    libdecor_frame_set_min_content_size(surfPtr->frame, minWidth, minHeight);
-    libdecor_frame_set_max_content_size(surfPtr->frame, maxWidth, maxHeight);
+
+    /*
+     * Changing the capabilities replaces the size limits, with the current
+     * size when the frame can no longer be resized, and with the limits it
+     * had before when it can again: they are set after.
+     */
+
     if (maxWidth > 0 && maxWidth == minWidth && maxHeight == minHeight) {
 	libdecor_frame_unset_capabilities(surfPtr->frame,
 		LIBDECOR_ACTION_RESIZE | LIBDECOR_ACTION_FULLSCREEN);
@@ -354,6 +364,76 @@ ApplySizeHints(
 	libdecor_frame_set_capabilities(surfPtr->frame,
 		LIBDECOR_ACTION_RESIZE | LIBDECOR_ACTION_FULLSCREEN);
     }
+
+    /*
+     * The GTK plugin makes the frame as large as the minimum size when it
+     * draws the decorations, even when the window is maximized or
+     * fullscreen, which must not be larger than the size the compositor gave
+     * it.
+     */
+
+    if (surfPtr->boundWidth > 0 && minWidth > surfPtr->boundWidth) {
+	minWidth = surfPtr->boundWidth;
+    }
+    if (surfPtr->boundHeight > 0 && minHeight > surfPtr->boundHeight) {
+	minHeight = surfPtr->boundHeight;
+    }
+    libdecor_frame_set_min_content_size(surfPtr->frame, minWidth, minHeight);
+    libdecor_frame_set_max_content_size(surfPtr->frame, maxWidth, maxHeight);
+    surfPtr->maxWidth = maxWidth;
+    surfPtr->maxHeight = maxHeight;
+    *minWidthPtr = minWidth;
+    *minHeightPtr = minHeight;
+    *maxWidthPtr = maxWidth;
+    *maxHeightPtr = maxHeight;
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * ApplySizeHints --
+ *
+ *	Apply the WM_NORMAL_HINTS property of a toplevel to its frame.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Changes the size limits and the capabilities of the frame, and commits
+ *	its state if it was configured: the limits are only sent to the
+ *	compositor with the state of the frame, whose size must be within
+ *	them, since libdecor makes the size of a frame which cannot be resized
+ *	its limits.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static void
+ApplySizeHints(
+    TkXeSurface *surfPtr)
+{
+    struct libdecor_state *state;
+    int minWidth, minHeight, maxWidth, maxHeight;
+    int width = surfPtr->winPtr->width, height = surfPtr->winPtr->height;
+
+    SetSizeLimits(surfPtr, &minWidth, &minHeight, &maxWidth, &maxHeight);
+    if (!surfPtr->configured) {
+	return;
+    }
+    if (width < minWidth) {
+	width = minWidth;
+    } else if (maxWidth > 0 && width > maxWidth) {
+	width = maxWidth;
+    }
+    if (height < minHeight) {
+	height = minHeight;
+    } else if (maxHeight > 0 && height > maxHeight) {
+	height = maxHeight;
+    }
+    ClampSize(surfPtr, &width, &height);
+    state = libdecor_state_new(width, height);
+    libdecor_frame_commit(surfPtr->frame, state, NULL);
+    libdecor_state_free(state);
 }
 
 /*
@@ -953,9 +1033,9 @@ TkWlSurfaceSetFrame(
  *
  *	Raise a size to the minimum size of the decorations (the header bar of
  *	the GTK plugin of libdecor), which the window cannot be smaller than,
- *	then lower it to the size the compositor gave a maximized or
- *	fullscreen window, which it must not exceed (the compositor ends the
- *	connection otherwise).
+ *	then lower it to the size the compositor gave a fullscreen window,
+ *	which it must not exceed, or make it that of a maximized window, which
+ *	it must have (the compositor ends the connection otherwise).
  *
  * Results:
  *	None.
@@ -975,16 +1055,37 @@ ClampSize(
 
     libdecor_frame_get_min_content_size(surfPtr->frame, &minWidth,
 	    &minHeight);
+
+    /*
+     * The decorations of the cairo plugin of libdecor before 0.2 raise the
+     * minimum size above the maximum size, which libdecor then fails for
+     * good on at the next commit: the maximum size is raised as well, as
+     * later versions do.
+     */
+
+    if ((surfPtr->maxWidth > 0 && surfPtr->maxWidth < minWidth)
+	    || (surfPtr->maxHeight > 0 && surfPtr->maxHeight < minHeight)) {
+	if (surfPtr->maxWidth > 0 && surfPtr->maxWidth < minWidth) {
+	    surfPtr->maxWidth = minWidth;
+	}
+	if (surfPtr->maxHeight > 0 && surfPtr->maxHeight < minHeight) {
+	    surfPtr->maxHeight = minHeight;
+	}
+	libdecor_frame_set_max_content_size(surfPtr->frame,
+		surfPtr->maxWidth, surfPtr->maxHeight);
+    }
     if (*widthPtr < minWidth) {
 	*widthPtr = minWidth;
     }
     if (*heightPtr < minHeight) {
 	*heightPtr = minHeight;
     }
-    if (surfPtr->boundWidth > 0 && *widthPtr > surfPtr->boundWidth) {
+    if (surfPtr->boundWidth > 0 && (surfPtr->boundExact
+	    || *widthPtr > surfPtr->boundWidth)) {
 	*widthPtr = surfPtr->boundWidth;
     }
-    if (surfPtr->boundHeight > 0 && *heightPtr > surfPtr->boundHeight) {
+    if (surfPtr->boundHeight > 0 && (surfPtr->boundExact
+	    || *heightPtr > surfPtr->boundHeight)) {
 	*heightPtr = surfPtr->boundHeight;
     }
 }
@@ -1783,19 +1884,39 @@ FrameConfigure(
     TkXeWindow *winPtr = surfPtr->winPtr;
     enum libdecor_window_state windowState = LIBDECOR_WINDOW_STATE_NONE;
     struct libdecor_state *state;
-    int width, height;
+    int width, height, oldBoundWidth, oldBoundHeight;
 
     libdecor_configuration_get_window_state(configuration, &windowState);
     if (!libdecor_configuration_get_content_size(configuration, frame,
 	    &width, &height) || width <= 0 || height <= 0) {
 	width = height = 0;
     }
+
+    /*
+     * Weston gives a size of 0x0 to a fullscreen window which is minimized,
+     * which no window can fit in. The configure is not acknowledged: the
+     * window keeps its state until the compositor gives it a size.
+     */
+
+    if ((windowState & LIBDECOR_WINDOW_STATE_FULLSCREEN) && width == 0) {
+	return;
+    }
+    oldBoundWidth = surfPtr->boundWidth;
+    oldBoundHeight = surfPtr->boundHeight;
     if (windowState & (LIBDECOR_WINDOW_STATE_MAXIMIZED
 	    | LIBDECOR_WINDOW_STATE_FULLSCREEN)) {
 	surfPtr->boundWidth = width;
 	surfPtr->boundHeight = height;
+	surfPtr->boundExact =
+		(windowState & LIBDECOR_WINDOW_STATE_MAXIMIZED) != 0;
     } else {
 	surfPtr->boundWidth = surfPtr->boundHeight = 0;
+    }
+    if (surfPtr->boundWidth != oldBoundWidth
+	    || surfPtr->boundHeight != oldBoundHeight) {
+	int minWidth, minHeight, maxWidth, maxHeight;
+
+	SetSizeLimits(surfPtr, &minWidth, &minHeight, &maxWidth, &maxHeight);
     }
 
     /*
@@ -1855,8 +1976,22 @@ FrameConfigure(
     libdecor_state_free(state);
 
     /*
-     * Drawing the decorations can raise their minimum size.
+     * Drawing the decorations can raise their minimum size. The cairo
+     * plugin of libdecor counts the title bar in the size of the content
+     * only when it was already shown, which it is not when a fullscreen
+     * window is maximized: the size is asked again once it is.
      */
+
+    if (surfPtr->boundExact) {
+	int contentWidth, contentHeight;
+
+	if (libdecor_configuration_get_content_size(configuration, frame,
+		&contentWidth, &contentHeight)
+		&& contentWidth > 0 && contentHeight > 0) {
+	    surfPtr->boundWidth = contentWidth;
+	    surfPtr->boundHeight = contentHeight;
+	}
+    }
 
     {
 	int clampedWidth = width, clampedHeight = height;

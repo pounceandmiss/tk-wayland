@@ -20,6 +20,10 @@
 #   wayland/tools/vinputmethod.c), whose command is given in the
 #   environment variable TK_WAYLAND_INPUT_METHOD.
 #
+# The random sequences of operations (wayland-13.*) start from the seed in the
+# environment variable TK_WAYLAND_TEST_SEED, if it is set, so that other
+# sequences can be tried, and a failing one repeated.
+#
 # Copyright © 2026 The Tk developers.
 
 #
@@ -66,6 +70,15 @@ namespace eval ::tk::test::wayland {
 	    update
 	}
 	return 1
+    }
+
+    # The seed of the random sequences of operations: the one given in the
+    # environment variable TK_WAYLAND_TEST_SEED, else the default.
+    proc testSeed {default} {
+	if {[info exists ::env(TK_WAYLAND_TEST_SEED)]} {
+	    return $::env(TK_WAYLAND_TEST_SEED)
+	}
+	return $default
     }
 
     # Wait for a window to be shown and drawn.
@@ -614,19 +627,21 @@ test wayland-4.4 {minimum size larger than the maximum size} -constraints {
 } -cleanup {
     destroy .t
 } -result 1
-test wayland-4.5 {fullscreen window with a minimum size larger than the screen} -constraints {
+test wayland-4.5 {fullscreen with a huge minimum size} -constraints {
     wayland
 } -setup {
     toplevel .t
     waitShown .t
 } -body {
+    set width [expr {[winfo screenwidth .t] + 200}]
+    set height [expr {[winfo screenheight .t] + 200}]
     wm attributes .t -fullscreen 1
     update
     after 100
     update
-    wm minsize .t 10000 10000
+    wm minsize .t $width $height
     update
-    wm geometry .t 12000x12000
+    wm geometry .t [expr {$width + 100}]x[expr {$height + 100}]
     update
     wm attributes .t -fullscreen 0
     update
@@ -653,6 +668,150 @@ test wayland-4.6 {transient set and unset} -constraints {
 } -cleanup {
     destroy .d .t
 } -result 1
+test wayland-4.7 {wm geometry gives the size} -constraints {
+    wayland
+} -setup {
+    toplevel .t
+    waitShown .t
+} -body {
+    wm geometry .t 300x200
+    waitFor {[winfo width .t] == 300 && [winfo height .t] == 200}
+    list [winfo width .t] [winfo height .t]
+} -cleanup {
+    destroy .t
+} -result {300 200}
+test wayland-4.8 {fullscreen, then the size before} -constraints {
+    wayland
+} -setup {
+    toplevel .t
+    waitShown .t
+    wm geometry .t 300x200
+    waitFor {[winfo width .t] == 300 && [winfo height .t] == 200}
+} -body {
+    set result {}
+    wm attributes .t -fullscreen 1
+    lappend result [waitFor {[winfo width .t] > 300 && [winfo height .t] > 200}]
+    lappend result [wm attributes .t -fullscreen]
+    wm attributes .t -fullscreen 0
+    waitFor {[winfo width .t] == 300 && [winfo height .t] == 200}
+    lappend result [wm attributes .t -fullscreen] [winfo width .t] \
+	    [winfo height .t]
+} -cleanup {
+    destroy .t
+    unset -nocomplain result
+} -result {1 1 0 300 200}
+test wayland-4.9 {zoomed, then the size before} -constraints {
+    wayland
+} -setup {
+    toplevel .t
+    waitShown .t
+    wm geometry .t 300x200
+    waitFor {[winfo width .t] == 300 && [winfo height .t] == 200}
+} -body {
+    set result {}
+    wm attributes .t -zoomed 1
+    lappend result [waitFor {[winfo width .t] > 300 && [winfo height .t] > 200}]
+    lappend result [wm attributes .t -zoomed]
+    wm attributes .t -zoomed 0
+    waitFor {[winfo width .t] == 300 && [winfo height .t] == 200}
+    lappend result [wm attributes .t -zoomed] [winfo width .t] \
+	    [winfo height .t]
+} -cleanup {
+    destroy .t
+    unset -nocomplain result
+} -result {1 1 0 300 200}
+test wayland-4.10 {wm minsize and wm maxsize limit the size} -constraints {
+    wayland
+} -setup {
+    toplevel .t
+    waitShown .t
+} -body {
+    set result {}
+    wm minsize .t 150 100
+    wm geometry .t 50x50
+    waitFor {[winfo width .t] == 150 && [winfo height .t] == 100}
+    lappend result [winfo width .t] [winfo height .t]
+    wm minsize .t 1 1
+    wm maxsize .t 200 150
+    wm geometry .t 400x300
+    waitFor {[winfo width .t] == 200 && [winfo height .t] == 150}
+    lappend result [winfo width .t] [winfo height .t]
+    wm maxsize .t 1000 1000
+    wm minsize .t 450 320
+    waitFor {[winfo width .t] == 450 && [winfo height .t] == 320}
+    lappend result [winfo width .t] [winfo height .t]
+} -cleanup {
+    destroy .t
+    unset -nocomplain result
+} -result {150 100 200 150 450 320}
+test wayland-4.11 {resized by the application when not resizable} -constraints {
+    wayland
+} -setup {
+    toplevel .t
+    waitShown .t
+    wm geometry .t 300x200
+    waitFor {[winfo width .t] == 300 && [winfo height .t] == 200}
+} -body {
+    set result {}
+    wm resizable .t 0 0
+    wm geometry .t 260x180
+    waitFor {[winfo width .t] == 260 && [winfo height .t] == 180}
+    lappend result [winfo width .t] [winfo height .t]
+    update
+    wm geometry .t 240x160
+    waitFor {[winfo width .t] == 240 && [winfo height .t] == 160}
+    lappend result [winfo width .t] [winfo height .t]
+    wm resizable .t 1 1
+    wm geometry .t 320x240
+    waitFor {[winfo width .t] == 320 && [winfo height .t] == 240}
+    lappend result [winfo width .t] [winfo height .t]
+} -cleanup {
+    destroy .t
+    unset -nocomplain result
+} -result {260 180 240 160 320 240}
+test wayland-4.12 {fullscreen size kept with a huge minimum size} -constraints {
+    wayland
+} -setup {
+    toplevel .t
+    waitShown .t
+} -body {
+    set result {}
+    wm attributes .t -fullscreen 1
+    waitFor {[winfo width .t] > 200 && [winfo height .t] > 200}
+    set width [winfo width .t]
+    set height [winfo height .t]
+    wm minsize .t [expr {$width + 100}] [expr {$height + 100}]
+    update
+    after 200
+    update
+    lappend result [expr {[winfo width .t] == $width
+	    && [winfo height .t] == $height}]
+    wm attributes .t -fullscreen 0
+    lappend result [waitFor {[winfo width .t] == $width + 100
+	    && [winfo height .t] == $height + 100}]
+} -cleanup {
+    destroy .t
+    unset -nocomplain result width height
+} -result {1 1}
+test wayland-4.13 {iconify and deiconify keep the size} -constraints {
+    wayland
+} -setup {
+    toplevel .t
+    waitShown .t
+    wm geometry .t 260x180
+    waitFor {[winfo width .t] == 260 && [winfo height .t] == 180}
+} -body {
+    set result {}
+    wm iconify .t
+    waitFor {![winfo ismapped .t]}
+    lappend result [wm state .t]
+    wm deiconify .t
+    waitShown .t
+    lappend result [wm state .t] [winfo width .t] [winfo height .t]
+} -cleanup {
+    destroy .t
+    unset -nocomplain result
+} -result {iconic normal 260 180}
 
 # Cursors
 
@@ -888,8 +1047,7 @@ test wayland-10.1 {generated key events} -constraints {
 test wayland-13.1 {random window operations} -constraints {
     wayland
 } -setup {
-    set seed 4242
-    expr {srand($seed)}
+    expr {srand([testSeed 4242])}
     proc pick {list} {
 	lindex $list [expr {int(rand() * [llength $list])}]
     }
@@ -948,6 +1106,89 @@ test wayland-13.1 {random window operations} -constraints {
     destroy {*}[tops]
     rename pick {}
     rename tops {}
+} -result 1
+test wayland-13.2 {random window manager operations} -constraints {
+    wayland
+} -setup {
+    expr {srand([testSeed 2718])}
+    proc pick {list} {
+	lindex $list [expr {int(rand() * [llength $list])}]
+    }
+    proc size {max} {
+	expr {int(rand() * $max)}
+    }
+    proc tops {} {
+	lmap w [winfo children .] {
+	    if {[string match .wlm* $w]} {set w} continue
+	}
+    }
+    image create photo wlmIcon -width 16 -height 16
+    wlmIcon put red -to 0 0 16 16
+    set screenWidth [winfo screenwidth .]
+    set screenHeight [winfo screenheight .]
+} -body {
+    set n 0
+    for {set i 0} {$i < 400} {incr i} {
+	set t [pick [tops]]
+	set op [pick {create destroy withdraw deiconify iconify geometry
+		minsize maxsize fullscreen zoomed resizable transient title
+		icon update}]
+	if {$t eq "" && $op ne "update"} {
+	    set op create
+	}
+	switch $op {
+	    create {
+		toplevel .wlm[incr n]
+	    }
+	    destroy {destroy $t}
+	    withdraw {wm withdraw $t}
+	    deiconify {wm deiconify $t}
+	    iconify {catch {wm iconify $t}}
+	    geometry {
+		set width [expr {1 + [size [expr {$screenWidth + 300}]]}]
+		set height [expr {1 + [size [expr {$screenHeight + 300}]]}]
+		wm geometry $t ${width}x$height
+	    }
+	    minsize {
+		wm minsize $t [size [expr {$screenWidth + 200}]] \
+			[size [expr {$screenHeight + 200}]]
+	    }
+	    maxsize {
+		wm maxsize $t [size [expr {$screenWidth + 200}]] \
+			[size [expr {$screenHeight + 200}]]
+	    }
+	    fullscreen - zoomed {
+		set on [wm attributes $t -$op]
+		wm attributes $t -$op [expr {!$on}]
+	    }
+	    resizable {
+		wm resizable $t [pick {0 1}] [pick {0 1}]
+	    }
+	    transient {
+		# A window cannot be the container of itself.
+		catch {wm transient $t [pick [concat {{}} [tops]]]}
+	    }
+	    title {
+		wm title $t [pick [list "" "Title" "שלום ✓ \U1F600" \
+			[string repeat x 300]]]
+	    }
+	    icon {wm iconphoto $t wlmIcon}
+	    update {update}
+	}
+	if {rand() < 0.3} {
+	    update
+	}
+    }
+    update
+    destroy {*}[tops]
+    stillConnected
+} -cleanup {
+    destroy {*}[tops]
+    image delete wlmIcon
+    rename pick {}
+    rename size {}
+    rename tops {}
+    unset -nocomplain screenWidth screenHeight width height on
 } -result 1
 
 # Input from the compositor (waylandInput, swayPointer)
