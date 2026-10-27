@@ -95,6 +95,21 @@ The APK is `../../build/android-x86_64/tk.apk` (`ANDROID_ABI=arm64-v8a` for
 phones). `APP_DIR` is the directory of the application (default: the demos).
 The standard output and error of Tcl go to `adb logcat -s Tk`.
 
+## Tests
+
+The tests of Tk run on an emulator with
+
+    make test-android TESTFLAGS="-file touch.test"
+
+in a Unix build directory, or `android/build/test.sh` with the options of
+tcltest. It builds `../../build/android-x86_64/tktest.apk` (`make test-apk`
+of `build/Makefile`): the package `tk.wish.test`, whose library has the test
+commands of tktest and runs `build/runtests.tcl`, the tests in a single
+process. The APK runs on the emulator adb knows, or on an emulator started
+without a window for the tests (the AVD in `TK_ANDROID_AVD`, or the only
+one); a phone is only used if `ANDROID_SERIAL` names it. The output of the
+tests is read with `run-as` when they end.
+
 ## Not done yet
 
 - The insets of the system bars: the activity opts out of drawing under them,

@@ -134,11 +134,16 @@ test touch-2.4 {a fling goes on after the finger is lifted} -constraints {
     fillText .t
     update
 } -body {
+    # The fling is compared with the same drag without one: where drawing is
+    # slow, the fling can end in the update of the drag.
+    drag .t 50 150 0 -100
+    set dragged [lindex [.t yview] 0]
+    .t yview moveto 0
+    update
     drag .t 50 150 0 -100 1
-    set before [lindex [.t yview] 0]
     after 300 {set ::flung 1}
     vwait ::flung
-    expr {[lindex [.t yview] 0] > $before}
+    expr {[lindex [.t yview] 0] > $dragged}
 } -cleanup {
     destroy .t
 } -result 1

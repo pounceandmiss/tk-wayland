@@ -874,6 +874,13 @@ test-weston: $(TKTEST_EXE)
 	$(SHELL) $(UNIX_DIR)/waylandTest weston \
 		$(MAKE) test "TESTFLAGS=$(TESTFLAGS)"
 
+# Tests of the Android port on an emulator, with TESTFLAGS as for "make
+# test": android/build/test.sh builds the APK of the tests (with the Docker
+# image of android/build), and starts an emulator if none is running.
+
+test-android:
+	$(SHELL) $(ANDROID_DIR)/build/test.sh $(TESTFLAGS)
+
 INSTALL_BASE_TARGETS = install-binaries ${INSTALL_LIBRARIES}
 INSTALL_DOC_TARGETS = install-doc
 INSTALL_DEV_TARGETS = install-headers
@@ -1989,9 +1996,10 @@ dist: $(UNIX_DIR)/configure $(UNIX_DIR)/tkConfig.h.in $(UNIX_DIR)/tk.pc.in \
 		$(ANDROID_DIR)/AndroidManifest.xml $(TOP_DIR)/license.terms \
 		$(DISTDIR)/android
 	$(DIST_INSTALL_DATA) $(ANDROID_DIR)/build/Dockerfile \
-		$(ANDROID_DIR)/build/Makefile $(DISTDIR)/android/build
-	$(DIST_INSTALL_SCRIPT) $(ANDROID_DIR)/build/build.sh \
+		$(ANDROID_DIR)/build/Makefile $(ANDROID_DIR)/build/runtests.tcl \
 		$(DISTDIR)/android/build
+	$(DIST_INSTALL_SCRIPT) $(ANDROID_DIR)/build/build.sh \
+		$(ANDROID_DIR)/build/test.sh $(DISTDIR)/android/build
 	$(DIST_INSTALL_DATA) $(ANDROID_DIR)/java/tk/android/*.java \
 		$(DISTDIR)/android/java/tk/android
 	$(DIST_INSTALL_DATA) $(ANDROID_DIR)/res/values/*.xml \

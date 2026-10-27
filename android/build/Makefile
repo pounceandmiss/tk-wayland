@@ -13,6 +13,8 @@
 #	make deps		the dependencies
 #	make tcl tk		Tcl and Tk
 #	make apk		build/tk.apk, with APP_DIR (default: the demos)
+#	make test-apk		build/tktest.apk, which runs the tests of Tk
+#				with TESTFLAGS (see test.sh)
 #
 # Copyright © 2026 The Tk developers.
 #
@@ -84,7 +86,7 @@ define fetch
 	tar xf $(SRCDIR)/$(notdir $(1)) -C $(BUILD)/src
 endef
 
-.PHONY: all deps tcl tk apk host-tcl clean
+.PHONY: all deps tcl tk apk test-apk host-tcl clean
 all: apk
 
 # ==== meson ====
@@ -211,11 +213,34 @@ APP_DIR		?= $(TK_SRC)/library/demos
 APK_DIR		:= $(BUILD)/apk
 LIBMAIN		:= $(APK_DIR)/lib/$(ANDROID_ABI)/libmain.so
 SCRIPTS_ZIP	:= $(BUILD)/scripts.zip
+MAIN_OBJ	:= $(BUILD)/tkAndroidMain.o
+APK		:= $(BUILD)/tk.apk
 KEYSTORE	:= $(abspath $(BUILD)/../android-debug.keystore)
+
+# The APK of the tests is another package, tk.wish.test, which can be
+# debugged (so that test.sh reads its output with run-as). Its library has
+# the test commands of tktest, and its application is runtests.tcl, with the
+# tests and TESTFLAGS.
+ifeq ($(TEST),1)
+  TEST_APP	:= $(BUILD)/test-app
+  APP_DIR	:= $(TEST_APP)
+  APK_DIR	:= $(BUILD)/apk-test
+  LIBMAIN	:= $(APK_DIR)/lib/$(ANDROID_ABI)/libmain.so
+  SCRIPTS_ZIP	:= $(BUILD)/scripts-test.zip
+  MAIN_OBJ	:= $(BUILD)/tkAndroidTestMain.o
+  MAIN_FLAGS	:= -DTK_TEST
+  TEST_OBJS	:= $(BUILD)/tk/tkTest.o $(BUILD)/tk/tkSquare.o
+  TEST_LIBS	:= $(BUILD)/tk/libtkstub.a $(BUILD)/tcl/libtclstub.a
+  APK		:= $(BUILD)/tktest.apk
+  LINK_FLAGS	:= --debug-mode --rename-manifest-package tk.wish.test
+endif
+
+test-apk:
+	$(MAKE) -f $(firstword $(MAKEFILE_LIST)) apk TEST=1
 
 # The scripts: the libraries of Tcl and Tk, and the application, whose
 # main.tcl is run.
-$(SCRIPTS_ZIP): FORCE $(HOST_TCLSH)
+$(SCRIPTS_ZIP): FORCE $(HOST_TCLSH) $(TEST_APP)
 	rm -rf $(BUILD)/scripts $@
 	mkdir -p $(BUILD)/scripts
 	cp -r $(TCL_SRC)/library $(BUILD)/scripts/tcl_library
@@ -225,24 +250,38 @@ $(SCRIPTS_ZIP): FORCE $(HOST_TCLSH)
 	cp -r $(APP_DIR) $(BUILD)/scripts/app
 	cd $(BUILD)/scripts && echo 'zipfs mkzip $@ . .' | $(HOST_TCLSH)
 
-$(BUILD)/scripts.o: $(SCRIPTS_ZIP)
+$(SCRIPTS_ZIP:.zip=.o): $(SCRIPTS_ZIP)
 	printf '%s\n' '.section .rodata' '.p2align 4' \
 	    '.globl tkAndroidScripts' 'tkAndroidScripts:' \
 	    '.incbin "$(SCRIPTS_ZIP)"' '.globl tkAndroidScriptsEnd' \
-	    'tkAndroidScriptsEnd:' > $(BUILD)/scripts.s
-	$(CC) -c $(BUILD)/scripts.s -o $@
+	    'tkAndroidScriptsEnd:' > $(SCRIPTS_ZIP:.zip=.s)
+	$(CC) -c $(SCRIPTS_ZIP:.zip=.s) -o $@
 
-$(BUILD)/tkAndroidMain.o: $(TK_SRC)/android/tkAndroidMain.c FORCE
-	$(CC) $(CFLAGS) -I$(PREFIX)/include -I$(TCL_SRC)/generic \
+$(MAIN_OBJ): $(TK_SRC)/android/tkAndroidMain.c FORCE
+	$(CC) $(CFLAGS) $(MAIN_FLAGS) -I$(PREFIX)/include -I$(TCL_SRC)/generic \
 	    -I$(TK_SRC)/generic -I$(TK_SRC)/xlib -I$(TK_SRC)/android -c $< -o $@
 
-$(LIBMAIN): $(BUILD)/tkAndroidMain.o $(BUILD)/scripts.o \
+# The test commands, compiled by the Makefile of Tk (with the stubs, as for
+# tktest).
+$(TEST_OBJS): $(BUILD)/tk/libtcl9tk9.1.a
+	$(MAKE) -C $(BUILD)/tk $(notdir $(TEST_OBJS)) TCLSH_PROG=$(HOST_TCLSH)
+
+# The application of the tests: runtests.tcl, the tests, and TESTFLAGS,
+# which runtests.tcl reads.
+$(TEST_APP): FORCE
+	rm -rf $@
+	mkdir -p $@
+	cp $(TK_SRC)/android/build/runtests.tcl $@/main.tcl
+	cp -r $(TK_SRC)/tests $@/tests
+	printf '%s\n' '$(TESTFLAGS)' > $@/testflags
+
+$(LIBMAIN): $(MAIN_OBJ) $(SCRIPTS_ZIP:.zip=.o) $(TEST_OBJS) \
 		$(BUILD)/tk/libtcl9tk9.1.a
 	mkdir -p $(dir $@)
 	$(CC) -shared -o $@ -Wl,--gc-sections -Wl,-z,max-page-size=16384 \
 	    -Wl,--exclude-libs,ALL -u ANativeActivity_onCreate \
-	    $(BUILD)/tkAndroidMain.o $(BUILD)/scripts.o \
-	    $(BUILD)/tk/libtcl9tk9.1.a $(BUILD)/tcl/libtcl9.1.a \
+	    $(MAIN_OBJ) $(SCRIPTS_ZIP:.zip=.o) $(TEST_OBJS) \
+	    $(BUILD)/tk/libtcl9tk9.1.a $(BUILD)/tcl/libtcl9.1.a $(TEST_LIBS) \
 	    $$(pkg-config --static --libs cairo fontconfig freetype2 pixman-1) \
 	    -landroid -llog -lz -lm
 
@@ -262,9 +301,9 @@ $(BUILD)/classes.dex: $(JAVA_SRC)
 	$(BUILD_TOOLS)/d8 --min-api $(ANDROID_API) --lib $(PLATFORM_JAR) \
 	    --output $(BUILD) $$(find $(BUILD)/classes -name '*.class')
 
-apk: $(BUILD)/tk.apk
+apk: $(APK)
 
-$(BUILD)/tk.apk: $(LIBMAIN) $(TK_SRC)/android/AndroidManifest.xml \
+$(APK): $(LIBMAIN) $(TK_SRC)/android/AndroidManifest.xml \
 		$(wildcard $(TK_SRC)/android/res/*/*) $(BUILD)/classes.dex \
 		$(KEYSTORE)
 	rm -f $(BUILD)/base.apk $(BUILD)/aligned.apk $(BUILD)/res.zip $@
@@ -273,7 +312,7 @@ $(BUILD)/tk.apk: $(LIBMAIN) $(TK_SRC)/android/AndroidManifest.xml \
 	$(BUILD_TOOLS)/aapt2 link -o $(BUILD)/base.apk \
 	    --manifest $(TK_SRC)/android/AndroidManifest.xml $(BUILD)/res.zip \
 	    -I $(PLATFORM_JAR) --min-sdk-version $(ANDROID_API) \
-	    --target-sdk-version 35
+	    --target-sdk-version 35 $(LINK_FLAGS)
 	cd $(APK_DIR) && zip -0 -r $(BUILD)/base.apk lib
 	cd $(BUILD) && zip $(BUILD)/base.apk classes.dex
 	$(BUILD_TOOLS)/zipalign -P 16 -f 4 $(BUILD)/base.apk $(BUILD)/aligned.apk

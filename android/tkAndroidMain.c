@@ -10,6 +10,8 @@
  *	a zip linked into the library, between the symbols tkAndroidScripts
  *	and tkAndroidScriptsEnd, which is mounted at //zipfs:/app. The
  *	application is app/main.tcl, or else app/widget (the demos).
+ *	Compiled with TK_TEST, the library has the test commands of tktest
+ *	(android/build/Makefile, "make test-apk").
  *
  * Copyright © 2026 The Tk developers.
  *
@@ -37,6 +39,10 @@
 
 extern const unsigned char tkAndroidScripts[];
 extern const unsigned char tkAndroidScriptsEnd[];
+
+#ifdef TK_TEST
+extern Tcl_LibraryInitProc Tktest_Init;
+#endif /* TK_TEST */
 
 /*
  * State of the glue, used in the main thread of the application.
@@ -217,14 +223,17 @@ WriteFontConfig(void)
  *
  * ExitProc --
  *
- *	Called by Tcl_Exit ([exit], or the end of the event loop): finish
- *	the activity, whose destruction ends the process, and the thread.
+ *	Called by Tcl_Exit ([exit], or the end of the event loop): finalize
+ *	Tcl, as Tcl_Exit does without an exit procedure, then finish the
+ *	activity, whose destruction ends the process, and the thread. The
+ *	main thread does not call Tcl.
  *
  * Results:
  *	None; does not return.
  *
  * Side effects:
- *	The activity finishes.
+ *	The channels are flushed and closed, the exit handlers run, and the
+ *	activity finishes.
  *
  *----------------------------------------------------------------------
  */
@@ -234,6 +243,7 @@ ExitProc(
     void *clientData)		/* The exit status. */
 {
     (void)clientData;
+    Tcl_Finalize();
     fflush(stdout);
     ANativeActivity_finish(tkAndroidActivity);
     pthread_exit(NULL);
@@ -293,6 +303,13 @@ TclThread(
 	goto done;
     }
     Tcl_StaticLibrary(interp, "Tk", Tk_Init, Tk_SafeInit);
+#ifdef TK_TEST
+    if (Tktest_Init(interp) != TCL_OK) {
+	fprintf(stderr, "%s\n", Tcl_GetStringResult(interp));
+	goto done;
+    }
+    Tcl_StaticLibrary(interp, "Tktest", Tktest_Init, 0);
+#endif /* TK_TEST */
 
     {
 	Tcl_Obj *pathPtr = Tcl_NewStringObj("//zipfs:/app/app/main.tcl", -1);
