@@ -29,7 +29,7 @@
  */
 
 static struct {
-    Atom WM_PROTOCOLS, WM_DELETE_WINDOW, _NET_WM_STATE,
+    Atom WM_PROTOCOLS, WM_DELETE_WINDOW, WM_CHANGE_STATE, _NET_WM_STATE,
 	_NET_WM_STATE_MAXIMIZED_VERT, _NET_WM_STATE_MAXIMIZED_HORZ,
 	_NET_WM_STATE_FULLSCREEN, _NET_ACTIVE_WINDOW, _NET_WM_WINDOW_OPACITY,
 	_NET_WM_WINDOW_TYPE, _NET_WM_WINDOW_TYPE_DIALOG;
@@ -70,6 +70,7 @@ InitAtoms(
 #define ATOM(name) atoms.name = XInternAtom(display, #name, False)
     ATOM(WM_PROTOCOLS);
     ATOM(WM_DELETE_WINDOW);
+    ATOM(WM_CHANGE_STATE);
     ATOM(_NET_WM_STATE);
     ATOM(_NET_WM_STATE_MAXIMIZED_VERT);
     ATOM(_NET_WM_STATE_MAXIMIZED_HORZ);
@@ -538,7 +539,8 @@ TkXeWmPropertyChanged(
  *	True if the message was for the window manager.
  *
  * Side effects:
- *	The window may be activated, maximized or made fullscreen.
+ *	The window may be iconified (unmapped), activated, maximized or made
+ *	fullscreen.
  *
  *----------------------------------------------------------------------
  */
@@ -558,7 +560,17 @@ TkXeWmClientMessage(
     if (winPtr == NULL || (surfPtr = winPtr->surface) == NULL) {
 	return true;
     }
-    if (eventPtr->xclient.message_type == atoms._NET_ACTIVE_WINDOW) {
+    if (eventPtr->xclient.message_type == atoms.WM_CHANGE_STATE
+	    && eventPtr->xclient.data.l[0] == IconicState) {
+	/*
+	 * Iconify: Android has no icons, and the window is unmapped, as X
+	 * window managers do; [wm deiconify] maps it again.
+	 */
+
+	if (winPtr->mapped) {
+	    XUnmapWindow(winPtr->display, winPtr->id);
+	}
+    } else if (eventPtr->xclient.message_type == atoms._NET_ACTIVE_WINDOW) {
 	TkXeWmActivate(surfPtr);
     } else if (eventPtr->xclient.message_type == atoms._NET_WM_STATE
 	    && surfPtr->placement != TKANDROID_PLACE_NONE) {
