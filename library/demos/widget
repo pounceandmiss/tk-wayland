@@ -377,6 +377,10 @@ addFormattedText {
     @@demo touch	Gestures, the on-screen keyboard and selection
     @@new
     @@demo multitouch	Finger painting with many fingers
+
+    @@subtitle	Your own scripts
+    @@new
+    @@demo editor	Write, run and save a script of your own
 }
 
 if {[tk windowingsystem] eq "aqua"} {

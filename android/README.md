@@ -92,22 +92,9 @@ with the SDK in `../../android-sdk`:
     android/build/build.sh deps tcl tk apk
 
 The APK is `../../build/android-x86_64/tk.apk` (`ANDROID_ABI=arm64-v8a` for
-phones). `APP_DIR` is the directory of the application (default: `wish`, below,
-with the demos of Tk).
+phones). `APP_DIR` is the directory of the application (default: the demos,
+whose "Your own scripts" entry edits and runs scripts).
 The standard output and error of Tcl go to `adb logcat -s Tk`.
-
-## Wish
-
-`wish/` is the default application: an editor of Tcl scripts with a Run
-button, and a console. Each run has an interpreter of its own, with Tk
-(`load {} Tk`), whose main window comes up above the editor once it has
-children, and which the back button closes; `exit` in a script ends only the
-run. stdout and stderr are shown in the console (with `chan push`), and the
-console evaluates commands in the interpreter of the last run. Scripts are
-saved in `scripts` of the home directory of the application (internal
-storage), the text of the editor is kept across restarts, and the Examples
-menu has a few scripts and the widget tour. Scripts can also be pasted from
-other applications, since the clipboard is shared.
 
 ## Tests
 
