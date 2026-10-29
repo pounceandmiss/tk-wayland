@@ -1416,7 +1416,7 @@ test listbox-4.7 {ConfigureListbox procedure} -setup {
 #
 resetGridInfo
 
-test listbox-4.8 {ConfigureListbox procedure} -setup {
+test listbox-4.8 {ConfigureListbox procedure} -constraints narrowToplevels -setup {
     destroy .l2
 } -body {
     listbox .l2 -width 15 -height 20 -xscrollcommand "record x" \
@@ -3312,7 +3312,7 @@ test listbox-32.2 {Bug [5d991b822e]} {
 } {}
 
 
-test listbox-33.1 {no scroll command before the listbox is mapped - bug 991849} -setup {
+test listbox-33.1 {no scroll command before the listbox is mapped - bug 991849} -constraints narrowToplevels -setup {
     toplevel .top
     wm withdraw .top
     set log {}

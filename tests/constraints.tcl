@@ -56,6 +56,37 @@ testConstraint integralScale [expr {
     [tk windowingsystem] ne "android"
     || [::tk::android::scale] == round([::tk::android::scale])
 }]
+# On Wayland, the plugin of libdecor which draws the decorations decides
+# whether toplevels can be narrower than their decorations (the GTK plugin
+# makes them as wide as its header bar, 168 pixels, and the resize to that
+# width can come after the next one the test asks for), and whether a process
+# of Tk writes nothing on stderr (the GTK plugin complains when the seat has no
+# keyboard, as in a headless compositor). A child process which maps a
+# toplevel of 1x1 pixels tells both, once for the interpreter.
+testConstraint narrowToplevels 1
+testConstraint quietStderr 1
+if {[tk windowingsystem] eq "wayland" && [testConstraint childProcesses]} {
+    if {![info exists ::tk::test::decorationProbe]} {
+	set code [loadTkCommand]
+	append code {
+	    toplevel .t -width 1 -height 1
+	    wm geometry .t 1x1
+	    tkwait visibility .t
+	    update
+	    puts [winfo width .t]
+	    exit
+	}
+	catch {exec [interpreter] << $code 2>@1} msg
+	set ::tk::test::decorationProbe [split [string trim $msg] \n]
+	unset code msg
+    }
+    testConstraint narrowToplevels [expr {
+	[lindex $::tk::test::decorationProbe end] < 100
+    }]
+    testConstraint quietStderr [expr {
+	[llength $::tk::test::decorationProbe] == 1
+    }]
+}
 testConstraint altDisplay  [info exists env(TK_ALT_DISPLAY)]
 
 # constraint for tests that need a window manager, e.g. to iconify a toplevel.

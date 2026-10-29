@@ -1439,7 +1439,7 @@ test canvas-25.1 {a canvas is not scrolled if its scroll region fits in it - bug
     destroy .c
 } -result 0.0
 
-test canvas-26.1 {no scroll command before the canvas is mapped - bug 991849} -setup {
+test canvas-26.1 {no scroll command before the canvas is mapped - bug 991849} -constraints narrowToplevels -setup {
     toplevel .top
     wm withdraw .top
     set log {}

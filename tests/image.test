@@ -133,7 +133,7 @@ test image-1.10 {Tk_ImageCmd procedure, "create" option} -constraints {
 } -result {}
 test image-1.11 {Tk_ImageCmd procedure, "create" option with same name as main window} \
 	-constraints {
-    childProcesses
+    childProcesses quietStderr
 } -body {
     set code [loadTkCommand]
     append code {
@@ -148,7 +148,7 @@ test image-1.11 {Tk_ImageCmd procedure, "create" option with same name as main w
 } -result {1 {images may not be named the same as the main window}}
 test image-1.12 {Tk_ImageCmd procedure, "create" option with same name as main window after renaming} \
 	-constraints {
-    childProcesses
+    childProcesses quietStderr
 } -body {
     set code [loadTkCommand]
     append code {

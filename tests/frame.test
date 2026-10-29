@@ -660,7 +660,7 @@ test frame-3.9 {TkCreateFrame procedure, -use option} -constraints {
     deleteWindows
 } -result {0 0 140 300}
 test frame-3.10 {TkCreateFrame procedure, -use option} -constraints {
-    unix sizedToplevels
+    unix sizedToplevels narrowToplevels
 } -setup {
     deleteWindows
 } -body {
@@ -1694,7 +1694,7 @@ test frame-15.7c {TIP 262: frame background images (offsets)} -setup {
     deleteWindows
     catch {image delete gorp}
 } -result {{gorp get} {gorp display 0 0 30 15} {gorp display 0 0 30 4} {gorp display 0 0 14 15} {gorp display 0 0 14 4}}
-test frame-15.8 {TIP 262: toplevel background images} -setup {
+test frame-15.8 {TIP 262: toplevel background images} -constraints narrowToplevels -setup {
     deleteWindows
     image create photo gorp -width 10 -height 10
     gorp put black -to 2 2 7 7

@@ -750,7 +750,7 @@ test wm-geometry-1.3 {usage} -returnCodes error -body {
     wm geometry . bogus
 } -result {bad geometry specifier "bogus"}
 
-test wm-geometry-2.1 {setting values} -constraints sizedToplevels -body {
+test wm-geometry-2.1 {setting values} -constraints {sizedToplevels narrowToplevels} -body {
     wm geometry .t 150x150+50+50
     update
     set result [wm geometry .t]

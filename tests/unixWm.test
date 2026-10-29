@@ -112,7 +112,7 @@ set yerr [expr {150-$y}]
 
 set i 1
 foreach geom "+20+80 +80+$Y0 +0+$Y0 -0-0 +0-0 -0+$Y0 -10-5 -10+$Y5 +10-5" {
-    test unixWm-2.$i {moving window while mapped} {unix sizedToplevels} {
+    test unixWm-2.$i {moving window while mapped} {unix sizedToplevels narrowToplevels} {
 	wm geom .t $geom
 	update
 	scan [wm geom .t] %dx%d%1s%d%1s%d width height xsign x ysign y
@@ -124,7 +124,7 @@ foreach geom "+20+80 +80+$Y0 +0+$Y0 -0-0 +0-0 -0+$Y0 -10-5 -10+$Y5 +10-5" {
 
 set i 1
 foreach geom "+20+80 +80+$Y0 +0+$Y0 -0-0 +0-0 -0+$Y0 -10-5 -10+$Y5 +10-5" {
-    test unixWm-3.$i {moving window while iconified} {unix sizedToplevels} {
+    test unixWm-3.$i {moving window while iconified} {unix sizedToplevels narrowToplevels} {
 	update
 	wm iconify .t
 	update idletasks
@@ -141,7 +141,7 @@ foreach geom "+20+80 +80+$Y0 +0+$Y0 -0-0 +0-0 -0+$Y0 -10-5 -10+$Y5 +10-5" {
 
 set i 1
 foreach geom "+$X+80 +$X+40 +$X+$Y0" {
-    test unixWm-4.$i {moving window while withdrawn} {unix sizedToplevels} {
+    test unixWm-4.$i {moving window while withdrawn} {unix sizedToplevels narrowToplevels} {
 	wm withdraw .t
 	pause 10
 	wm geom .t $geom
@@ -1487,7 +1487,7 @@ test unixWm-41.3 {ConfigureEvent procedure, synthesized Configure events} {unix 
     update
     set result
 } {configured: 400 150}
-test unixWm-41.4 {ConfigureEvent procedure, synthesized Configure events} {unix sizedToplevels} {
+test unixWm-41.4 {ConfigureEvent procedure, synthesized Configure events} {unix sizedToplevels narrowToplevels} {
     destroy .t
     toplevel .t -width 400 -height 150
     wm geometry .t +0+0
@@ -1657,7 +1657,7 @@ test unixWm-44.8 {UpdateGeometryInfo procedure, computing position} -constraints
     destroy .t
 } -result [list [expr {[winfo screenwidth .t] - 110}] $Y2]
 
-test unixWm-44.9 {UpdateGeometryInfo procedure, updating fixed dimensions} {unix testwrapper} {
+test unixWm-44.9 {UpdateGeometryInfo procedure, updating fixed dimensions} {unix testwrapper narrowToplevels} {
     destroy .t
     toplevel .t -width 80 -height 60
     wm resizable .t 0 0
@@ -1791,7 +1791,7 @@ toplevel .t -width 300 -height 200
 wm geometry .t +0+0
 tkwait visibility .t
 
-test unixWm-48.1 {ParseGeometry procedure} {unix sizedToplevels} {
+test unixWm-48.1 {ParseGeometry procedure} {unix sizedToplevels narrowToplevels} {
     wm geometry .t =100x120
     update
     list [winfo width .t] [winfo height .t]
@@ -1829,7 +1829,7 @@ test unixWm-48.11 {ParseGeometry procedure} unix {
 test unixWm-48.12 {ParseGeometry procedure} unix {
     catch {wm geometry .t +30+-10}
 } 0
-test unixWm-48.13 {ParseGeometry procedure, resize causes window to move} {unix sizedToplevels} {
+test unixWm-48.13 {ParseGeometry procedure, resize causes window to move} {unix sizedToplevels narrowToplevels} {
     destroy .t
     toplevel .t -width 200 -height 200
     wm geom .t +0+0
@@ -2566,7 +2566,7 @@ argumentNumber18
 
 # Test exit processing and cleanup:
 
-test unixWm-59.1 {exit processing} {unix childProcesses} {
+test unixWm-59.1 {exit processing} {unix childProcesses quietStderr} {
     set script [makeFile {
 	update
 	exit
@@ -2579,7 +2579,7 @@ test unixWm-59.1 {exit processing} {unix childProcesses} {
     removeFile script
     list $error $msg
 } {0 {}}
-test unixWm-59.2 {exit processing} {unix childProcesses} {
+test unixWm-59.2 {exit processing} {unix childProcesses quietStderr} {
     set code [loadTkCommand]
     append code  {
 	interp create x
@@ -2598,7 +2598,7 @@ test unixWm-59.2 {exit processing} {unix childProcesses} {
     removeFile script
     list $error $msg
 } {0 {}}
-test unixWm-59.3 {exit processing} {unix childProcesses} {
+test unixWm-59.3 {exit processing} {unix childProcesses quietStderr} {
     set code [loadTkCommand]
     append code  {
 	interp create x

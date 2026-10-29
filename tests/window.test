@@ -108,7 +108,7 @@ test window-2.3 {Tk_DestroyWindow procedure, destroy handler deletes parent} -se
 } -result {}
 
 test window-2.4 {Tk_DestroyWindow, cleanup half dead window at exit} -constraints {
-    unixOrWin childProcesses
+    unixOrWin childProcesses quietStderr
 } -body {
     set code [loadTkCommand]
     append code {
@@ -127,7 +127,7 @@ test window-2.4 {Tk_DestroyWindow, cleanup half dead window at exit} -constraint
 } -result {0 {}}
 
 test window-2.5 {Tk_DestroyWindow, cleanup half dead windows at exit} -constraints {
-    unixOrWin childProcesses
+    unixOrWin childProcesses quietStderr
 } -body {
     set code [loadTkCommand]
     append code {
@@ -147,7 +147,7 @@ test window-2.5 {Tk_DestroyWindow, cleanup half dead windows at exit} -constrain
 } -result {0 {}}
 
 test window-2.6 {Tk_DestroyWindow, cleanup half dead windows at exit} -constraints {
-    unixOrWin childProcesses
+    unixOrWin childProcesses quietStderr
 } -body {
     set code [loadTkCommand]
     append code {
@@ -167,7 +167,7 @@ test window-2.6 {Tk_DestroyWindow, cleanup half dead windows at exit} -constrain
 } -result {0 {}}
 
 test window-2.7 {Tk_DestroyWindow, cleanup half dead windows at exit} -constraints {
-    unixOrWin childProcesses
+    unixOrWin childProcesses quietStderr
 } -body {
     set code [loadTkCommand]
     append code {
@@ -188,7 +188,7 @@ test window-2.7 {Tk_DestroyWindow, cleanup half dead windows at exit} -constrain
 } -result {0 {}}
 
 test window-2.8 {Tk_DestroyWindow, cleanup half dead windows at exit} -constraints {
-    unixOrWin childProcesses
+    unixOrWin childProcesses quietStderr
 } -body {
     set code [loadTkCommand]
     append code {
@@ -212,7 +212,7 @@ test window-2.8 {Tk_DestroyWindow, cleanup half dead windows at exit} -constrain
 } -result {0 {}}
 
 test window-2.9 {Tk_DestroyWindow, Destroy bindings evaluated after exit} -constraints {
-    unixOrWin childProcesses
+    unixOrWin childProcesses quietStderr
 } -body {
     set code [loadTkCommand]
     append code {
@@ -235,7 +235,7 @@ test window-2.9 {Tk_DestroyWindow, Destroy bindings evaluated after exit} -const
 Destroy .t1}}
 
 test window-2.10 {Tk_DestroyWindow, Destroy binding evaluated once} -constraints {
-    unixOrWin childProcesses
+    unixOrWin childProcesses quietStderr
 } -body {
     set code [loadTkCommand]
     append code {
@@ -258,7 +258,7 @@ test window-2.10 {Tk_DestroyWindow, Destroy binding evaluated once} -constraints
 } -result {0 {Destroy .}}
 
 test window-2.11 {Tk_DestroyWindow, don't reanimate a half-dead window} -constraints {
-    unixOrWin childProcesses
+    unixOrWin childProcesses quietStderr
 } -body {
     set code [loadTkCommand]
     append code {
@@ -286,7 +286,7 @@ test window-2.11 {Tk_DestroyWindow, don't reanimate a half-dead window} -constra
 } -result {0 YES}
 
 test window-2.12 {Test for ticket [9b6065d1fd] - restore Tcl [update] command} -constraints {
-    unixOrWin childProcesses
+    unixOrWin childProcesses quietStderr
 } -body {
     set code [loadTkCommand]
     append code {
