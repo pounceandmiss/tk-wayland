@@ -117,11 +117,14 @@ waitFile() {
 case $compositor in
     sway)
 	# The command of the configuration tells the environment of the
-	# session: the Wayland display and the socket of swaymsg.
+	# session: the Wayland display and the socket of swaymsg. Floating
+	# windows have no minimum size (75x50 by default), as the tests
+	# expect of a window manager.
 
 	cat > "$work/config" <<EOF
 output HEADLESS-1 resolution ${WIDTH}x$HEIGHT scale $SCALE
 for_window [all] floating enable
+floating_minimum_size 1 x 1
 exec env > "$work/env.tmp" && mv "$work/env.tmp" "$work/env"
 EOF
 	WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 WLR_RENDERER=pixman \
