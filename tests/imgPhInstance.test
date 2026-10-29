@@ -249,7 +249,7 @@ test imgPhInstance-7.1 "-gamma is applied" \
     update
 } -result 1
 test imgPhInstance-7.2 "-palette is applied" \
-	-constraints {pixelProbe notAqua} -setup {
+	-constraints {pixelProbe notAqua integralScale} -setup {
     image create photo photo.palette -width 20 -height 20 -palette 2
     photo.palette put #808080 -to 0 0 20 20
 } -body {

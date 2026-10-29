@@ -3079,7 +3079,9 @@ test text-11a.22 {TextWidgetCmd procedure, "sync" option with -command} -setup {
     destroy .top.yt .top
 } -result {1 0 0 1 1 2}
 
-test text-11a.31 {"<<WidgetViewSync>>" event} -setup {
+test text-11a.31 {"<<WidgetViewSync>>" event} -constraints {
+    sizedToplevels
+} -setup {
     destroy .top.yt .top
 } -body {
     toplevel .top

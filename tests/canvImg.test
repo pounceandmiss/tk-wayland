@@ -384,7 +384,7 @@ test canvImg-6.12 {ComputeImageBbox procedure} -constraints {
 } -result {5 23 35 38}
 
 test canvImg-7.1 {DisplayImage procedure} -constraints {
-    testImageType
+    testImageType integralScale
 } -setup {
     .c delete all
 } -body {
@@ -757,7 +757,7 @@ test canvImg-9.1 {DisplayImage procedure} -constraints testImageType -setup {
 	image delete foo
 } -result {75 150 105 165}
 
-test canvImg-10.1 {TranslateImage procedure} -constraints testImageType -setup {
+test canvImg-10.1 {TranslateImage procedure} -constraints {testImageType integralScale} -setup {
     .c delete all
     update
 } -body {

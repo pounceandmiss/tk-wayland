@@ -741,7 +741,9 @@ test scrollbar-9.1 {scrollbar widget vs hidden commands} {
     list [winfo children .] [interp hidden]
 } [list {} [interp hidden]]
 
-test scrollbar-10.1 {<MouseWheel> event on scrollbar} -setup {
+test scrollbar-10.1 {<MouseWheel> event on scrollbar} -constraints {
+    sizedToplevels
+} -setup {
     destroy .t .s
 } -body {
     pack [text .t -yscrollcommand {.s set}] -side left

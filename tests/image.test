@@ -360,7 +360,7 @@ test image-8.1 {Tk_ImageCmd procedure, "inuse" option} -constraints {
     catch {destroy .b}
 } -result [list 0 1]
 
-test image-9.1 {Tk_ImageChanged procedure} -constraints testImageType -setup {
+test image-9.1 {Tk_ImageChanged procedure} -constraints {testImageType integralScale} -setup {
     .c delete all
     imageCleanup
     update
@@ -380,7 +380,7 @@ test image-9.1 {Tk_ImageChanged procedure} -constraints testImageType -setup {
     imageCleanup
 } -result {{foo display 5 6 7 8}}
 
-test image-9.2 {Tk_ImageChanged procedure} -constraints testImageType -setup {
+test image-9.2 {Tk_ImageChanged procedure} -constraints {testImageType integralScale} -setup {
     .c delete all
     imageCleanup
     update

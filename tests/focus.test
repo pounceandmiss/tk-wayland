@@ -597,7 +597,7 @@ test focus-3.5 {SetFocus procedure, generating events} -constraints {
 in .t.b2 NotifyAncestor
 }
 test focus-3.6 {SetFocus procedure, generating events} -constraints {
-    unix testwrapper
+    unix testwrapper forcedFocus
 } -body {
     focusSetup
     focus -force .b
@@ -625,7 +625,7 @@ unix nonPortable testwrapper
 
 
 test focus-4.1 {TkFocusDeadWindow procedure} -constraints {
-    unix testwrapper
+    unix testwrapper forcedFocus
 } -body {
     focusSetup
     update
@@ -635,7 +635,7 @@ test focus-4.1 {TkFocusDeadWindow procedure} -constraints {
     focus
 } -result {.b}
 test focus-4.2 {TkFocusDeadWindow procedure} -constraints {
-    unix testwrapper
+    unix testwrapper forcedFocus
 } -body {
     focusSetup
     update
@@ -707,7 +707,7 @@ bind all <Key> {}
 fixfocus
 
 test focus-6.1 {miscellaneous - embedded application in same process} -constraints {
-    unix  testwrapper
+    unix  testwrapper forcedFocus
 } -setup {
     eval interp delete [interp children]
 } -body {
@@ -884,7 +884,7 @@ test focus-9.1 {implicit focus is lost when another application takes the focus}
 } -result {. {}}
 
 test focus-10.1 {a toplevel which got the X focus during a grab gets the Tk focus when the grab is released - bug 220892} -constraints {
-    unix testxfocus
+    unix testxfocus forcedFocus
 } -setup {
     deleteWindows
 } -body {

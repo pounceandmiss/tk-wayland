@@ -41,12 +41,18 @@ unset c
 # Another process of the interpreter can be started (not on Android).
 testConstraint childProcesses [file executable [interpreter]]
 # Toplevels take the size and position they ask for (on Android, those which
-# can be resized fill the screen, and the others are centered).
+# can be resized fill the screen, the others are centered, and none is larger
+# than the screen).
 testConstraint sizedToplevels [expr {[tk windowingsystem] ne "android"}]
-# Scrolling copies pixels, and only the rest is redrawn: not at fractional
-# scales, where the X emulation of Wayland and Android redraws the whole area
-# (the emulator of the Android tests has 2.625 pixels per logical pixel).
-testConstraint copiedScrolling [expr {
+# "focus -force" gives the keyboard focus to a toplevel at once (on Wayland,
+# the compositor gives it, to the toplevel it chooses).
+testConstraint forcedFocus [expr {[tk windowingsystem] ne "wayland"}]
+# A logical pixel is a whole number of pixels of the screen. At fractional
+# scales (the emulator of the Android tests has 2.625 pixels per logical
+# pixel), the X emulation of Wayland and Android redraws the whole area of a
+# scroll instead of copying pixels, redraws areas rounded out to whole pixels
+# of the screen, and images are interpolated.
+testConstraint integralScale [expr {
     [tk windowingsystem] ne "android"
     || [::tk::android::scale] == round([::tk::android::scale])
 }]

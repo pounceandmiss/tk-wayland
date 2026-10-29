@@ -694,7 +694,7 @@ test unixEmbed-5.1 {EmbedFocusProc procedure, FocusIn events} -constraints {
     deleteWindows
 } -result {{focus in .t1}}
 test unixEmbed-5.1a {EmbedFocusProc procedure, FocusIn events} -constraints {
-    unix
+    unix forcedFocus
 } -setup {
     deleteWindows
     catch {interp delete child}
@@ -794,7 +794,7 @@ test unixEmbed-5.3 {EmbedFocusProc procedure, FocusOut events} -constraints {
     deleteWindows
 } -result {{{focus in .t1}} {{focus in .t1} {focus out .t1}}}
 test unixEmbed-5.3a {EmbedFocusProc procedure, FocusOut events} -constraints {
-    unix
+    unix forcedFocus
 } -setup {
     deleteWindows
     catch {interp delete child}
@@ -953,7 +953,7 @@ test unixEmbed-7.1 {TkpRedirectKeyEvent procedure, forward keystroke} -constrain
 # TkpRedirectKeyEvent is not implemented in win or aqua.  If someone
 # implements it they should change the constraints for this test.
 test unixEmbed-7.1a {TkpRedirectKeyEvent procedure, forward keystroke} -constraints {
-    unix notAqua failsOnXQuartz
+    unix notAqua failsOnXQuartz forcedFocus
 } -setup {
     deleteWindows
     catch {interp delete child}
@@ -1016,7 +1016,7 @@ test unixEmbed-7.2 {TkpRedirectKeyEvent procedure, don't forward keystroke width
     bind . <Key> {}
 } -result {{} {{key b}}}
 test unixEmbed-7.2a {TkpRedirectKeyEvent procedure, don't forward keystroke width} -constraints {
-    unix
+    unix forcedFocus
 } -setup {
     deleteWindows
     catch {interp delete child}
@@ -1079,7 +1079,7 @@ test unixEmbed-8.1 {TkpClaimFocus procedure} -constraints {
 } -cleanup {
     deleteWindows
 } -result {{{} .t1} .f1}
-test unixEmbed-8.1a {TkpClaimFocus procedure} -constraints unix -setup {
+test unixEmbed-8.1a {TkpClaimFocus procedure} -constraints {unix forcedFocus} -setup {
     deleteWindows
     catch {interp delete child}
     childTkInterp child
@@ -1107,7 +1107,7 @@ test unixEmbed-8.1a {TkpClaimFocus procedure} -constraints unix -setup {
     interp delete child
     deleteWindows
 } -result {{{} .t1} .f1}
-test unixEmbed-8.2 {TkpClaimFocus procedure} -constraints unix -setup {
+test unixEmbed-8.2 {TkpClaimFocus procedure} -constraints {unix forcedFocus} -setup {
     deleteWindows
     catch {interp delete child}
     interp create child
