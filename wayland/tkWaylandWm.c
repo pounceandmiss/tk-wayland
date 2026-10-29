@@ -972,7 +972,8 @@ ScheduleWaitingPopups(void)
  * TkWlWmSurfacePresented --
  *
  *	Called when a surface was shown for the first time since it got its
- *	role: the popups waiting for it can be attached to it.
+ *	role: the popups waiting for it (a cascade for its menu, a dropdown
+ *	for its toplevel) can be attached to it.
  *
  * Results:
  *	None.
@@ -985,11 +986,9 @@ ScheduleWaitingPopups(void)
 
 void
 TkWlWmSurfacePresented(
-    TkXeSurface *surfPtr)
+    TCL_UNUSED(TkXeSurface *))
 {
-    if (surfPtr->popupGrab) {
-	ScheduleWaitingPopups();
-    }
+    ScheduleWaitingPopups();
 }
 
 /*
@@ -1804,8 +1803,9 @@ CanBeParent(
  *
  * FindPopupParent --
  *
- *	Find the surface a popup is attached to: the one which received the
- *	input that posted it, or else any surface which is shown.
+ *	Find the surface a popup is attached to: the toplevel it is transient
+ *	for (a combobox dropdown), or else the one which received the input
+ *	that posted it, or else any surface which is shown.
  *
  * Results:
  *	The parent, or NULL if there is none.
@@ -1820,8 +1820,16 @@ static TkXeSurface *
 FindPopupParent(
     TkXeSurface *surfPtr)
 {
-    TkXeSurface *p;
+    TkXeSurface *p = TransientParent(surfPtr);
 
+    /*
+     * The toplevel a popup is transient for is the one it is posted from,
+     * even when a script posts it while the input is in another one.
+     */
+
+    if (CanBeParent(p, surfPtr)) {
+	return p;
+    }
     if (CanBeParent(tkXeDisplay->pointerSurface, surfPtr)) {
 	return tkXeDisplay->pointerSurface;
     }
@@ -1942,6 +1950,21 @@ MapPopup(
 
     if (tkXeDisplay->wmBase == NULL) {
 	return;
+    }
+
+    /*
+     * A popup is attached to the toplevel it is transient for, which must
+     * have been shown: when a script maps both at once, the popup waits.
+     */
+
+    {
+	TkXeSurface *transientPtr = TransientParent(surfPtr);
+
+	if (transientPtr && transientPtr->winPtr->mapped
+		&& !transientPtr->presented && !transientPtr->popupDismissed) {
+	    surfPtr->popupWaiting = true;
+	    return;
+	}
     }
 
     /*
