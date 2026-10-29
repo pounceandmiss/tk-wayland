@@ -12,7 +12,7 @@
 #
 #	make deps		the dependencies
 #	make tcl tk		Tcl and Tk
-#	make apk		build/tk.apk, with APP_DIR (default: the demos)
+#	make apk		build/tk.apk, with APP_DIR (default: wish, ../wish)
 #	make test-apk		build/tktest.apk, which runs the tests of Tk
 #				with TESTFLAGS (see test.sh)
 #
@@ -209,7 +209,7 @@ FORCE:
 
 # ==== The APK ====
 
-APP_DIR		?= $(TK_SRC)/library/demos
+APP_DIR		?= $(TK_SRC)/android/wish
 APK_DIR		:= $(BUILD)/apk
 LIBMAIN		:= $(APK_DIR)/lib/$(ANDROID_ABI)/libmain.so
 SCRIPTS_ZIP	:= $(BUILD)/scripts.zip
@@ -248,6 +248,9 @@ $(SCRIPTS_ZIP): FORCE $(HOST_TCLSH) $(TEST_APP)
 	cp -r $(TK_SRC)/library $(BUILD)/scripts/tk_library
 	rm -rf $(BUILD)/scripts/tk_library/demos
 	cp -r $(APP_DIR) $(BUILD)/scripts/app
+ifeq ($(APP_DIR),$(TK_SRC)/android/wish)
+	cp -r $(TK_SRC)/library/demos $(BUILD)/scripts/app/demos
+endif
 	cd $(BUILD)/scripts && echo 'zipfs mkzip $@ . .' | $(HOST_TCLSH)
 
 $(SCRIPTS_ZIP:.zip=.o): $(SCRIPTS_ZIP)
