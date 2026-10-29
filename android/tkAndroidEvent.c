@@ -1438,7 +1438,9 @@ TkpGetString(
  *
  * TkpSetKeycodeAndState --
  *
- *	Set the keycode of an event generated with [event generate].
+ *	Set the keycode of an event generated with [event generate], and add
+ *	Shift to its state if the keysym is the one of the key with Shift, as
+ *	on X11.
  *
  * Results:
  *	None.
@@ -1455,8 +1457,16 @@ TkpSetKeycodeAndState(
     KeySym keySym,		/* The keysym of the event. */
     XEvent *eventPtr)		/* The event to fill. */
 {
+    int keyCode;
+
     eventPtr->xkey.keycode = (keySym == NoSymbol) ? 0
 	    : TkAndroidKeyCode(keySym);
+    keyCode = (int)eventPtr->xkey.keycode - 8;
+    if (eventPtr->xkey.keycode != 0
+	    && TkAndroidKeySym(keyCode, 0, 0) != keySym
+	    && TkAndroidKeySym(keyCode, AMETA_SHIFT_ON, 0) == keySym) {
+	eventPtr->xkey.state |= ShiftMask;
+    }
     ((TkKeyEvent *)eventPtr)->keysym = keySym;
 }
 
