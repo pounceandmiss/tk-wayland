@@ -1354,6 +1354,15 @@ QueueGraphicsExposures(
 	pixman_region32_init_rect(&lost, srcX, srcY, width, height);
 	pixman_region32_subtract(&lost, &lost, &visible);
 	pixman_region32_translate(&lost, dstX - srcX, dstY - srcY);
+
+	/*
+	 * As in X servers, what lands in a part of the window which is not
+	 * visible either is not exposed (scrolling under a child).
+	 */
+
+	if (srcWinPtr->id == dst) {
+	    pixman_region32_intersect(&lost, &lost, &visible);
+	}
 	pixman_region32_fini(&visible);
     }
     if (pixman_region32_not_empty(&lost)) {
