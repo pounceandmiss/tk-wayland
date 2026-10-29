@@ -92,7 +92,13 @@ or leaves it alone. The tests run on each with `make test-sway`,
   without end.
 - The GTK plugin prints `Gdk-CRITICAL ... gdk_seat_get_keyboard` on stderr
   when the seat has no keyboard (the headless Weston and GNOME of the tests),
-  which makes the tests that check stderr fail.
+  which makes the tests that check stderr fail. The tests find both with a
+  child process (constraints `narrowToplevels` and `quietStderr`).
+- Mutter dismisses (`popup_done`) a grabbing popup attached to a toplevel
+  other than the focused one: a dropdown posted by a script right after its
+  toplevel was created was attached to the toplevel which had the keyboard.
+  The port attaches a popup to the toplevel it is transient for, once it is
+  shown.
 - libdecor 0.2.4 (Fedora 42) includes the title bar of its plugin in the
   window geometry when the compositor draws the decorations (libdecor issues
   80 and 81, fixed in 0.2.5): on sway, windows are 37 pixels higher than they
