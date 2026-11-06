@@ -15,9 +15,12 @@ run as on X11. Both ports are configured with `TK_USE_XEMU` defined.
   region is computed as the X server computes it (clipped by its ancestors,
   minus its children and the siblings above it), and Expose events are
   generated, after painting the background, for the parts of windows which
-  become visible. The children of the root window (the wrappers of Tk's
-  toplevels, and override-redirect windows) have a surface, with a backing
-  image.
+  become visible. A window which moves keeps its contents, which are copied
+  in the backing image, as the X server does, when it moves by a whole
+  number of pixels of the image (`TkXeMoveStep` gives the distances); at
+  other distances, at fractional scales, all of it is exposed and redrawn.
+  The children of the root window (the wrappers of Tk's toplevels, and
+  override-redirect windows) have a surface, with a backing image.
 - `tkXemuDraw.c`: GCs, drawing, pixmaps and images, with Cairo, following the
   rules of X11 for which pixels are drawn (lines through the centers of
   pixels, end points included, no antialiasing). Photo images are composited

@@ -14,6 +14,9 @@
  */
 
 #include "tkUnixInt.h"
+#ifdef TK_USE_XEMU
+#include "tkXemuInt.h"
+#endif
 
 /*
  * A data structure of the following type holds information for each window
@@ -50,13 +53,34 @@ typedef struct {
 } WmAttributes;
 
 typedef enum {
-    WMATT_ALPHA, WMATT_FULLSCREEN, WMATT_TOPMOST, WMATT_TYPE,
-    WMATT_ZOOMED, _WMATT_LAST_ATTRIBUTE
+    WMATT_ALPHA, WMATT_FULLSCREEN, WMATT_OVERFLOW, WMATT_SCROLL,
+    WMATT_TOPMOST, WMATT_TYPE, WMATT_ZOOMED, _WMATT_LAST_ATTRIBUTE
 } WmAttribute;
 
 static const char *const WmAttributeNames[] = {
-    "-alpha", "-fullscreen", "-topmost", "-type",
+    "-alpha", "-fullscreen", "-overflow", "-scroll", "-topmost", "-type",
     "-zoomed", NULL
+};
+
+/*
+ * What a toplevel does when its wrapper is smaller than the toplevel asks
+ * ([wm attributes -overflow]): it scrolls in the wrapper, keeping the size
+ * it asks for, or it is squeezed to the size of the wrapper. By default
+ * (auto), it scrolls in the directions in which it cannot be resized: being
+ * smaller there was not chosen by the user, but forced by the screen or the
+ * window manager. The application squeezes it by setting its size with
+ * [wm geometry], unless it asks for more than the screen has: then it could
+ * never show whole (libraries such as BWidget set the size of their dialogs
+ * to what they ask for, bounded by the screen). The menubar of a toplevel
+ * which scrolls stays at the top of the wrapper (see PlaceToplevel).
+ */
+
+typedef enum {
+    OVERFLOW_AUTO, OVERFLOW_SCROLL, OVERFLOW_SQUEEZE
+} WmOverflow;
+
+static const char *const WmOverflowNames[] = {
+    "auto", "scroll", "squeeze", NULL
 };
 
 /*
@@ -211,6 +235,15 @@ typedef struct TkWmInfo {
     char *clientMachine;	/* String to store in WM_CLIENT_MACHINE
 				 * property, or NULL. */
     int flags;			/* Miscellaneous flags, defined below. */
+    WmOverflow overflow;	/* What the toplevel does when its wrapper is
+				 * smaller than it asks: scroll or be
+				 * squeezed ([wm attributes -overflow]). */
+    int scrollX, scrollY;	/* The position, in the toplevel, of the part
+				 * of it which shows in the wrapper, when it
+				 * scrolls ([wm attributes -scroll]). */
+    int scrollRestX, scrollRestY;
+				/* Movement given to TkWmScrollToplevel not
+				 * yet applied (see there). */
     int numTransients;		/* number of transients on this window */
     int iconDataSize;		/* size of iconphoto image data */
     unsigned char *iconDataPtr;	/* iconphoto image data, if set */
@@ -266,6 +299,12 @@ typedef struct TkWmInfo {
  * WM_HIDDEN -			non-zero means the window manager has set
  *				_NET_WM_STATE_HIDDEN: the window is
  *				minimized although it is still mapped.
+ * WM_SIZE_SET -		non-zero means the size of the window was set
+ *				with "wm geometry" (not by the user through
+ *				the window manager), so the window is
+ *				squeezed rather than scrolled when it is
+ *				smaller than it asks, but not larger than the
+ *				screen (see WmOverflow).
  */
 
 #define WM_NEVER_MAPPED			1
@@ -284,6 +323,7 @@ typedef struct TkWmInfo {
 #define WM_HEIGHT_NOT_RESIZABLE		0x2000
 #define WM_WITHDRAWN			0x4000
 #define WM_HIDDEN			0x8000
+#define WM_SIZE_SET			0x10000
 
 /*
  * Wrapper for XGetWindowProperty and XChangeProperty to make them a *bit*
@@ -300,6 +340,17 @@ typedef struct TkWmInfo {
 	    Tk_InternAtom((Tk_Window) wrapperPtr, (atomName)),		\
 	    (type), (width), PropModeReplace, (unsigned char *) (data), \
 	    (int) (length))
+
+/*
+ * The toplevels of a thread: while there are some, a generic handler
+ * (OverflowFocusProc) scrolls the window which gets the focus into view, in
+ * toplevels which scroll.
+ */
+
+typedef struct {
+    int numToplevels;		/* The number of toplevels of the thread. */
+} ThreadSpecificData;
+static Tcl_ThreadDataKey dataKey;
 
 /*
  * This module keeps a list of all top-level windows, primarily to simplify
@@ -356,6 +407,11 @@ static void		MenubarDestroyProc(void *clientData,
 			    XEvent *eventPtr);
 static int		ParseGeometry(Tcl_Interp *interp, const char *string,
 			    TkWindow *winPtr);
+static void		PlaceToplevel(WmInfo *wmPtr, bool always);
+static Tk_GenericProc	OverflowFocusProc;
+static Tcl_IdleProc	SeeFocus;
+static bool		Overflows(WmInfo *wmPtr, int notResizable);
+static int		ScrollStep(WmInfo *wmPtr);
 static void		ReparentEvent(WmInfo *wmPtr, XReparentEvent *eventPtr);
 static void		PropertyEvent(WmInfo *wmPtr, XPropertyEvent *eventPtr);
 static void		TkWmStackorderToplevelWrapperMap(TkWindow *winPtr,
@@ -578,7 +634,12 @@ TkWmNewWindow(
 {
     WmInfo *wmPtr;
     TkDisplay *dispPtr = winPtr->dispPtr;
+    ThreadSpecificData *tsdPtr = (ThreadSpecificData *)
+	    Tcl_GetThreadData(&dataKey, sizeof(ThreadSpecificData));
 
+    if (tsdPtr->numToplevels++ == 0) {
+	Tk_CreateGenericHandler(OverflowFocusProc, NULL);
+    }
     wmPtr = (WmInfo *)Tcl_Alloc(sizeof(WmInfo));
     memset(wmPtr, 0, sizeof(WmInfo));
     wmPtr->winPtr = winPtr;
@@ -841,10 +902,16 @@ TkWmDeadWindow(
 {
     WmInfo *wmPtr = winPtr->wmInfoPtr;
     WmInfo *wmPtr2;
+    ThreadSpecificData *tsdPtr = (ThreadSpecificData *)
+	    Tcl_GetThreadData(&dataKey, sizeof(ThreadSpecificData));
 
     if (wmPtr == NULL) {
 	return;
     }
+    if (--tsdPtr->numToplevels == 0) {
+	Tk_DeleteGenericHandler(OverflowFocusProc, NULL);
+    }
+    Tcl_CancelIdleCall(SeeFocus, winPtr);
     if ((WmInfo *) winPtr->dispPtr->firstWmPtr == wmPtr) {
 	winPtr->dispPtr->firstWmPtr = wmPtr->nextPtr;
     } else {
@@ -1328,6 +1395,41 @@ WmSetAttribute(
 	SetNetWmState(winPtr, "_NET_WM_STATE_FULLSCREEN",
 		wmPtr->reqState.fullscreen);
 	break;
+    case WMATT_OVERFLOW: {
+	int overflow;
+
+	if (Tcl_GetIndexFromObj(interp, value, WmOverflowNames, "overflow",
+		0, &overflow) != TCL_OK) {
+	    return TCL_ERROR;
+	}
+	wmPtr->overflow = (WmOverflow)overflow;
+	PlaceToplevel(wmPtr, false);
+	break;
+    }
+    case WMATT_SCROLL: {
+	Tcl_Obj **objv;
+	Tcl_Size objc;
+	int x, y;
+
+	if (Tcl_ListObjGetElements(interp, value, &objc, &objv) != TCL_OK) {
+	    return TCL_ERROR;
+	}
+	if (objc != 2) {
+	    Tcl_SetObjResult(interp, Tcl_ObjPrintf(
+		    "expected a list of two integers but got \"%s\"",
+		    Tcl_GetString(value)));
+	    Tcl_SetErrorCode(interp, "TK", "WM", "ATTR", "SCROLL", (char *)NULL);
+	    return TCL_ERROR;
+	}
+	if (Tcl_GetIntFromObj(interp, objv[0], &x) != TCL_OK
+		|| Tcl_GetIntFromObj(interp, objv[1], &y) != TCL_OK) {
+	    return TCL_ERROR;
+	}
+	wmPtr->scrollX = x;
+	wmPtr->scrollY = y;
+	PlaceToplevel(wmPtr, false);
+	break;
+    }
     case _WMATT_LAST_ATTRIBUTE:
 	return TCL_ERROR;
     }
@@ -1365,6 +1467,15 @@ WmGetAttribute(
 	return Tcl_NewBooleanObj(wmPtr->attributes.fullscreen);
     case WMATT_TYPE:
 	return GetNetWmType(winPtr);
+    case WMATT_OVERFLOW:
+	return Tcl_NewStringObj(WmOverflowNames[wmPtr->overflow], -1);
+    case WMATT_SCROLL: {
+	Tcl_Obj *pos[2];
+
+	pos[0] = Tcl_NewWideIntObj(wmPtr->scrollX);
+	pos[1] = Tcl_NewWideIntObj(wmPtr->scrollY);
+	return Tcl_NewListObj(2, pos);
+    }
     case _WMATT_LAST_ATTRIBUTE:
 	break;
     }
@@ -1944,6 +2055,14 @@ WmGeometryCmd(
 		    - winPtr->reqWidth)/wmPtr->widthInc;
 	    height = wmPtr->reqGridHeight + (winPtr->changes.height
 		    - winPtr->reqHeight)/wmPtr->heightInc;
+	} else if (TkWmToplevelOverflows((Tk_Window) winPtr)) {
+	    /*
+	     * The toplevel scrolls: its geometry is that of the part of it
+	     * the wrapper shows.
+	     */
+
+	    width = wmPtr->wrapperPtr->changes.width;
+	    height = wmPtr->wrapperPtr->changes.height - wmPtr->menuHeight;
 	} else {
 	    width = winPtr->changes.width;
 	    height = winPtr->changes.height;
@@ -1956,6 +2075,7 @@ WmGeometryCmd(
     if (*argv3 == '\0') {
 	wmPtr->width = -1;
 	wmPtr->height = -1;
+	wmPtr->flags &= ~WM_SIZE_SET;
 	WmUpdateGeom(wmPtr, winPtr);
 	return TCL_OK;
     }
@@ -3900,6 +4020,7 @@ Tk_SetGrid(
     if ((wmPtr->gridWin == NULL) && !(wmPtr->flags & WM_NEVER_MAPPED)) {
 	wmPtr->width = -1;
 	wmPtr->height = -1;
+	wmPtr->flags &= ~WM_SIZE_SET;
     }
 
     /*
@@ -3999,6 +4120,431 @@ Tk_UnsetGrid(
 /*
  *----------------------------------------------------------------------
  *
+ * Overflows --
+ *
+ *	Whether a toplevel scrolls in its wrapper, rather than being
+ *	squeezed, in a direction, when the wrapper is smaller than the
+ *	toplevel asks (see WmOverflow).
+ *
+ * Results:
+ *	True if it scrolls.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static bool
+Overflows(
+    WmInfo *wmPtr,		/* The toplevel. */
+    int notResizable)		/* WM_WIDTH_NOT_RESIZABLE or
+				 * WM_HEIGHT_NOT_RESIZABLE: the direction. */
+{
+    if ((wmPtr->gridWin != NULL) || (wmPtr->winPtr->flags & TK_EMBEDDED)) {
+	return false;
+    }
+    switch (wmPtr->overflow) {
+    case OVERFLOW_SCROLL:
+	return true;
+    case OVERFLOW_SQUEEZE:
+	return false;
+    default:
+	if (!(wmPtr->flags & notResizable)) {
+	    return false;
+	}
+	if (!(wmPtr->flags & WM_SIZE_SET)) {
+	    return true;
+	}
+	if (notResizable == WM_WIDTH_NOT_RESIZABLE) {
+	    return wmPtr->winPtr->reqWidth
+		    > WidthOfScreen(Tk_Screen((Tk_Window) wmPtr->winPtr));
+	}
+	return wmPtr->winPtr->reqHeight
+		> HeightOfScreen(Tk_Screen((Tk_Window) wmPtr->winPtr));
+    }
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * ScrollStep --
+ *
+ *	The distance by which a toplevel which scrolls moves when it is
+ *	dragged or scrolled into view: with the X server emulation, windows
+ *	keep their contents when they move by multiples of it (see
+ *	TkXeMoveStep), instead of being redrawn whole.
+ *
+ * Results:
+ *	The distance, in pixels.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static int
+ScrollStep(
+    WmInfo *wmPtr)		/* The toplevel. */
+{
+#ifdef TK_USE_XEMU
+    if (wmPtr->wrapperPtr != NULL) {
+	return TkXeMoveStep(wmPtr->wrapperPtr->window);
+    }
+#else
+    (void)wmPtr;
+#endif
+    return 1;
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * PlaceToplevel --
+ *
+ *	Place a toplevel and its menubar in the wrapper. The menubar is at
+ *	the top, as wide as the wrapper, and the toplevel below it fills the
+ *	rest; but a toplevel which scrolls keeps the size it asks for, in the
+ *	directions in which it is larger than that rest (rounded up so that
+ *	the distance it scrolls is a multiple of ScrollStep), and the wrapper
+ *	shows the part of it at its scroll position.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The toplevel is moved and resized, and told with a ConfigureNotify
+ *	event if its geometry changed, or always if asked. The scroll
+ *	position is kept within the toplevel.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static void
+PlaceToplevel(
+    WmInfo *wmPtr,		/* The toplevel. */
+    bool always)		/* Whether to send the ConfigureNotify event
+				 * even if nothing changed (the wrapper
+				 * moved). */
+{
+    TkWindow *winPtr = wmPtr->winPtr;
+    TkWindow *wrapperPtr = wmPtr->wrapperPtr;
+    int x, y, width, height, visibleWidth, visibleHeight, step;
+    Tk_ErrorHandler handler;
+
+    if (wrapperPtr == NULL) {
+	return;
+    }
+
+    /*
+     * Leave toplevels which cannot scroll alone, unless the wrapper changed:
+     * they fill it. Before the window is mapped, the wrapper has no size
+     * yet: it is placed when the wrapper gets one (ConfigureEvent).
+     */
+
+    if (!always && (wmPtr->flags & (WM_NEVER_MAPPED|WM_ABOUT_TO_MAP))) {
+	return;
+    }
+    if (!always && !Overflows(wmPtr, WM_WIDTH_NOT_RESIZABLE)
+	    && !Overflows(wmPtr, WM_HEIGHT_NOT_RESIZABLE)
+	    && !TkWmToplevelOverflows((Tk_Window) winPtr)) {
+	return;
+    }
+    width = visibleWidth = wrapperPtr->changes.width;
+    height = visibleHeight = wrapperPtr->changes.height - wmPtr->menuHeight;
+    step = ScrollStep(wmPtr);
+    if (Overflows(wmPtr, WM_WIDTH_NOT_RESIZABLE)
+	    && (winPtr->reqWidth > width)) {
+	width += (winPtr->reqWidth - width + step - 1) / step * step;
+    }
+    if (Overflows(wmPtr, WM_HEIGHT_NOT_RESIZABLE)
+	    && (winPtr->reqHeight > height)) {
+	height += (winPtr->reqHeight - height + step - 1) / step * step;
+    }
+    if (wmPtr->scrollX > width - visibleWidth) {
+	wmPtr->scrollX = width - visibleWidth;
+    }
+    if (wmPtr->scrollX < 0) {
+	wmPtr->scrollX = 0;
+    }
+    if (wmPtr->scrollY > height - visibleHeight) {
+	wmPtr->scrollY = height - visibleHeight;
+    }
+    if (wmPtr->scrollY < 0) {
+	wmPtr->scrollY = 0;
+    }
+    x = -wmPtr->scrollX;
+    y = wmPtr->menuHeight - wmPtr->scrollY;
+    if (!always && (winPtr->changes.x == wrapperPtr->changes.x + x)
+	    && (winPtr->changes.y == wrapperPtr->changes.y + y)
+	    && (winPtr->changes.width == width)
+	    && (winPtr->changes.height == height)) {
+	return;
+    }
+
+    /*
+     * If the menuHeight happens to be zero, we'll get a BadValue X error
+     * that we want to ignore [Bug: 3377]
+     */
+
+    handler = Tk_CreateErrorHandler(winPtr->display, -1, -1, -1, NULL, NULL);
+    XMoveResizeWindow(winPtr->display, winPtr->window, x, y,
+	    (unsigned) width, (unsigned) height);
+    Tk_DeleteErrorHandler(handler);
+    if ((wmPtr->menubar != NULL)
+	    && ((Tk_Width(wmPtr->menubar) != wrapperPtr->changes.width)
+	    || (Tk_Height(wmPtr->menubar) != wmPtr->menuHeight))) {
+	Tk_MoveResizeWindow(wmPtr->menubar, 0, 0, wrapperPtr->changes.width,
+		wmPtr->menuHeight);
+    }
+
+    /*
+     * Update the coordinates in the toplevel (they should refer to the
+     * position in root window coordinates, not the coordinates of the wrapper
+     * window). Then synthesize a ConfigureNotify event to tell the
+     * application about the change.
+     */
+
+    winPtr->changes.x = wrapperPtr->changes.x + x;
+    winPtr->changes.y = wrapperPtr->changes.y + y;
+    winPtr->changes.width = width;
+    winPtr->changes.height = height;
+    TkDoConfigureNotify(winPtr);
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWmToplevelOverflows --
+ *
+ *	Whether a toplevel is larger than the part of it its wrapper shows,
+ *	so that it scrolls.
+ *
+ * Results:
+ *	True if it scrolls.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
+bool
+TkWmToplevelOverflows(
+    Tk_Window tkwin)		/* The toplevel. */
+{
+    TkWindow *winPtr = (TkWindow *) tkwin;
+    WmInfo *wmPtr = winPtr->wmInfoPtr;
+
+    if (!(winPtr->flags & TK_TOP_LEVEL) || (wmPtr == NULL)
+	    || (wmPtr->wrapperPtr == NULL)) {
+	return false;
+    }
+    return (winPtr->changes.width > wmPtr->wrapperPtr->changes.width)
+	    || (winPtr->changes.height
+	    > wmPtr->wrapperPtr->changes.height - wmPtr->menuHeight);
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWmScrollToplevel --
+ *
+ *	Scroll a toplevel larger than the part of it its wrapper shows. It
+ *	moves by multiples of ScrollStep, so that it is not redrawn whole at
+ *	each step; the rest of the movement is kept for the next call.
+ *
+ * Results:
+ *	True if the toplevel scrolls (even if it is already at the end in
+ *	that direction).
+ *
+ * Side effects:
+ *	The toplevel moves in its wrapper.
+ *
+ *----------------------------------------------------------------------
+ */
+
+bool
+TkWmScrollToplevel(
+    Tk_Window tkwin,		/* The toplevel. */
+    int dx, int dy)		/* How far the part shown moves, in pixels:
+				 * right and down are positive. */
+{
+    WmInfo *wmPtr = ((TkWindow *) tkwin)->wmInfoPtr;
+    int step;
+
+    if (!TkWmToplevelOverflows(tkwin)) {
+	return false;
+    }
+    step = ScrollStep(wmPtr);
+    wmPtr->scrollRestX += dx;
+    wmPtr->scrollRestY += dy;
+    dx = wmPtr->scrollRestX / step * step;
+    dy = wmPtr->scrollRestY / step * step;
+    wmPtr->scrollRestX -= dx;
+    wmPtr->scrollRestY -= dy;
+    if (dx || dy) {
+	wmPtr->scrollX += dx;
+	wmPtr->scrollY += dy;
+	PlaceToplevel(wmPtr, false);
+    }
+    return true;
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWmSeeWindow --
+ *
+ *	Scroll the toplevel of a window, if it scrolls, so that the window
+ *	shows (its top left corner, if it is larger than what shows), to a
+ *	position which is a multiple of ScrollStep.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The toplevel may move in its wrapper.
+ *
+ *----------------------------------------------------------------------
+ */
+
+void
+TkWmSeeWindow(
+    Tk_Window tkwin)		/* The window. */
+{
+    TkWindow *winPtr = (TkWindow *) tkwin, *topPtr;
+    WmInfo *wmPtr;
+    int x, y, topX, topY, scrollX, scrollY, visibleWidth, visibleHeight;
+    int step;
+
+    for (topPtr = winPtr;
+	    (topPtr != NULL) && !(topPtr->flags & TK_TOP_HIERARCHY);
+	    topPtr = topPtr->parentPtr) {
+	/* Empty loop body. */
+    }
+    if ((topPtr == NULL) || (topPtr == winPtr)
+	    || !TkWmToplevelOverflows((Tk_Window) topPtr)) {
+	return;
+    }
+    wmPtr = topPtr->wmInfoPtr;
+    Tk_GetRootCoords(tkwin, &x, &y);
+    Tk_GetRootCoords((Tk_Window) topPtr, &topX, &topY);
+    x -= topX;
+    y -= topY;
+    visibleWidth = wmPtr->wrapperPtr->changes.width;
+    visibleHeight = wmPtr->wrapperPtr->changes.height - wmPtr->menuHeight;
+    scrollX = wmPtr->scrollX;
+    scrollY = wmPtr->scrollY;
+    step = ScrollStep(wmPtr);
+    if (x + Tk_Width(tkwin) > scrollX + visibleWidth) {
+	scrollX = (x + Tk_Width(tkwin) - visibleWidth + step - 1) / step * step;
+    }
+    if (x < scrollX) {
+	scrollX = x / step * step;
+    }
+    if (y + Tk_Height(tkwin) > scrollY + visibleHeight) {
+	scrollY = (y + Tk_Height(tkwin) - visibleHeight + step - 1)
+		/ step * step;
+    }
+    if (y < scrollY) {
+	scrollY = y / step * step;
+    }
+    if ((scrollX != wmPtr->scrollX) || (scrollY != wmPtr->scrollY)) {
+	wmPtr->scrollX = scrollX;
+	wmPtr->scrollY = scrollY;
+	PlaceToplevel(wmPtr, false);
+    }
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * SeeFocus --
+ *
+ *	Idle handler: scroll a toplevel which scrolls so that the window of
+ *	its application with the focus shows, if it is in the toplevel. It
+ *	runs at idle time, once the windows are laid out.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The toplevel may move in its wrapper.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static void
+SeeFocus(
+    void *clientData)		/* The toplevel. */
+{
+    TkWindow *topPtr = (TkWindow *) clientData;
+    TkWindow *focusPtr = TkGetFocusWin(topPtr), *winPtr;
+
+    for (winPtr = focusPtr; winPtr != NULL; winPtr = winPtr->parentPtr) {
+	if (winPtr == topPtr) {
+	    TkWmSeeWindow((Tk_Window) focusPtr);
+	    return;
+	}
+	if (winPtr->flags & TK_TOP_HIERARCHY) {
+	    return;
+	}
+    }
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * OverflowFocusProc --
+ *
+ *	Generic event handler: when a window gets the focus in a toplevel
+ *	which scrolls, it is scrolled into view (at idle time).
+ *
+ * Results:
+ *	0: the event is processed further.
+ *
+ * Side effects:
+ *	SeeFocus may be scheduled.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static int
+OverflowFocusProc(
+    TCL_UNUSED(void *),
+    XEvent *eventPtr)		/* The event. */
+{
+    TkWindow *winPtr, *topPtr;
+
+    if ((eventPtr->type != FocusIn)
+	    || (eventPtr->xfocus.detail == NotifyVirtual)
+	    || (eventPtr->xfocus.detail == NotifyNonlinearVirtual)
+	    || (eventPtr->xfocus.detail == NotifyPointer)) {
+	return 0;
+    }
+    winPtr = (TkWindow *) Tk_IdToWindow(eventPtr->xany.display,
+	    eventPtr->xany.window);
+    if ((winPtr == NULL) || (winPtr->flags & TK_TOP_HIERARCHY)) {
+	return 0;
+    }
+    for (topPtr = winPtr; !(topPtr->flags & TK_TOP_HIERARCHY);
+	    topPtr = topPtr->parentPtr) {
+	if (topPtr->parentPtr == NULL) {
+	    return 0;
+	}
+    }
+    if (TkWmToplevelOverflows((Tk_Window) topPtr)) {
+	Tcl_CancelIdleCall(SeeFocus, topPtr);
+	Tcl_DoWhenIdle(SeeFocus, topPtr);
+    }
+    return 0;
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
  * ConfigureEvent --
  *
  *	This function is called to handle ConfigureNotify events on wrapper
@@ -4024,7 +4570,6 @@ ConfigureEvent(
     TkWindow *wrapperPtr = wmPtr->wrapperPtr;
     TkWindow *winPtr = wmPtr->winPtr;
     TkDisplay *dispPtr = wmPtr->winPtr->dispPtr;
-    Tk_ErrorHandler handler;
 
     /*
      * Update size information from the event. There are a couple of tricky
@@ -4161,34 +4706,15 @@ ConfigureEvent(
 
     /*
      * Make sure that the toplevel and menubar are properly positioned within
-     * the wrapper. If the menuHeight happens to be zero, we'll get a BadValue
-     * X error that we want to ignore [Bug: 3377]
+     * the wrapper, and tell the toplevel. If the wrapper got smaller than a
+     * toplevel which scrolls, the window with the focus is kept in view.
      */
 
-    handler = Tk_CreateErrorHandler(winPtr->display, -1, -1, -1, NULL, NULL);
-    XMoveResizeWindow(winPtr->display, winPtr->window, 0,
-	    wmPtr->menuHeight, (unsigned) wrapperPtr->changes.width,
-	    (unsigned) (wrapperPtr->changes.height - wmPtr->menuHeight));
-    Tk_DeleteErrorHandler(handler);
-    if ((wmPtr->menubar != NULL)
-	    && ((Tk_Width(wmPtr->menubar) != wrapperPtr->changes.width)
-	    || (Tk_Height(wmPtr->menubar) != wmPtr->menuHeight))) {
-	Tk_MoveResizeWindow(wmPtr->menubar, 0, 0, wrapperPtr->changes.width,
-		wmPtr->menuHeight);
+    PlaceToplevel(wmPtr, true);
+    if (TkWmToplevelOverflows((Tk_Window) winPtr)) {
+	Tcl_CancelIdleCall(SeeFocus, winPtr);
+	Tcl_DoWhenIdle(SeeFocus, winPtr);
     }
-
-    /*
-     * Update the coordinates in the toplevel (they should refer to the
-     * position in root window coordinates, not the coordinates of the wrapper
-     * window). Then synthesize a ConfigureNotify event to tell the
-     * application about the change.
-     */
-
-    winPtr->changes.x = wrapperPtr->changes.x;
-    winPtr->changes.y = wrapperPtr->changes.y + wmPtr->menuHeight;
-    winPtr->changes.width = wrapperPtr->changes.width;
-    winPtr->changes.height = wrapperPtr->changes.height - wmPtr->menuHeight;
-    TkDoConfigureNotify(winPtr);
 }
 
 /*
@@ -4280,8 +4806,9 @@ ReparentEvent(
 	wmPtr->xInParent = wmPtr->yInParent = 0;
 	wrapperPtr->changes.x = reparentEventPtr->x;
 	wrapperPtr->changes.y = reparentEventPtr->y;
-	wmPtr->winPtr->changes.x = reparentEventPtr->x;
-	wmPtr->winPtr->changes.y = reparentEventPtr->y + wmPtr->menuHeight;
+	wmPtr->winPtr->changes.x = reparentEventPtr->x - wmPtr->scrollX;
+	wmPtr->winPtr->changes.y = reparentEventPtr->y + wmPtr->menuHeight
+		- wmPtr->scrollY;
 	return;
     }
 
@@ -4591,9 +5118,11 @@ TopLevelReqProc(
 	 * positioned incorrectly the first time it appears (because we didn't
 	 * know the proper width of the window manager borders); if we invoke
 	 * UpdateGeometryInfo again, the window will be positioned correctly,
-	 * which may cause it to jump on the screen.
+	 * which may cause it to jump on the screen. A toplevel which scrolls
+	 * takes the size it asks for in its wrapper, though.
 	 */
 
+	PlaceToplevel(wmPtr, false);
 	return;
     }
 
@@ -4640,10 +5169,23 @@ UpdateGeometryInfo(
 {
     TkWindow *winPtr = (TkWindow *)clientData;
     WmInfo *wmPtr = winPtr->wmInfoPtr;
-    int x, y, width, height, min, max;
+    int x, y, width, height, min, max, visibleWidth, visibleHeight;
     unsigned long serial;
 
     wmPtr->flags &= ~WM_UPDATE_PENDING;
+
+    /*
+     * The size of the toplevel as it shows in its wrapper: a toplevel which
+     * scrolls may be larger (see PlaceToplevel).
+     */
+
+    if (wmPtr->wrapperPtr != NULL) {
+	visibleWidth = wmPtr->wrapperPtr->changes.width;
+	visibleHeight = wmPtr->wrapperPtr->changes.height - wmPtr->menuHeight;
+    } else {
+	visibleWidth = winPtr->changes.width;
+	visibleHeight = winPtr->changes.height;
+    }
 
     /*
      * Compute the new size for the top-level window. See the user
@@ -4735,13 +5277,13 @@ UpdateGeometryInfo(
 
     if (wmPtr->flags & WM_NEGATIVE_X) {
 	x = wmPtr->vRootWidth - wmPtr->x
-		- (width + (wmPtr->parentWidth - winPtr->changes.width));
+		- (width + (wmPtr->parentWidth - visibleWidth));
     } else {
 	x = wmPtr->x;
     }
     if (wmPtr->flags & WM_NEGATIVE_Y) {
 	y = wmPtr->vRootHeight - wmPtr->y
-		- (height + (wmPtr->parentHeight - winPtr->changes.height));
+		- (height + (wmPtr->parentHeight - visibleHeight));
     } else {
 	y = wmPtr->y;
     }
@@ -4753,8 +5295,7 @@ UpdateGeometryInfo(
      * else, too.
      */
 
-    if (((width != winPtr->changes.width)
-	    || (height != winPtr->changes.height))
+    if (((width != visibleWidth) || (height != visibleHeight))
 	    && (wmPtr->gridWin == NULL)
 	    && !(wmPtr->sizeHintsFlags & (PMinSize|PMaxSize))) {
 	wmPtr->flags |= WM_UPDATE_SIZE_HINTS;
@@ -4807,18 +5348,21 @@ UpdateGeometryInfo(
     serial = NextRequest(winPtr->display);
     height += wmPtr->menuHeight;
     if (wmPtr->flags & WM_MOVE_PENDING) {
-	if ((x + wmPtr->xInParent == winPtr->changes.x) &&
-		(y+wmPtr->yInParent+wmPtr->menuHeight == winPtr->changes.y)
+	if ((x + wmPtr->xInParent == wmPtr->wrapperPtr->changes.x) &&
+		(y + wmPtr->yInParent == wmPtr->wrapperPtr->changes.y)
 		&& (width == wmPtr->wrapperPtr->changes.width)
 		&& (height == wmPtr->wrapperPtr->changes.height)) {
 	    /*
 	     * The window already has the correct geometry, so don't bother to
 	     * configure it; the X server appears to ignore these requests, so
 	     * we won't get back a ConfigureNotify and the
-	     * WaitForConfigureNotify call below will hang for a while.
+	     * WaitForConfigureNotify call below will hang for a while. A
+	     * toplevel which scrolls may still have to take a new size in the
+	     * wrapper.
 	     */
 
 	    wmPtr->flags &= ~WM_MOVE_PENDING;
+	    PlaceToplevel(wmPtr, false);
 	    return;
 	}
 	wmPtr->configWidth = width;
@@ -4837,9 +5381,12 @@ UpdateGeometryInfo(
 	     * The window is already just the size we want, so don't bother to
 	     * configure it; the X server appears to ignore these requests, so
 	     * we won't get back a ConfigureNotify and the
-	     * WaitForConfigureNotify call below will hang for a while.
+	     * WaitForConfigureNotify call below will hang for a while. A
+	     * toplevel which scrolls may still have to take a new size in the
+	     * wrapper.
 	     */
 
+	    PlaceToplevel(wmPtr, false);
 	    return;
 	}
 	wmPtr->configWidth = width;
@@ -4863,6 +5410,7 @@ UpdateGeometryInfo(
 	XResizeWindow(winPtr->display, wmPtr->wrapperPtr->window,
 		(unsigned) width, (unsigned) height);
     } else {
+	PlaceToplevel(wmPtr, false);
 	return;
     }
 
@@ -5742,6 +6290,7 @@ ParseGeometry(
 	}
 	height = strtoul(p, &end, 10);
 	p = end;
+	flags |= WM_SIZE_SET;
     }
 
     /*
@@ -5960,7 +6509,7 @@ Tk_CoordsToWindow(
 				 * to identify the display. */
 {
     Window window, parent, child;
-    int x, y, childX, childY, tmpx, tmpy, bd;
+    int x, y, childX, childY, tmpx, tmpy, bd, width, height;
     WmInfo *wmPtr;
     TkWindow *winPtr, *childPtr, *nextPtr;
     TkDisplay *dispPtr = ((TkWindow *) tkwin)->dispPtr;
@@ -6082,10 +6631,21 @@ Tk_CoordsToWindow(
      * translate the coordinates into the coordinate system of that window.
      */
 
-    x = childX - winPtr->changes.x;
-    y = childY - winPtr->changes.y;
-    if ((x < 0) || (x >= winPtr->changes.width)
-	    || (y >= winPtr->changes.height)) {
+    x = childX - (winPtr->changes.x + wmPtr->scrollX);
+    y = childY - (winPtr->changes.y + wmPtr->scrollY);
+    if (wmPtr->wrapperPtr != NULL) {
+	/*
+	 * The part of the toplevel the wrapper shows (the toplevel may be
+	 * larger, and scroll: see PlaceToplevel).
+	 */
+
+	width = wmPtr->wrapperPtr->changes.width;
+	height = wmPtr->wrapperPtr->changes.height - wmPtr->menuHeight;
+    } else {
+	width = winPtr->changes.width;
+	height = winPtr->changes.height;
+    }
+    if ((x < 0) || (x >= width) || (y >= height)) {
 	return NULL;
     }
     if (y < 0) {
@@ -6097,6 +6657,9 @@ Tk_CoordsToWindow(
 	if (y < 0) {
 	    return NULL;
 	}
+    } else {
+	x += wmPtr->scrollX;
+	y += wmPtr->scrollY;
     }
 
     /*

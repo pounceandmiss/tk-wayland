@@ -2634,7 +2634,7 @@ test unixWm-60.1.1 {wm attributes - test} -constraints {unix notAqua} -body {
     destroy .t
     toplevel .t
     wm attributes .t
-} -match exact -result {-alpha 1.0 -fullscreen 0 -topmost 0 -type {} -zoomed 0}
+} -match exact -result {-alpha 1.0 -fullscreen 0 -overflow auto -scroll {0 0} -topmost 0 -type {} -zoomed 0}
 
 test unixWm-60.1.2 {wm attributes - test} -constraints {unix aqua} -body {
     destroy .t
@@ -2759,6 +2759,235 @@ test unixWm-63.1 {UpdateSizeHints procedure, the size hints of a toplevel
 } -cleanup {
     destroy .t
 } -result {0 0}
+
+# A toplevel which cannot be resized, with a 400x300 frame and an entry at
+# each end, made 200x100 with wm geometry: it scrolls if its -overflow
+# attribute says so.
+proc overflowToplevel {{overflow scroll} {width 400}} {
+    destroy .t
+    toplevel .t
+    wm attributes .t -overflow $overflow
+    frame .t.f -width $width -height 300
+    pack .t.f
+    entry .t.f.left -width 4
+    entry .t.f.right -width 4
+    place .t.f.left -x 10 -y 10
+    place .t.f.right -x [expr {$width - 60}] -y 250
+    wm resizable .t 0 0
+    wm geometry .t 200x100
+    update
+}
+# The size of a toplevel, and of the part of it which shows.
+proc overflowSizes {} {
+    list [winfo width .t]x[winfo height .t] \
+	    [lindex [split [wm geometry .t] +-] 0]
+}
+testConstraint testtouch [llength [info commands testtouch]]
+
+test unixWm-64.1 {wm attributes -overflow: default} -constraints unix -setup {
+    destroy .t
+    toplevel .t
+} -body {
+    list [wm attributes .t -overflow] [wm attributes .t -scroll]
+} -cleanup {
+    destroy .t
+} -result {auto {0 0}}
+test unixWm-64.2 {wm attributes -overflow: bad value} -constraints {
+    unix
+} -setup {
+    destroy .t
+    toplevel .t
+} -body {
+    wm attributes .t -overflow sideways
+} -cleanup {
+    destroy .t
+} -returnCodes error -result {bad overflow "sideways": must be auto, scroll, or squeeze}
+test unixWm-64.3 {wm attributes -scroll: bad value} -constraints unix -setup {
+    destroy .t
+    toplevel .t
+} -body {
+    wm attributes .t -scroll 1
+} -cleanup {
+    destroy .t
+} -returnCodes error -result {expected a list of two integers but got "1"}
+test unixWm-64.4 {wm attributes -overflow scroll: the toplevel keeps its
+	size, the wrapper shows part of it} -constraints unix -setup {
+    overflowToplevel scroll
+} -body {
+    list {*}[overflowSizes] [wm attributes .t -scroll]
+} -cleanup {
+    destroy .t
+} -result {400x300 200x100 {0 0}}
+test unixWm-64.5 {wm attributes -scroll: kept in the toplevel} -constraints {
+    unix
+} -setup {
+    overflowToplevel scroll
+} -body {
+    wm attributes .t -scroll {1000 -5}
+    wm attributes .t -scroll
+} -cleanup {
+    destroy .t
+} -result {200 0}
+test unixWm-64.6 {wm attributes -scroll: the windows move} -constraints {
+    unix
+} -setup {
+    overflowToplevel scroll
+} -body {
+    set x [winfo rootx .t.f.right]
+    set y [winfo rooty .t.f.right]
+    wm attributes .t -scroll {50 30}
+    update
+    list [expr {[winfo rootx .t.f.right] - $x}] \
+	    [expr {[winfo rooty .t.f.right] - $y}] [winfo x .t.f.right]
+} -cleanup {
+    destroy .t
+} -result {-50 -30 340}
+test unixWm-64.7 {winfo containing in a toplevel which scrolls} -constraints {
+    unix
+} -setup {
+    overflowToplevel scroll
+    raise .t
+} -body {
+    wm attributes .t -scroll {200 200}
+    update
+    # The right entry shows, the left one does not: the point where it would
+    # be is not in the wrapper.
+    list [winfo containing [expr {[winfo rootx .t.f.right] + 2}] \
+		[expr {[winfo rooty .t.f.right] + 2}]] \
+	    [string match .t* [winfo containing \
+		[expr {[winfo rootx .t.f.left] + 2}] \
+		[expr {[winfo rooty .t.f.left] + 2}]]]
+} -cleanup {
+    destroy .t
+} -result {.t.f.right 0}
+test unixWm-64.8 {wm attributes -overflow auto: a toplevel sized with wm
+	geometry is squeezed} -constraints unix -setup {
+    overflowToplevel auto
+} -body {
+    overflowSizes
+} -cleanup {
+    destroy .t
+} -result {200x100 200x100}
+test unixWm-64.9 {wm attributes -overflow auto: unless it asks for more than
+	the screen has} -constraints unix -setup {
+    overflowToplevel auto [expr {[winfo screenwidth .] + 100}]
+} -body {
+    # (With the X server emulation, the toplevel may be a few pixels larger,
+    # so that it scrolls by whole pixels of the screen.)
+    list [expr {[winfo width .t] >= [winfo reqwidth .t]}] [winfo height .t]
+} -cleanup {
+    destroy .t
+} -result {1 100}
+test unixWm-64.10 {wm attributes -overflow auto: a toplevel which can be
+	resized is squeezed} -constraints unix -setup {
+    overflowToplevel auto [expr {[winfo screenwidth .] + 100}]
+    wm resizable .t 1 1
+    update
+} -body {
+    expr {[winfo width .t] < [winfo reqwidth .t]}
+} -cleanup {
+    destroy .t
+} -result 1
+test unixWm-64.11 {wm attributes -overflow auto: a toplevel which cannot be
+	resized keeps its size, if the window manager makes it
+	smaller} -constraints unix -setup {
+    destroy .t
+    toplevel .t
+    frame .t.f -width [expr {[winfo screenwidth .] + 100}] -height 50
+    pack .t.f
+    wm resizable .t 0 0
+    update
+} -body {
+    # Without a window manager, or with one which lets windows be larger than
+    # the screen, the wrapper is as large; else the toplevel scrolls in it.
+    expr {[winfo width .t] >= [winfo reqwidth .t]}
+} -cleanup {
+    destroy .t
+} -result 1
+test unixWm-64.12 {wm attributes -overflow squeeze: back to the size of the
+	wrapper} -constraints unix -setup {
+    overflowToplevel scroll
+    wm attributes .t -scroll {50 50}
+    update
+} -body {
+    wm attributes .t -overflow squeeze
+    update
+    list {*}[overflowSizes] [wm attributes .t -scroll]
+} -cleanup {
+    destroy .t
+} -result {200x100 200x100 {0 0}}
+test unixWm-64.13 {a toplevel which scrolls follows its requested
+	size} -constraints unix -setup {
+    overflowToplevel scroll
+} -body {
+    .t.f configure -width 600
+    update
+    overflowSizes
+} -cleanup {
+    destroy .t
+} -result {600x300 200x100}
+test unixWm-64.14 {the window which gets the focus is scrolled into
+	view} -constraints {unix forcedFocus} -setup {
+    overflowToplevel scroll
+} -body {
+    # (The position may be rounded, with the X server emulation, so that
+    # the toplevel keeps its contents when it moves.)
+    proc shows {w} {
+	lassign [wm attributes .t -scroll] x y
+	expr {[winfo x $w] >= $x && [winfo x $w] + [winfo width $w] <= $x + 200
+	    && [winfo y $w] >= $y && [winfo y $w] + [winfo height $w] <= $y + 100}
+    }
+    focus -force .t.f.right
+    update
+    set right [shows .t.f.right]
+    focus -force .t.f.left
+    update
+    list $right [shows .t.f.left] [shows .t.f.right]
+} -cleanup {
+    destroy .t
+    rename shows {}
+} -result {1 1 0}
+test unixWm-64.15 {the menubar stays at the top of a toplevel which
+	scrolls} -constraints unix -setup {
+    overflowToplevel scroll
+    menu .t.m
+    .t.m add command -label Command
+    .t configure -menu .t.m
+    raise .t
+    update
+} -body {
+    set y [winfo rooty .t]
+    wm attributes .t -scroll {0 50}
+    update
+    # The point of the toplevel at the top of the part which shows is just
+    # below the menubar, which is still above it.
+    set below [winfo containing [expr {[winfo rootx .t] + 100}] $y]
+    set above [winfo containing [expr {[winfo rootx .t] + 100}] \
+	    [expr {$y - 2}]]
+    list [expr {[winfo rooty .t] - $y}] $below [winfo class $above]
+} -cleanup {
+    destroy .t
+} -result {-50 .t.f Menu}
+test unixWm-64.16 {dragging a finger scrolls a toplevel which
+	scrolls} -constraints {unix testtouch} -setup {
+    overflowToplevel scroll
+    raise .t
+} -body {
+    lassign [list [winfo rootx .t] [winfo rooty .t]] rx ry
+    set t [clock milliseconds]
+    testtouch begin 1 [expr {$rx + 150}] [expr {$ry + 50}] $t
+    # (With the X server emulation, the toplevel moves by steps of up to 8
+    # pixels, so that it keeps its contents.)
+    for {set i 1} {$i <= 10} {incr i} {
+	testtouch move 1 [expr {$rx + 150 - 8 * $i}] [expr {$ry + 50 - 4 * $i}] \
+		[incr t 10]
+    }
+    testtouch end 1 0 0 [incr t 200]
+    update
+    wm attributes .t -scroll
+} -cleanup {
+    destroy .t
+} -result {80 40}
 
 #
 # TESTFILE CLEANUP

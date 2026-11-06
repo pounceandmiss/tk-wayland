@@ -28,9 +28,11 @@
  *	<<TouchEnd>> or <<TouchCancel>> events, whose data (%d) is the id
  *	of the finger, as long as it is on the screen, wherever it moves.
  *	By default, the window touched scrolls if it, or one of its
- *	ancestors, is a widget which scrolls; otherwise the finger is a mouse
- *	at once. A tap on a widget which scrolls is only delivered when the
- *	finger is lifted, since until then it could be the start of a drag.
+ *	ancestors, is a widget which scrolls, or else its toplevel, if it is
+ *	larger than what shows of it (see [wm attributes -overflow]);
+ *	otherwise the finger is a mouse at once. A tap on a widget which
+ *	scrolls is only delivered when the finger is lifted, since until then
+ *	it could be the start of a drag.
  *
  * Copyright © 2026 The Tk developers.
  *
@@ -264,7 +266,8 @@ GetMode(
  *
  *	Find the window which scrolls when a window is touched: the window,
  *	or the nearest of its ancestors in its toplevel, whose mode is
- *	scroll, unless a window with the mouse mode is found first.
+ *	scroll, unless a window with the mouse mode is found first; or else
+ *	the toplevel, if it is larger than what its wrapper shows.
  *
  * Results:
  *	The window, or NULL if the finger is a mouse; *mousePtr says whether
@@ -292,7 +295,7 @@ ScrollTarget(
 	    return NULL;
 	}
 	if (Tk_IsTopLevel(tkwin)) {
-	    break;
+	    return TkWmToplevelOverflows(tkwin) ? tkwin : NULL;
 	}
     }
     return NULL;
@@ -332,13 +335,14 @@ MouseButton(
  * Scroll --
  *
  *	Scroll the window being scrolled, with a TouchpadScroll event whose
- *	delta is the movement of the finger, in whole pixels.
+ *	delta is the movement of the finger, in whole pixels; a toplevel
+ *	larger than what shows of it is moved with the finger instead.
  *
  * Results:
  *	None.
  *
  * Side effects:
- *	An event is queued.
+ *	An event is queued, or the toplevel scrolls.
  *
  *----------------------------------------------------------------------
  */
@@ -364,6 +368,10 @@ Scroll(
     }
     tsdPtr->restX -= ix;
     tsdPtr->restY -= iy;
+    if (Tk_IsTopLevel(tkwin)) {
+	TkWmScrollToplevel(tkwin, -ix, -iy);
+	return;
+    }
     Tk_GetRootCoords(tkwin, &winX, &winY);
     memset(&event, 0, sizeof(XEvent));
     event.type = TouchpadScroll;

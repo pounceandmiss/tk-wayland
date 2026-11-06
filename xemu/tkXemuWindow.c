@@ -1329,6 +1329,215 @@ Restack(
 /*
  *----------------------------------------------------------------------
  *
+ * Moving windows --
+ *
+ *	As the X server does, a window which moves keeps its contents and
+ *	those of its descendants: they are copied in the backing image, and
+ *	only the parts which were not visible get Expose events. At a
+ *	fractional scale, this is only done when the window moves by a whole
+ *	number of pixels of the image; otherwise all of it is exposed again,
+ *	and redrawn. TkXeMoveStep gives the distances which are copied.
+ *
+ *----------------------------------------------------------------------
+ */
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkXeMoveStep --
+ *
+ *	The smallest distance, in logical pixels, by which a window can move
+ *	in its surface and keep its contents, at the scale of the surface:
+ *	multiples of it are whole numbers of pixels of the image.
+ *
+ * Results:
+ *	The distance, or 1 if no small one fits.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
+int
+TkXeMoveStep(
+    Window w)			/* The window. */
+{
+    TkXeWindow *winPtr = TkXeGetWindow(w), *topPtr;
+    int step;
+
+    topPtr = winPtr ? TkXeTopWindow(winPtr) : NULL;
+    if (topPtr == NULL || topPtr->surface == NULL) {
+	return 1;
+    }
+    for (step = 1; step <= 64; step++) {
+	double pixels = step * topPtr->surface->scale;
+
+	if (fabs(pixels - floor(pixels + 0.5)) < 1e-6) {
+	    return step;
+	}
+    }
+    return 1;
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * ShiftExposed --
+ *
+ *	Move what is recorded as exposed of a window and of its descendants
+ *	with them, keeping the part which is in a region.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The exposed regions and positions of the windows are changed.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static void
+ShiftExposed(
+    TkXeWindow *winPtr,
+    int dx, int dy,		/* The movement. */
+    pixman_region32_t *keptPtr)	/* What was copied, in the coordinates of
+				 * the surface. */
+{
+    TkXeWindow *childPtr;
+
+    pixman_region32_translate(&winPtr->exposed, dx, dy);
+    pixman_region32_intersect(&winPtr->exposed, &winPtr->exposed, keptPtr);
+    winPtr->exposedX += dx;
+    winPtr->exposedY += dy;
+    for (childPtr = winPtr->firstChild; childPtr; childPtr = childPtr->above) {
+	ShiftExposed(childPtr, dx, dy, keptPtr);
+    }
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * DeviceEdge --
+ *
+ *	The pixel of the image at which an edge of a box in logical pixels
+ *	falls: the first pixel whose center is past it, as Cairo fills boxes
+ *	without antialiasing.
+ *
+ * Results:
+ *	The pixel coordinate.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static int
+DeviceEdge(
+    int coord,			/* The edge, in logical pixels. */
+    double scale)		/* Pixels per logical pixel. */
+{
+    return (int)ceil(coord * scale - 0.5);
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * CopyMoved --
+ *
+ *	Copy the contents of a window and of its descendants which moved
+ *	in the backing image of their surface, to where the window is now,
+ *	as far as it is visible there.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The backing image is changed and damaged, and the exposed regions of
+ *	the windows follow them, so that only the rest is exposed.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static void
+CopyMoved(
+    TkXeWindow *winPtr,		/* The window, at its new position. */
+    TkXeSurface *surfPtr,	/* Its surface. */
+    pixman_region32_t *oldPtr,	/* What was visible of it and its
+				 * descendants before it moved. */
+    int dx, int dy)		/* The movement, in logical pixels. */
+{
+    pixman_region32_t dst, devDst;
+    pixman_box32_t *boxes, *ext;
+    pixman_image_t *image, *tmp;
+    pixman_format_code_t format;
+    double s = surfPtr->scale;
+    int i, n, ddx = (int)floor(dx * s + 0.5), ddy = (int)floor(dy * s + 0.5);
+    int width, height, sx, sy;
+
+    format = (cairo_image_surface_get_format(surfPtr->backing)
+	    == CAIRO_FORMAT_ARGB32) ? PIXMAN_a8r8g8b8 : PIXMAN_x8r8g8b8;
+    pixman_region32_init(&dst);
+    TkXeVisibleRegion(winPtr, true, &dst);
+    pixman_region32_translate(oldPtr, dx, dy);
+    pixman_region32_intersect(&dst, &dst, oldPtr);
+    pixman_region32_translate(oldPtr, -dx, -dy);
+
+    /*
+     * The destination, in pixels of the image.
+     */
+
+    pixman_region32_init(&devDst);
+    boxes = pixman_region32_rectangles(&dst, &n);
+    for (i = 0; i < n; i++) {
+	int x1 = DeviceEdge(boxes[i].x1, s), y1 = DeviceEdge(boxes[i].y1, s);
+	int x2 = DeviceEdge(boxes[i].x2, s), y2 = DeviceEdge(boxes[i].y2, s);
+
+	if (x2 > x1 && y2 > y1) {
+	    pixman_region32_union_rect(&devDst, &devDst, x1, y1,
+		    (unsigned)(x2 - x1), (unsigned)(y2 - y1));
+	}
+    }
+    pixman_region32_intersect_rect(&devDst, &devDst, 0, 0,
+	    (unsigned)cairo_image_surface_get_width(surfPtr->backing),
+	    (unsigned)cairo_image_surface_get_height(surfPtr->backing));
+
+    if (pixman_region32_not_empty(&devDst)) {
+	/*
+	 * Go through a copy of the source, since the areas may overlap.
+	 */
+
+	cairo_surface_flush(surfPtr->backing);
+	image = pixman_image_create_bits(format,
+		cairo_image_surface_get_width(surfPtr->backing),
+		cairo_image_surface_get_height(surfPtr->backing),
+		(uint32_t *)cairo_image_surface_get_data(surfPtr->backing),
+		cairo_image_surface_get_stride(surfPtr->backing));
+	ext = pixman_region32_extents(&devDst);
+	width = ext->x2 - ext->x1;
+	height = ext->y2 - ext->y1;
+	sx = ext->x1 - ddx;
+	sy = ext->y1 - ddy;
+	tmp = pixman_image_create_bits(format, width, height, NULL, 0);
+	pixman_image_composite32(PIXMAN_OP_SRC, image, NULL, tmp, sx, sy,
+		0, 0, 0, 0, width, height);
+	pixman_image_set_clip_region32(image, &devDst);
+	pixman_image_composite32(PIXMAN_OP_SRC, tmp, NULL, image, 0, 0,
+		0, 0, ext->x1, ext->y1, width, height);
+	pixman_image_unref(tmp);
+	pixman_image_unref(image);
+	cairo_surface_mark_dirty(surfPtr->backing);
+	TkXeAddDamage(surfPtr, &dst);
+    }
+    ShiftExposed(winPtr, dx, dy, &dst);
+    pixman_region32_fini(&devDst);
+    pixman_region32_fini(&dst);
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
  * XConfigureWindow --
  *
  *	Move, resize, restack or change the border width of a window.
@@ -1339,7 +1548,8 @@ Restack(
  * Side effects:
  *	The window and its surface are changed, Expose events are scheduled,
  *	the window manager of the port is told when a child of the root window
- *	is resized, and ConfigureNotify events are queued.
+ *	is resized, and ConfigureNotify events are queued. A window which only
+ *	moves keeps its contents, if it can (see CopyMoved).
  *
  *----------------------------------------------------------------------
  */
@@ -1351,12 +1561,39 @@ XConfigureWindow(
     unsigned int valueMask,
     XWindowChanges *values)
 {
-    TkXeWindow *winPtr = TkXeGetWindow(w);
+    TkXeWindow *winPtr = TkXeGetWindow(w), *topPtr;
+    TkXeSurface *moveSurfPtr = NULL;
+    pixman_region32_t old;
+    int dx, dy;
 
     TkXeNextRequest(display);
     if (winPtr == NULL) {
 	TkXeError(display, w, BadWindow, X_ConfigureWindow);
 	return BadWindow;
+    }
+
+    /*
+     * A window inside a surface which only moves, by whole pixels of its
+     * image, keeps its contents: what is visible of it now is recorded,
+     * once the exposures pending are done, to be copied.
+     */
+
+    dx = (valueMask & CWX) ? values->x - winPtr->x : 0;
+    dy = (valueMask & CWY) ? values->y - winPtr->y : 0;
+    topPtr = TkXeTopWindow(winPtr);
+    if ((dx || dy) && winPtr->surface == NULL && topPtr && topPtr->surface
+	    && topPtr->surface->backing && TkXeIsViewable(winPtr)
+	    && !(valueMask & (CWBorderWidth | CWStackMode))
+	    && (!(valueMask & CWWidth) || values->width == winPtr->width)
+	    && (!(valueMask & CWHeight) || values->height == winPtr->height)) {
+	int step = TkXeMoveStep(w);
+
+	if (dx % step == 0 && dy % step == 0) {
+	    moveSurfPtr = topPtr->surface;
+	    TkXeProcessExposures(moveSurfPtr);
+	    pixman_region32_init(&old);
+	    TkXeVisibleRegion(winPtr, true, &old);
+	}
     }
     if (winPtr->mapped) {
 	TkXeTreeChanged(winPtr);
@@ -1390,6 +1627,10 @@ XConfigureWindow(
 	TkXeTreeChanged(winPtr);
     } else {
 	clipGeneration++;
+    }
+    if (moveSurfPtr) {
+	CopyMoved(winPtr, moveSurfPtr, &old, dx, dy);
+	pixman_region32_fini(&old);
     }
     QueueConfigureNotify(winPtr);
     return Success;

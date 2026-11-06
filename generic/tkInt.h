@@ -1374,6 +1374,20 @@ MODULE_SCOPE Tcl_ObjCmdProc2 SquareObjCmd;
 MODULE_SCOPE int	TkplatformtestInit(Tcl_Interp *interp);
 #endif
 
+/*
+ * Toplevels larger than what their wrapper shows scroll in it, with the X11
+ * window manager code ([wm attributes -overflow]).
+ */
+#if !(defined(_WIN32) || defined(MAC_OSX_TK))
+MODULE_SCOPE bool	TkWmToplevelOverflows(Tk_Window tkwin);
+MODULE_SCOPE bool	TkWmScrollToplevel(Tk_Window tkwin, int dx, int dy);
+MODULE_SCOPE void	TkWmSeeWindow(Tk_Window tkwin);
+#else
+#define TkWmToplevelOverflows(tkwin) false
+#define TkWmScrollToplevel(tkwin, dx, dy) false
+#define TkWmSeeWindow(tkwin)
+#endif
+
 #ifdef __cplusplus
 }
 #endif

@@ -237,6 +237,7 @@ MODULE_SCOPE void	TkXeProcessExposures(TkXeSurface *surfPtr);
 MODULE_SCOPE void	TkXeForgetExposed(TkXeWindow *winPtr);
 MODULE_SCOPE void	TkXeLimitExposed(TkXeWindow *winPtr, int width,
 			    int height);
+MODULE_SCOPE int	TkXeMoveStep(Window w);
 MODULE_SCOPE TkXeWindow *TkXeWindowAtPoint(TkXeWindow *winPtr, int x, int y);
 MODULE_SCOPE void	TkXeQueueEvent(XEvent *eventPtr);
 MODULE_SCOPE TkXeProperty *TkXeGetProperty(TkXeWindow *winPtr, Atom name);

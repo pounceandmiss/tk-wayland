@@ -262,6 +262,40 @@ On X11, changes to window attributes are performed asynchronously. Querying
 the value of an attribute returns the current state, which will not be the
 same as the value most recently set if the window manager has not yet
 processed the request or if it does not support the attribute.
+.PP
+On X11, the following attributes are handled by Tk itself, with any window
+manager:
+.\" OPTION: -overflow
+.TP
+\fB\-overflow\fR
+.
+What the window does when it is given a smaller size than it asks for (the
+size its geometry manager computes), by the window manager, or because the
+screen is smaller. With \fBsqueeze\fR, the window takes the size it is
+given, and its geometry manager lays its contents out in it, squeezing or
+cutting off what does not fit; this is what happens on other platforms. With
+\fBscroll\fR, the window keeps the size it asks for in that direction (on
+the Wayland and Android ports, it may be a few pixels larger, so that it
+scrolls by whole pixels of the screen), and
+only the part of it at its scroll position (see \fB\-scroll\fR) shows: it
+is scrolled by dragging a finger on a touchscreen (see \fBtk touch\fR), and
+the window which gets the focus is scrolled into view. A menubar (see the
+\fB\-menu\fR option of \fBtoplevel\fR) stays at the top. With \fBauto\fR,
+the default, the window scrolls in the directions in which it cannot be
+resized (see \fBwm resizable\fR), and is squeezed in the others, unless its
+size was set with \fBwm geometry\fR: then it is squeezed, except in the
+directions in which it asks for more than the screen has. Dialogs whose
+contents are larger than the screen thus scroll, instead of being cut off.
+\fBwinfo width\fR and \fBwinfo height\fR give the size of the whole window,
+and \fBwm geometry\fR the size of the part which shows.
+.\" OPTION: -scroll
+.TP
+\fB\-scroll\fR
+.
+The scroll position of a window which is larger than what shows of it (see
+\fB\-overflow\fR): a list of the x and y coordinates, in the window, of the
+point which shows at the top left corner. It is kept within the window: it is
+always \fB{0 0}\fR for a window which is not larger than what shows of it.
 .RE
 .\" METHOD: client
 .TP

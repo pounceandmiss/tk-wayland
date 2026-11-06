@@ -229,7 +229,10 @@ which scroll (canvases, entries, listboxes, texts and treeviews), and
 \fBmouse\fR for those which need the button at once (comboboxes, menus,
 panedwindows, scales, scrollbars, sizegrips and spinboxes); for other
 windows, it is that of the
-nearest ancestor which has one, or else \fBmouse\fR. A canvas in which
+nearest ancestor which has one, or else \fBscroll\fR if the toplevel is
+larger than what shows of it (dragging then scrolls the toplevel; see the
+\fB\-overflow\fR attribute of \fBwm attributes\fR), or else
+\fBmouse\fR. A canvas in which
 dragging draws, for instance, should have the mode \fBmouse\fR. The mode is
 returned.
 .RS
