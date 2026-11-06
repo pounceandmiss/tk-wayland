@@ -13,6 +13,8 @@
 #include "tkWaylandInt.h"
 #include <sys/mman.h>
 #include <poll.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <locale.h>
 #include <linux/input-event-codes.h>
 
@@ -33,7 +35,11 @@ static void		DisplayFileProc(void *clientData, int flags);
 static void		DisplaySetupProc(void *clientData, int flags);
 static void		DisplayCheckProc(void *clientData, int flags);
 static void		DisplayExitHandler(void *clientData);
+static int		Dispatch(int timeout);
 static void		RepeatProc(void *clientData);
+static Tcl_ThreadCreateType ReaderProc(void *clientData);
+static void		StartReader(TkXeDisplay *wlPtr);
+static void		StopReader(TkXeDisplay *wlPtr);
 
 /*
  *----------------------------------------------------------------------
@@ -1958,8 +1964,9 @@ TkpOpenDisplay(
     dispPtr = (TkDisplay *)Tcl_Alloc(sizeof(TkDisplay));
     memset(dispPtr, 0, sizeof(TkDisplay));
     dispPtr->display = tkXeDisplay->display;
-    Tcl_CreateFileHandler(wl_display_get_fd(wlDisplay), TCL_READABLE,
-	    DisplayFileProc, dispPtr);
+    StartReader(tkXeDisplay);
+    Tcl_CreateFileHandler(TkWlEventFd(), TCL_READABLE, DisplayFileProc,
+	    dispPtr);
     TkpInitKeymapInfo(dispPtr);
     return dispPtr;
 }
@@ -1977,7 +1984,7 @@ TkpOpenDisplay(
  *
  * Side effects:
  *	Cleans up the send and window manager data of the display, stops
- *	reading the connection, and flushes it.
+ *	reading the connection (and the reader thread), and flushes it.
  *
  *----------------------------------------------------------------------
  */
@@ -1990,7 +1997,8 @@ TkpCloseDisplay(
     TkWmCleanup(dispPtr);
     if (dispPtr->display != NULL && tkXeDisplay
 	    && dispPtr->display == tkXeDisplay->display) {
-	Tcl_DeleteFileHandler(wl_display_get_fd(tkXeDisplay->wlDisplay));
+	Tcl_DeleteFileHandler(TkWlEventFd());
+	StopReader(tkXeDisplay);
 	wl_display_flush(tkXeDisplay->wlDisplay);
     }
 }
@@ -2023,11 +2031,262 @@ TkClipCleanup(
  *
  * The event source --
  *
- *	Wayland events are read when the connection is readable. Requests
- *	are flushed before Tcl waits for events.
+ *	A thread reads the events of the connection as soon as the compositor
+ *	sends them, and queues them in libwayland for the main thread, which
+ *	dispatches them. Compositors disconnect a client whose events they
+ *	cannot send: Weston when 4 KiB of them are waiting, which motions of
+ *	the pointer fill in a few seconds. So without the thread, Tk would be
+ *	killed when busy for a few seconds, as when a script waits on a
+ *	blocking socket, or runs exec. The thread only reads, so the
+ *	compositor can still tell that Tk does not respond (to its pings).
+ *
+ *	The reader writes to a pipe after reading events; Tk waits on the pipe
+ *	instead of the connection. libwayland lets threads read a connection
+ *	together (wl_display_prepare_read), so the code reading it in the main
+ *	thread (wl_display_roundtrip, libdecor) still works. Requests are
+ *	flushed before Tcl waits for events.
  *
  *----------------------------------------------------------------------
  */
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * StartReader, StopReader --
+ *
+ *	Start and stop the thread reading the connection. If it cannot be
+ *	started, Tk reads the connection itself.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The thread and its pipes are created, or stopped and closed.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static void
+StartReader(
+    TkXeDisplay *wlPtr)
+{
+    int i;
+
+    wlPtr->wakeFds[0] = wlPtr->wakeFds[1] = -1;
+    wlPtr->stopFds[0] = wlPtr->stopFds[1] = -1;
+    if (pipe(wlPtr->wakeFds) < 0) {
+	wlPtr->wakeFds[0] = wlPtr->wakeFds[1] = -1;
+	return;
+    }
+    if (pipe(wlPtr->stopFds) < 0) {
+	goto error;
+    }
+    for (i = 0; i < 2; i++) {
+	fcntl(wlPtr->wakeFds[i], F_SETFD, FD_CLOEXEC);
+	fcntl(wlPtr->wakeFds[i], F_SETFL, O_NONBLOCK);
+	fcntl(wlPtr->stopFds[i], F_SETFD, FD_CLOEXEC);
+    }
+    wlPtr->readerQueue = wl_display_create_queue(wlPtr->wlDisplay);
+    if (wlPtr->readerQueue && Tcl_CreateThread(&wlPtr->reader, ReaderProc,
+	    wlPtr, TCL_THREAD_STACK_DEFAULT, TCL_THREAD_JOINABLE) == TCL_OK) {
+	return;
+    }
+
+  error:
+    if (wlPtr->readerQueue) {
+	wl_event_queue_destroy(wlPtr->readerQueue);
+	wlPtr->readerQueue = NULL;
+    }
+    for (i = 0; i < 2; i++) {
+	if (wlPtr->wakeFds[i] >= 0) {
+	    close(wlPtr->wakeFds[i]);
+	}
+	if (wlPtr->stopFds[i] >= 0) {
+	    close(wlPtr->stopFds[i]);
+	}
+	wlPtr->wakeFds[i] = wlPtr->stopFds[i] = -1;
+    }
+}
+
+static void
+StopReader(
+    TkXeDisplay *wlPtr)
+{
+    int i, result;
+
+    if (wlPtr->readerQueue == NULL) {
+	return;
+    }
+    while (write(wlPtr->stopFds[1], "", 1) < 0 && errno == EINTR) {
+	/* Retry. */
+    }
+    Tcl_JoinThread(wlPtr->reader, &result);
+    wl_event_queue_destroy(wlPtr->readerQueue);
+    wlPtr->readerQueue = NULL;
+    for (i = 0; i < 2; i++) {
+	close(wlPtr->wakeFds[i]);
+	close(wlPtr->stopFds[i]);
+	wlPtr->wakeFds[i] = wlPtr->stopFds[i] = -1;
+    }
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * ReaderProc --
+ *
+ *	The thread reading the connection: it waits for it to be readable,
+ *	reads the events, and writes to the wake pipe, until it is stopped or
+ *	the connection fails. It prepares its reads on its own queue, which
+ *	stays empty, so that the events waiting for the main thread do not
+ *	stop it.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The events are queued for the main thread, and the wake pipe is
+ *	written.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static Tcl_ThreadCreateType
+ReaderProc(
+    void *clientData)
+{
+    TkXeDisplay *wlPtr = (TkXeDisplay *)clientData;
+    struct pollfd pfd[2];
+    bool failed = false;
+
+    pfd[0].fd = wl_display_get_fd(wlPtr->wlDisplay);
+    pfd[0].events = POLLIN;
+    pfd[1].fd = wlPtr->stopFds[0];
+    pfd[1].events = POLLIN;
+    while (!failed) {
+	if (wl_display_prepare_read_queue(wlPtr->wlDisplay,
+		wlPtr->readerQueue) != 0) {
+	    wl_display_dispatch_queue_pending(wlPtr->wlDisplay,
+		    wlPtr->readerQueue);
+	    continue;
+	}
+	if (poll(pfd, 2, -1) < 0) {
+	    wl_display_cancel_read(wlPtr->wlDisplay);
+	    if (errno == EINTR) {
+		continue;
+	    }
+	    failed = true;
+	} else if (pfd[1].revents) {
+	    wl_display_cancel_read(wlPtr->wlDisplay);
+	    break;
+	} else if (pfd[0].revents) {
+	    failed = wl_display_read_events(wlPtr->wlDisplay) < 0;
+	} else {
+	    wl_display_cancel_read(wlPtr->wlDisplay);
+	    continue;
+	}
+
+	/*
+	 * Wake the main thread, which finds the error of the connection if
+	 * it failed. The pipe may be full, which wakes it as well.
+	 */
+
+	while (write(wlPtr->wakeFds[1], "", 1) < 0 && errno == EINTR) {
+	    /* Retry. */
+	}
+    }
+    TCL_THREAD_CREATE_RETURN;
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWlEventFd --
+ *
+ *	The file descriptor to wait on for the events of the compositor: the
+ *	wake pipe, or the connection if there is no reader thread.
+ *
+ * Results:
+ *	The file descriptor.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
+int
+TkWlEventFd(void)
+{
+    if (tkXeDisplay->readerQueue) {
+	return tkXeDisplay->wakeFds[0];
+    }
+    return wl_display_get_fd(tkXeDisplay->wlDisplay);
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkWlDispatchEvents --
+ *
+ *	Dispatch the events read by the reader thread, and those waiting to be
+ *	read, when the file descriptor of TkWlEventFd is readable, and before
+ *	Tcl waits for events.
+ *
+ * Results:
+ *	The number of events dispatched, or -1 if the connection failed, with
+ *	errno set.
+ *
+ * Side effects:
+ *	The wake pipe is emptied, the connection read, and the listeners of
+ *	the events are called.
+ *
+ *----------------------------------------------------------------------
+ */
+
+int
+TkWlDispatchEvents(void)
+{
+    struct wl_display *wlDisplay = tkXeDisplay->wlDisplay;
+    struct pollfd pfd;
+    char buf[64];
+    int n = 0, error;
+
+    if (tkXeDisplay->readerQueue == NULL) {
+	return Dispatch(0);
+    }
+    while (read(tkXeDisplay->wakeFds[0], buf, sizeof(buf)) > 0) {
+	/* Empty the pipe. */
+    }
+
+    /*
+     * Read the events which arrived since the reader last read, so that
+     * [update] processes all the events sent before it was called, as when
+     * Tk read the connection itself.
+     */
+
+    if (tkXeDisplay->decor) {
+	n = libdecor_dispatch(tkXeDisplay->decor, 0);
+    } else {
+	while (wl_display_prepare_read(wlDisplay) != 0) {
+	    n += wl_display_dispatch_pending(wlDisplay);
+	}
+	pfd.fd = wl_display_get_fd(wlDisplay);
+	pfd.events = POLLIN;
+	if (poll(&pfd, 1, 0) > 0) {
+	    wl_display_read_events(wlDisplay);
+	} else {
+	    wl_display_cancel_read(wlDisplay);
+	}
+	n += wl_display_dispatch_pending(wlDisplay);
+    }
+    error = wl_display_get_error(wlDisplay);
+    if (error) {
+	errno = error;
+	return -1;
+    }
+    return n;
+}
 
 /*
  *----------------------------------------------------------------------
@@ -2092,9 +2351,9 @@ DisplayExitHandler(
  * DisplaySetupProc, DisplayCheckProc --
  *
  *	The procedures of the event source. Before Tcl waits for events, the
- *	events already read are dispatched, and the requests are flushed; the
- *	events of the connection are read by DisplayFileProc when it is
- *	readable.
+ *	events already read (and with the reader thread, those waiting) are
+ *	dispatched, and the requests are flushed; the other events are read by
+ *	DisplayFileProc when they arrive.
  *
  * Results:
  *	None.
@@ -2115,7 +2374,8 @@ DisplaySetupProc(
     if (!(flags & TCL_WINDOW_EVENTS) || tkXeDisplay == NULL) {
 	return;
     }
-    if (wl_display_dispatch_pending(tkXeDisplay->wlDisplay) > 0) {
+    if ((tkXeDisplay->readerQueue ? TkWlDispatchEvents()
+	    : wl_display_dispatch_pending(tkXeDisplay->wlDisplay)) > 0) {
 	Tcl_Time blockTime = {0, 0};
 
 	Tcl_SetMaxBlockTime(&blockTime);
@@ -2163,7 +2423,8 @@ Dispatch(
  *
  * DisplayFileProc --
  *
- *	File handler of the connection, called when it is readable.
+ *	File handler of the events of the connection (see TkWlEventFd),
+ *	called when they can be dispatched.
  *
  * Results:
  *	None.
@@ -2179,12 +2440,12 @@ DisplayFileProc(
     TCL_UNUSED(void *),
     TCL_UNUSED(int))
 {
-    if (Dispatch(0) < 0) {
+    if (TkWlDispatchEvents() < 0) {
 	/*
 	 * The compositor went away. There is nothing more Tk can do.
 	 */
 
-	Tcl_DeleteFileHandler(wl_display_get_fd(tkXeDisplay->wlDisplay));
+	Tcl_DeleteFileHandler(TkWlEventFd());
 	Tcl_Panic("lost the connection to the Wayland compositor: %s",
 		strerror(errno));
     }
@@ -2237,10 +2498,10 @@ TkUnixDoOneXEvent(
 	    timeout = 0;
 	}
     }
-    pfd.fd = wl_display_get_fd(tkXeDisplay->wlDisplay);
+    pfd.fd = TkWlEventFd();
     pfd.events = POLLIN;
     if (poll(&pfd, 1, timeout) > 0) {
-	Dispatch(0);
+	TkWlDispatchEvents();
     }
     if (Tcl_ServiceEvent(TCL_WINDOW_EVENTS)) {
 	return true;

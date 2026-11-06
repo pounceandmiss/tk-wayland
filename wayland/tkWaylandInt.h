@@ -194,6 +194,16 @@ typedef struct TkWlOutput {
 struct TkXeDisplay {
     Display *display;		/* The emulated X display. */
     struct wl_display *wlDisplay;
+    Tcl_ThreadId reader;	/* Thread reading the events of the
+				 * connection, so that the compositor can
+				 * send them while Tk is busy. */
+    struct wl_event_queue *readerQueue;
+				/* Empty queue on which the reader prepares
+				 * its reads. */
+    int wakeFds[2];		/* Pipe written by the reader after reading
+				 * events, which Tk waits on instead of the
+				 * connection. */
+    int stopFds[2];		/* Pipe written to stop the reader. */
     struct wl_registry *registry;
     struct wl_compositor *compositor;
     struct wl_shm *shm;
@@ -259,6 +269,10 @@ struct TkXeDisplay {
 /*
  * Functions shared between the files of the Wayland port.
  */
+
+/* tkWaylandEvent.c */
+MODULE_SCOPE int	TkWlEventFd(void);
+MODULE_SCOPE int	TkWlDispatchEvents(void);
 
 /* tkWaylandSurface.c */
 MODULE_SCOPE TkXeSurface *TkWlSurfaceFromWl(struct wl_surface *surface);

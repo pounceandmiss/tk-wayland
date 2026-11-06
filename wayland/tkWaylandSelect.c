@@ -1108,7 +1108,7 @@ ReceiveData(
 	}
 	pfd[0].fd = fds[0];
 	pfd[0].events = POLLIN;
-	pfd[1].fd = wl_display_get_fd(tkXeDisplay->wlDisplay);
+	pfd[1].fd = TkWlEventFd();
 	pfd[1].events = POLLIN;
 	if (poll(pfd, 2, timeout) < 0) {
 	    if (errno == EINTR) {
@@ -1118,7 +1118,7 @@ ReceiveData(
 	    return TCL_ERROR;
 	}
 	if (pfd[1].revents & POLLIN) {
-	    wl_display_dispatch(tkXeDisplay->wlDisplay);
+	    TkWlDispatchEvents();
 	}
 	if (pfd[0].revents & (POLLIN | POLLHUP)) {
 	    ssize_t n = read(fds[0], buf, sizeof(buf));
