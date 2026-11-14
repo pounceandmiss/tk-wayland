@@ -888,7 +888,9 @@ test wm-geometry-2.2 {setting only the size does not move the window - bug 29953
     destroy .geom
     unset -nocomplain x y
 } -result {0 0 300 200}
-test wm-geometry-2.3 {the position of a zoomed toplevel - bug 557441302b} -setup {
+test wm-geometry-2.3 {the position of a zoomed toplevel - bug 557441302b} -constraints {
+    sizedToplevels
+} -setup {
     destroy .geom
     toplevel .geom
     wm geometry .geom 480x200+303+210
@@ -908,7 +910,9 @@ test wm-geometry-2.3 {the position of a zoomed toplevel - bug 557441302b} -setup
     destroy .geom
     unset -nocomplain x y dx dy res
 } -result {1 1 480x200+303+210}
-test wm-geometry-2.4 {a toplevel iconified from zoomed - bug 557441302b} -setup {
+test wm-geometry-2.4 {a toplevel iconified from zoomed - bug 557441302b} -constraints {
+    sizedToplevels
+} -setup {
     destroy .geom
     toplevel .geom
     wm geometry .geom 480x200+303+210
@@ -928,7 +932,9 @@ test wm-geometry-2.4 {a toplevel iconified from zoomed - bug 557441302b} -setup 
     destroy .geom
     unset -nocomplain zoomed res
 } -result {1 1 480x200+303+210}
-test wm-geometry-2.5 {a toplevel iconified from normal} -setup {
+test wm-geometry-2.5 {a toplevel iconified from normal} -constraints {
+    sizedToplevels
+} -setup {
     destroy .geom
     toplevel .geom
     wm geometry .geom 480x200+303+210

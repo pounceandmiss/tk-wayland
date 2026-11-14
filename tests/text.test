@@ -3532,7 +3532,9 @@ if {[tk windowingsystem] eq "aqua"} {
     set minY 0
 }
 
-test text-14.19 {ConfigureText procedure} -setup {
+test text-14.19 {ConfigureText procedure} -constraints {
+    sizedToplevels
+} -setup {
     toplevel .top
     text .top.t -font {Courier -12} -borderwidth 2 -highlightthickness 2
 } -body {
@@ -3545,7 +3547,9 @@ test text-14.19 {ConfigureText procedure} -setup {
 } -cleanup {
     destroy .top
 } -result "70x10+0+$minY"
-test text-14.20 {ConfigureText procedure} -setup {
+test text-14.20 {ConfigureText procedure} -constraints {
+    sizedToplevels
+} -setup {
     toplevel .top
     text .top.t -font {Courier -12} -borderwidth 2 -highlightthickness 2
 } -body {

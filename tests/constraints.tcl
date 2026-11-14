@@ -53,9 +53,11 @@ testConstraint zoomedToplevels [expr {
     [tk windowingsystem] ne "wayland" || ![info exists env(SWAYSOCK)]
 }]
 # Tk knows the work area and the size of the decorations which the window
-# manager adds to toplevels (on Wayland, which tells neither, the default
-# maximum size of a toplevel is the size of the screen).
-testConstraint knownDecorations [expr {[tk windowingsystem] ne "wayland"}]
+# manager adds to toplevels (on Wayland and Android, which tell neither, the
+# default maximum size of a toplevel is the size of the screen).
+testConstraint knownDecorations [expr {
+    [tk windowingsystem] ni {wayland android}
+}]
 # A toplevel made fullscreen and back before the window manager answers keeps
 # its size (sway gives it the size of the output: see
 # ../wayland/COMPOSITORS.md).

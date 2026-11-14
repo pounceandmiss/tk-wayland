@@ -102,9 +102,11 @@ option add *Text.padY 1  ; # same padding in x and y, see proc bo; tests work wi
 # fairly wide, even if the text window is very narrow.  This is needed
 # because some window managers don't allow the overall width of a window
 # to get very narrow (e.g. about 400 pixels on Windows with 350% scaling).
+# On Android, where no toplevel is larger than the screen (about 400 pixels
+# wide on a phone), it stays narrow enough for the window to fit.
 
 catch {destroy .f .t}
-frame .f -width 480 -height 20
+frame .f -width [expr {[testConstraint sizedToplevels] ? 480 : 100}] -height 20
 pack .f -side left
 
 set bigFont {Helvetica -24}  ; # note: not a fixed-width font!
@@ -5425,7 +5427,9 @@ test textDisp-40.2 {display lineend at a multi-byte character ending the display
     destroy .t1
 } -result {1.1 1 1.1 1}
 
-test textDisp-41.1 {many text widgets complete their line metrics update - bug 1348333} -setup {
+test textDisp-41.1 {many text widgets complete their line metrics update - bug 1348333} -constraints {
+    sizedToplevels
+} -setup {
     toplevel .tt
 } -body {
     # About 600 widgets are needed to show the bug.  A small font keeps the
