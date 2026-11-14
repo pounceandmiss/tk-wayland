@@ -522,8 +522,8 @@ GENERIC_SRCS = \
 	$(GENERIC_DIR)/tkGeometry.c $(GENERIC_DIR)/tkGrab.c \
 	$(GENERIC_DIR)/tkGrid.c $(GENERIC_DIR)/tkConsole.c \
 	$(GENERIC_DIR)/tkMain.c $(GENERIC_DIR)/tkOption.c \
-	$(GENERIC_DIR)/tkPack.c $(GENERIC_DIR)/tkPlace.c $(GENERIC_DIR)/tkTouch.c \
-	$(GENERIC_DIR)/tkKeyboard.c \
+	$(GENERIC_DIR)/tkPack.c $(GENERIC_DIR)/tkPlace.c \
+	$(GENERIC_DIR)/tkTouch.c $(GENERIC_DIR)/tkKeyboard.c \
 	$(GENERIC_DIR)/tkPkgConfig.c \
 	$(GENERIC_DIR)/tkSelect.c $(GENERIC_DIR)/tkStyle.c \
 	$(GENERIC_DIR)/tkUndo.c $(GENERIC_DIR)/tkUtil.c \
@@ -2009,8 +2009,9 @@ dist: $(UNIX_DIR)/configure $(UNIX_DIR)/tkConfig.h.in $(UNIX_DIR)/tk.pc.in \
 	$(DIST_INSTALL_DATA) $(WAYLAND_DIR)/*.[ch] $(WAYLAND_DIR)/*.md \
 		$(TOP_DIR)/license.terms $(DISTDIR)/wayland
 	$(DIST_INSTALL_DATA) $(WAYLAND_DIR)/demos/*.tcl $(DISTDIR)/wayland/demos
-	$(DIST_INSTALL_DATA) $(WAYLAND_DIR)/tools/*.c $(WAYLAND_DIR)/tools/*.xml \
-		$(WAYLAND_DIR)/tools/*.tcl $(DISTDIR)/wayland/tools
+	$(DIST_INSTALL_DATA) $(WAYLAND_DIR)/tools/*.c \
+		$(WAYLAND_DIR)/tools/*.xml $(WAYLAND_DIR)/tools/*.tcl \
+		$(DISTDIR)/wayland/tools
 	$(INSTALL_DATA_DIR) $(DISTDIR)/android/build
 	$(INSTALL_DATA_DIR) $(DISTDIR)/android/java/tk/android
 	$(INSTALL_DATA_DIR) $(DISTDIR)/android/res/values
@@ -2018,8 +2019,8 @@ dist: $(UNIX_DIR)/configure $(UNIX_DIR)/tkConfig.h.in $(UNIX_DIR)/tk.pc.in \
 		$(ANDROID_DIR)/AndroidManifest.xml $(TOP_DIR)/license.terms \
 		$(DISTDIR)/android
 	$(DIST_INSTALL_DATA) $(ANDROID_DIR)/build/Dockerfile \
-		$(ANDROID_DIR)/build/Makefile $(ANDROID_DIR)/build/runtests.tcl \
-		$(DISTDIR)/android/build
+		$(ANDROID_DIR)/build/Makefile \
+		$(ANDROID_DIR)/build/runtests.tcl $(DISTDIR)/android/build
 	$(DIST_INSTALL_SCRIPT) $(ANDROID_DIR)/build/build.sh \
 		$(ANDROID_DIR)/build/test.sh $(DISTDIR)/android/build
 	$(DIST_INSTALL_DATA) $(ANDROID_DIR)/java/tk/android/*.java \

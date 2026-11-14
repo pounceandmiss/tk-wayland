@@ -1347,12 +1347,13 @@ TesttouchObjCmd(
  *
  *	This function implements the "testkeyboard" command, which plays the
  *	on-screen keyboard of a port for tkKeyboard.c:
- *	    testkeyboard install	Install a keyboard which appends "show
- *					type" or "hide" to ::testkeyboard
- *					when it is shown or hidden.
- *	    testkeyboard remove		Put back the keyboard of the port.
- *	    testkeyboard changed shown	Tell that the keyboard was shown or
- *					hidden.
+ *	    testkeyboard install
+ *		Install a keyboard which appends "show type" or "hide" to
+ *		::testkeyboard when it is shown or hidden.
+ *	    testkeyboard remove
+ *		Put back the keyboard of the port.
+ *	    testkeyboard changed shown
+ *		Tell that the keyboard was shown or hidden.
  *
  * Results:
  *	A standard Tcl result.

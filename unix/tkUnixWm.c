@@ -351,7 +351,7 @@ typedef struct TkWmInfo {
  */
 
 typedef struct {
-    int numToplevels;		/* The number of toplevels of the thread. */
+    int numToplevels;	/* The number of toplevels of the thread. */
 } ThreadSpecificData;
 static Tcl_ThreadDataKey dataKey;
 
@@ -1430,7 +1430,8 @@ WmSetAttribute(
 	    Tcl_SetObjResult(interp, Tcl_ObjPrintf(
 		    "expected a list of two integers but got \"%s\"",
 		    Tcl_GetString(value)));
-	    Tcl_SetErrorCode(interp, "TK", "WM", "ATTR", "SCROLL", (char *)NULL);
+	    Tcl_SetErrorCode(interp, "TK", "WM", "ATTR", "SCROLL",
+		    (char *)NULL);
 	    return TCL_ERROR;
 	}
 	if (Tcl_GetIntFromObj(interp, objv[0], &x) != TCL_OK

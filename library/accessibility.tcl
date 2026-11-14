@@ -141,7 +141,8 @@ if {[info commands ::tk::accessible::check_screenreader] eq "" || [::tk::accessi
 		# overwrite the announcement for the newly selected one.
 		# Deselection is a side effect, so only narrate the button
 		# that became selected (ATK state is still updated above).
-		if {[tk windowingsystem] in {x11 wayland android} && $state eq "selected"} {
+		if {[tk windowingsystem] in {x11 wayland android}
+			&& $state eq "selected"} {
 		    ::tk::accessible::speak "$description $state"
 		}
 	    } elseif {$class eq "Checkbutton" || $class eq "TCheckbutton" || $class eq "Toggleswitch"} {
@@ -156,7 +157,8 @@ if {[info commands ::tk::accessible::check_screenreader] eq "" || [::tk::accessi
 		# children). Speech is coalesced to the last call, so only narrate
 		# the button the user is operating; ATK state is updated above
 		# for every button.
-		if {[tk windowingsystem] in {x11 wayland android} && [focus] eq $w} {
+		if {[tk windowingsystem] in {x11 wayland android}
+			&& [focus] eq $w} {
 		    ::tk::accessible::speak "$description $state"
 		}
 	    }
