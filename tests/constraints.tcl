@@ -47,6 +47,21 @@ testConstraint sizedToplevels [expr {[tk windowingsystem] ne "android"}]
 # "focus -force" gives the keyboard focus to a toplevel at once (on Wayland,
 # the compositor gives it, to the toplevel it chooses).
 testConstraint forcedFocus [expr {[tk windowingsystem] ne "wayland"}]
+# The window manager maximizes a zoomed toplevel (sway does not maximize the
+# floating windows of the tests).
+testConstraint zoomedToplevels [expr {
+    [tk windowingsystem] ne "wayland" || ![info exists env(SWAYSOCK)]
+}]
+# Tk knows the work area and the size of the decorations which the window
+# manager adds to toplevels (on Wayland, which tells neither, the default
+# maximum size of a toplevel is the size of the screen).
+testConstraint knownDecorations [expr {[tk windowingsystem] ne "wayland"}]
+# A toplevel made fullscreen and back before the window manager answers keeps
+# its size (sway gives it the size of the output: see
+# ../wayland/COMPOSITORS.md).
+testConstraint quickFullscreen [expr {
+    [tk windowingsystem] ne "wayland" || ![info exists env(SWAYSOCK)]
+}]
 # A logical pixel is a whole number of pixels of the screen. At fractional
 # scales (the emulator of the Android tests has 2.625 pixels per logical
 # pixel), the X emulation of Wayland and Android redraws the whole area of a
@@ -246,10 +261,17 @@ testConstraint nonUnixUserInteraction [expr {
 
 testConstraint deprecated [expr {![::tk::build-info no-deprecate]}]
 
+# a test that must be run by the installed wish, not by the tktest executable
+
+testConstraint useInstalledWish [expr {
+    "useInstalledWish" in [tcltest::configure -constraints]
+}]
+
 # constraints for testing facilities defined in the tktest executable
 testConstraint testbitmap      [llength [info commands testbitmap]]
 testConstraint testborder      [llength [info commands testborder]]
 testConstraint testcbind       [llength [info commands testcbind]]
+testConstraint testalignimagedata [llength [info commands testalignimagedata]]
 testConstraint testclipboard   [llength [info commands testclipboard]]
 testConstraint testcolor       [llength [info commands testcolor]]
 testConstraint testcursor      [llength [info commands testcursor]]
@@ -259,6 +281,7 @@ testConstraint testgetwindowinfo [llength [info commands testgetwindowinfo]]
 testConstraint testImageType   [expr {"test" in [image types]}]
 testConstraint testmakeexist   [llength [info commands testmakeexist]]
 testConstraint testmenubar     [llength [info commands testmenubar]]
+testConstraint testmenubaritems [llength [info commands testmenubaritems]]
 testConstraint testmetrics     [llength [info commands testmetrics]]
 testConstraint testmovemouse   [llength [info commands testmovemouse]]
 testConstraint testobjconfig   [llength [info commands testobjconfig]]
@@ -268,6 +291,7 @@ testConstraint testsend        [llength [info commands testsend]]
 testConstraint testsendinput   [llength [info commands testsendinput]]
 testConstraint testsetlocale   [llength [info commands testsetlocale]]
 testConstraint testtext        [llength [info commands testtext]]
+testConstraint testforeignwindow [llength [info commands testforeignwindow]]
 testConstraint testwinevent    [llength [info commands testwinevent]]
 testConstraint testwindowposchanged [llength [info commands testwindowposchanged]]
 testConstraint testwrapper     [llength [info commands testwrapper]]

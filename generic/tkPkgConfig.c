@@ -43,7 +43,9 @@
 #  define CFG_FONTSYSTEM	"cocoa"
 #elif defined(TK_USE_XEMU)
 #  define CFG_FONTSYSTEM	"fontconfig"
-#elif defined(HAVE_XFT) || defined(HAVE_BIDI)
+#elif defined(TK_USE_WAYLAND)
+#  define CFG_FONTSYSTEM "wayland"
+#elif defined(HAVE_XFT)
 #  define CFG_FONTSYSTEM	"xft"
 #else
 #  define CFG_FONTSYSTEM	"x11"

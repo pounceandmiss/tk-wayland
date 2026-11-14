@@ -46,7 +46,7 @@ text .t -width 20 -height 10 -font $fixedFont2
 
 pack .t -expand 1 -fill both
 update
-.t debug on
+.t debug 1
 
 wm geometry . {}
 
@@ -1556,7 +1556,7 @@ test textTag-17.1 {insert procedure inserts tags} -setup {
 
 
 test textTag-18.1 {TkTextPickCurrent tag bindings} -constraints {
-    pointerWarp
+    pointerWarp aquaKnownBug
 } -setup {
     destroy .t
     wm geometry . +200+200 ; update

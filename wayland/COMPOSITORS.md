@@ -27,6 +27,11 @@ or leaves it alone. The tests run on each with `make test-sway`,
 - **Toplevels are placed by the compositor.** `wm geometry +x+y` is not
   applied, and Tk does not know where its toplevels are (constraint
   `placedToplevels` in the tests).
+- **No work area and no size of the decorations.** Neither is told to the
+  client, so the default maximum size of a toplevel (`wm maxsize`) is the
+  size of the screen, larger than a maximized window with a title bar
+  (constraint `knownDecorations`). Open: the configure bounds of xdg-shell
+  and the decorations drawn by libdecor could give it.
 
 ## Sway
 
@@ -36,7 +41,12 @@ or leaves it alone. The tests run on each with `make test-sway`,
   application gave it. A stale size can still win after a gridded window is
   resized (`listbox.test` run alone, open).
 - Sway 1.9, 1.10 and 1.12 ignore the maximization of a floating window
-  (`wayland-4.14`).
+  (`wayland-4.14`; constraint `zoomedToplevels` in `wm.test`).
+- Sway 1.12, asked to make a floating window fullscreen and then not before
+  it answered, sends a configure without the fullscreen state but with the
+  size of the output, which the window takes as a resize: it stays as large
+  as the output (`wm-geometry-2.6`, constraint `quickFullscreen`). Not worked
+  around: the configure cannot be told from a resize by the user.
 - Sway 1.10 gives in its tree (`swaymsg -t get_tree`) the rectangle of a
   bordered window for a window without a border, so that tests cannot find
   its pixels (`wayland-14.12` needs the constraint `swayRects`); sway 1.12

@@ -182,6 +182,22 @@ test winfo-4.8 {"winfo containing": don't consider unmapped toplevel windows (bu
 } -cleanup {
     wm deiconify .
 } -result ""
+test winfo-4.9 {"winfo containing": withdrawn toplevel whose WM frame is still mapped} -setup {
+    wm geometry . 200x200+100+100
+    after 10; update
+    wm withdraw .
+    destroy .one
+} -body {
+    toplevel .one
+    wm geometry .one 200x200+350+100
+    after 10; update
+    wm withdraw .one
+    update idletasks
+    winfo containing 450 200
+} -cleanup {
+    destroy .one
+    wm deiconify .
+} -result ""
 
 testutils import child
 
@@ -513,6 +529,26 @@ test winfo-14.4 {"winfo ismapped" command, new toplevel is mapped at idle time} 
     toplevel .t
     update idletasks
     winfo ismapped .t
+} -cleanup {
+    destroy .t
+} -result 1
+
+test winfo-15.1 {"winfo isdark" command, toplevel which was never mapped} -setup {
+    destroy .t
+} -body {
+    toplevel .t
+    wm withdraw .t
+    string is boolean -strict [winfo isdark .t]
+} -cleanup {
+    destroy .t
+} -result 1
+test winfo-15.2 {"winfo isdark" command, widget in a toplevel which was never mapped} -setup {
+    destroy .t
+} -body {
+    toplevel .t
+    wm withdraw .t
+    frame .t.f
+    string is boolean -strict [winfo isdark .t.f]
 } -cleanup {
     destroy .t
 } -result 1

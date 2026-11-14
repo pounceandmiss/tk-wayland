@@ -72,7 +72,7 @@ testConstraint swayRects [expr {[testConstraint swayPointer]
 unset -nocomplain version major minor
 # Sway does not maximize windows.
 testConstraint maximize [expr {[testConstraint wayland]
-	&& ![testConstraint sway]}]
+	&& [testConstraint zoomedToplevels]}]
 
 # Ensure a pristine initial window state
 resetWindows
