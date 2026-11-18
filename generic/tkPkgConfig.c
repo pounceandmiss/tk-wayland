@@ -45,7 +45,7 @@
 #  define CFG_FONTSYSTEM	"fontconfig"
 #elif defined(TK_USE_WAYLAND)
 #  define CFG_FONTSYSTEM "wayland"
-#elif defined(HAVE_XFT)
+#elif defined(HAVE_XFT) || defined(HAVE_BIDI)
 #  define CFG_FONTSYSTEM	"xft"
 #else
 #  define CFG_FONTSYSTEM	"x11"

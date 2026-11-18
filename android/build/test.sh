@@ -79,8 +79,9 @@ if [ -z "$ANDROID_SERIAL" ]; then
 fi
 export ANDROID_SERIAL
 
-# Run the tests: wait until the application has written tktest.done or the
-# summary of tcltest, or dies, or the time is up.
+# Run the tests: wait until the application has written tktest.done (after
+# the tests of Tk and those of Ttk, each ending with a summary), or dies, or
+# the time is up.
 
 "$adb" install -r "$apk" > /dev/null || exit 1
 "$adb" shell am force-stop $package
@@ -92,9 +93,8 @@ status=1
 while [ $t -lt $timeout ]; do
     sleep 5
     t=$((t + 5))
-    if "$adb" shell run-as $package ls files/tktest.done > /dev/null 2>&1 \
-	    || "$adb" shell run-as $package cat files/tktest.log 2>/dev/null \
-	    | grep -q '^Sourced [0-9]* Test Files'; then
+    if "$adb" shell run-as $package ls files/tktest.done > /dev/null 2>&1
+    then
 	status=0
 	break
     fi

@@ -19,7 +19,9 @@
 #	pointer and input method built there (vpointer and vinputmethod) are
 #	given to the tests. On GNOME (mutter) and KDE
 #	(KWin), the compositor has a session bus of its own, so that it does
-#	not meet the one of a running desktop.
+#	not meet the one of a running desktop. XDG_CURRENT_DESKTOP names the
+#	compositor (sway, GNOME, KDE or weston), as in a session of it, for
+#	the constraints of the tests.
 #
 # Copyright © 2026 The Tk developers.
 #
@@ -133,7 +135,8 @@ EOF
 	waitFile "$work/env"
 	WAYLAND_DISPLAY=`sed -n 's/^WAYLAND_DISPLAY=//p' "$work/env"`
 	SWAYSOCK=`sed -n 's/^SWAYSOCK=//p' "$work/env"`
-	export WAYLAND_DISPLAY SWAYSOCK
+	XDG_CURRENT_DESKTOP=sway
+	export WAYLAND_DISPLAY SWAYSOCK XDG_CURRENT_DESKTOP
 
 	if command -v wtype >/dev/null && command -v wl-paste >/dev/null \
 		&& command -v grim >/dev/null; then
@@ -180,7 +183,8 @@ EOF
 	pids="$pids $!"
 	waitFile "$XDG_RUNTIME_DIR/$socket"
 	WAYLAND_DISPLAY=$socket
-	export WAYLAND_DISPLAY
+	XDG_CURRENT_DESKTOP=GNOME
+	export WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
 	;;
     kde)
 	kwin_wayland --virtual --width $WIDTH --height $HEIGHT \
@@ -189,7 +193,8 @@ EOF
 	pids="$pids $!"
 	waitFile "$XDG_RUNTIME_DIR/$socket"
 	WAYLAND_DISPLAY=$socket
-	export WAYLAND_DISPLAY
+	XDG_CURRENT_DESKTOP=KDE
+	export WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
 	;;
     weston)
 	# Weston before 11 names its backends by their modules.
@@ -205,7 +210,8 @@ EOF
 	pids="$pids $!"
 	waitFile "$XDG_RUNTIME_DIR/$socket"
 	WAYLAND_DISPLAY=$socket
-	export WAYLAND_DISPLAY
+	XDG_CURRENT_DESKTOP=weston
+	export WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
 	;;
 esac
 

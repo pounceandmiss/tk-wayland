@@ -64,6 +64,13 @@ testConstraint knownDecorations [expr {
 testConstraint quickFullscreen [expr {
     [tk windowingsystem] ne "wayland" || ![info exists env(SWAYSOCK)]
 }]
+# A toplevel smaller than 150x150 pixels made fullscreen and back keeps its
+# size (KWin 6.8.3 gives it at least that size: see ../wayland/COMPOSITORS.md).
+testConstraint smallFullscreen [expr {
+    [tk windowingsystem] ne "wayland"
+	|| ![info exists env(XDG_CURRENT_DESKTOP)]
+	|| "KDE" ni [split $env(XDG_CURRENT_DESKTOP) :]
+}]
 # A logical pixel is a whole number of pixels of the screen. At fractional
 # scales (the emulator of the Android tests has 2.625 pixels per logical
 # pixel), the X emulation of Wayland and Android redraws the whole area of a
@@ -181,8 +188,12 @@ if {![string match {{22 3 6 15} {31 18 [34] 15}} $x]} {
     testConstraint fonts 0
 }
 
-testConstraint withXft [expr {![catch {tk::pkgconfig get fontsystem} fs] && ($fs eq "xft")}]
-unset fs
+testConstraint withXft [expr {[tk::build-info x11] && ![tk::build-info no-xft]}]
+# Text drawn with a stipple shows only the pixels of the stipple (Xft, and the
+# Xft emulation of Wayland and Android, ignore the stipple: bug 220796).
+testConstraint stippledText [expr {
+    ![testConstraint withXft] && [tk windowingsystem] ni {wayland android}
+}]
 
 # Expected results of some tests on Linux rely on availability of the "times"
 # font. This font is generally provided when Tk uses the old X font system,

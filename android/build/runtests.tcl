@@ -1,8 +1,8 @@
 # runtests.tcl --
 #
 #	The application of the APK of the tests ("make test-apk"): run the
-#	tests of Tk in the directory tests next to it with the options of
-#	tcltest in the file testflags, in a single process, and exit. The
+#	tests of Tk and Ttk in the directory tests next to it with the options
+#	of tcltest in the file testflags, in a single process, and exit. The
 #	output goes to tktest.log and tktest.err in the home directory of the
 #	application, which test.sh reads once tktest.done is there.
 #
@@ -20,29 +20,58 @@ namespace eval ::tktest {
     file delete $log.log $log.err $log.done
 }
 
-# tcltest exits at the end of the tests in Tk; tktest.done is written then.
+# Each suite (tests/all.tcl, then tests/ttk/all.tcl, which all.tcl leaves
+# out) exits at its end: exit goes on with the next suite, and once the last
+# has run, writes tktest.done and exits.
 rename exit ::tktest::Exit
 proc exit {{status 0}} {
     catch {
 	flush [tcltest::outputChannel]
 	flush [tcltest::errorChannel]
     }
+    if {$::tktest::running} {
+	return -code error -errorcode {TKTEST EXIT} $status
+    }
     catch {close [open $::tktest::log.done w]}
     ::tktest::Exit $status
 }
 
+namespace eval ::tktest {
+    variable running 1
+    variable suite
+    variable flags
+}
 if {[catch {
     set f [open [file join $::tktest::dir testflags]]
-    set flags [string trim [read $f]]
+    set ::tktest::flags [string trim [read $f]]
     close $f
-    set argv [list -tmpdir $env(TMPDIR) -outfile $::tktest::log.log \
-	    -errfile $::tktest::log.err {*}$flags]
-    set argc [llength $argv]
-    set argv0 [file join $::tktest::dir tests all.tcl]
-    source $argv0
-}]} {
+} msg]} {
     set f [open $::tktest::log.err a]
     puts $f $::errorInfo
     close $f
+    set ::tktest::running 0
+    exit
 }
+foreach ::tktest::suite {all.tcl ttk/all.tcl} {
+    set argv [list -tmpdir $env(TMPDIR) -outfile $::tktest::log.log \
+	    -errfile $::tktest::log.err {*}$::tktest::flags]
+    set argc [llength $argv]
+    set argv0 [file join $::tktest::dir tests $::tktest::suite]
+
+    # all.tcl replaces tcltest::cleanupTests with one which sets the
+    # interactive constraint at the end of the suite, so as not to exit
+    # there; the next suite replaces it again.
+    if {[info commands ::tcltest::CleanupTestsAndExit] ne ""} {
+	rename ::tcltest::cleanupTests {}
+	rename ::tcltest::CleanupTestsAndExit ::tcltest::cleanupTests
+	::tcltest::testConstraint interactive 0
+    }
+    if {[catch {uplevel #0 [list source $argv0]} msg opts]
+	    && [dict get $opts -errorcode] ne {TKTEST EXIT}} {
+	set f [open $::tktest::log.err a]
+	puts $f [dict get $opts -errorinfo]
+	close $f
+    }
+}
+set ::tktest::running 0
 exit

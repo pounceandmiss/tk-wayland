@@ -75,6 +75,12 @@ or leaves it alone. The tests run on each with `make test-sway`,
   scale 1 instead of scaling it, so KWin is only tested at the scale 1.
 - `kwin_wayland` has file capabilities (`CAP_SYS_RESOURCE` on Debian), so it
   does not start in a container which drops them.
+- KWin 6.8.3 gives a window smaller than 150x150 which leaves the
+  fullscreen state the size 150x150 (a configure of that size after
+  `unset_fullscreen`, its minimum size being 1x1), however slowly it was made
+  fullscreen and back; 6.8.2 gave it its size again (`wm-geometry-2.6`,
+  constraint `smallFullscreen`). Not worked around: the configure cannot be
+  told from a resize by the user.
 
 ## Weston
 
