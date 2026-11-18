@@ -161,6 +161,9 @@ WAYLAND_INCLUDES	= -I$(WAYLAND_DIR) -I$(XEMU_DIR) -I$(XLIB_DIR) -I. \
 ANDROID_INCLUDES	= -I$(ANDROID_DIR) -I$(XEMU_DIR) -I$(XLIB_DIR) -I. \
 			  @ANDROID_CFLAGS@
 
+HAIKU_INCLUDES		= -I$(HAIKU_DIR) -I$(XEMU_DIR) -I$(XLIB_DIR) -I. \
+			  @HAIKU_CFLAGS@
+
 # Linker switch(es) to use to link with the X11 library archive (the
 # configure script will try to set this value automatically, but you
 # can override it).
@@ -168,6 +171,7 @@ X11_LIB_SWITCHES	= $(XFT_LIBS) $(HB_LIBS) $(XRENDER_LIBS) @XLIBSW@
 AQUA_LIB_SWITCHES	= $(X11_LIB_SWITCHES)
 WAYLAND_LIB_SWITCHES	= @WAYLAND_LIBS@
 ANDROID_LIB_SWITCHES	= @ANDROID_LIBS@
+HAIKU_LIB_SWITCHES	= @HAIKU_LIBS@
 
 # To turn off the security checks that disallow incoming sends when
 # the X server appears to be insecure, reverse the comments on the
@@ -363,6 +367,8 @@ WAYLAND_DIR		= $(TOP_DIR)/wayland
 WAYLAND_PROTOCOLS_DIR	= @WAYLAND_PROTOCOLS_DIR@
 WAYLAND_SCANNER		= @WAYLAND_SCANNER@
 ANDROID_DIR		= $(TOP_DIR)/android
+HAIKU_DIR		= $(TOP_DIR)/haiku
+HAIKU_CXX		= @HAIKU_CXX@
 
 #----------------------------------------------------------------
 # The information below should be usable as is.  The configure
@@ -464,7 +470,7 @@ AQUA_TKTEST_OBJS = tkMacOSXTest.o
 
 # The Wayland port shares the X11 code, which runs on the Xlib emulation of
 # the port; tkPointer.c and xlib/ are shared with the Aqua and Windows ports.
-# The X server emulation shared by the Wayland and Android ports.
+# The X server emulation shared by the Wayland, Android and Haiku ports.
 XEMU_OBJS = tkXemuDraw.o $(FONT_OBJS) tkXemuHints.o tkXemuMisc.o \
 	tkXemuWindow.o tkXemuXlib.o
 
@@ -493,9 +499,20 @@ ANDROID_OBJS = tkUnix.o tkUnix3d.o tkUnixAccessibility.o tkUnixButton.o \
 	tkUnixInit.o tkUnixMenu.o tkUnixMenubu.o tkUnixScale.o \
 	tkUnixScrlbr.o tkUnixSend.o tkUnixSysNotify.o tkUnixWm.o tkUnixXId.o \
 	tkUnixPrint.o tkPointer.o xcolors.o xdraw.o xgc.o ximage.o \
-	$(XEMU_OBJS) \
+	$(XEMU_OBJS) tkXemuKeysym.o \
 	tkAndroidCmds.o tkAndroidCursor.o tkAndroidEvent.o tkAndroidKey.o \
 	tkAndroidSelect.o tkAndroidSurface.o tkAndroidWm.o
+
+# The Haiku port runs on the X server emulation as well, with the Be API
+# (tkHaikuApp.cpp, the only file in C++).
+HAIKU_OBJS = tkUnix.o tkUnix3d.o tkUnixAccessibility.o tkUnixButton.o \
+	tkUnixColor.o tkUnixConfig.o tkUnixDraw.o tkUnixEmbed.o tkUnixFocus.o \
+	tkUnixInit.o tkUnixMenu.o tkUnixMenubu.o tkUnixScale.o \
+	tkUnixScrlbr.o tkUnixSend.o tkUnixSysNotify.o tkUnixWm.o tkUnixXId.o \
+	tkUnixPrint.o tkPointer.o xcolors.o xdraw.o xgc.o ximage.o \
+	$(XEMU_OBJS) tkXemuKeysym.o \
+	tkHaikuApp.o tkHaikuCursor.o tkHaikuEvent.o tkHaikuKey.o \
+	tkHaikuSelect.o tkHaikuSurface.o tkHaikuWm.o
 
 OBJS =  $(GENERIC_OBJS) $(WIDG_OBJS) $(CANV_OBJS) $(IMAGE_OBJS) $(TEXT_OBJS) \
 	$(STUB_OBJS) $(TTK_OBJS) \
@@ -1599,6 +1616,15 @@ vinputmethod: $(WAYLAND_DIR)/tools/vinputmethod.c im-client.h \
 tkAndroid%.o: $(ANDROID_DIR)/tkAndroid%.c $(ANDROID_DIR)/tkAndroidInt.h \
 		$(XEMU_DIR)/tkXemuInt.h $(XEMU_DIR)/tkXemuPort.h
 	$(CC) -c $(CC_SWITCHES) $(ANDROID_DIR)/tkAndroid$*.c
+
+tkHaikuApp.o: $(HAIKU_DIR)/tkHaikuApp.cpp $(HAIKU_DIR)/tkHaiku.h
+	$(HAIKU_CXX) -c $(CFLAGS) $(SHLIB_CFLAGS) -I$(HAIKU_DIR) \
+		$(HAIKU_DIR)/tkHaikuApp.cpp
+
+tkHaiku%.o: $(HAIKU_DIR)/tkHaiku%.c $(HAIKU_DIR)/tkHaikuInt.h \
+		$(HAIKU_DIR)/tkHaiku.h $(XEMU_DIR)/tkXemuInt.h \
+		$(XEMU_DIR)/tkXemuPort.h
+	$(CC) -c $(CC_SWITCHES) $(HAIKU_DIR)/tkHaiku$*.c
 
 tkMacOSXAccessibility.o: $(MAC_OSX_DIR)/tkMacOSXAccessibility.c
 	$(CC) -c $(CC_SWITCHES) $(MAC_OSX_DIR)/tkMacOSXAccessibility.c
