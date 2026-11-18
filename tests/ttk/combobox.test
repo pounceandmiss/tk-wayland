@@ -177,7 +177,7 @@ test combobox-5.1 "Popdown higher than the screen is limited to the screen below
     destroy .t
 } -result {below 1 1 1}
 test combobox-5.2 "Popdown higher than the screen is limited to the screen above" \
-	-constraints {notAqua} -body {
+	-constraints {notAqua sizedToplevels} -body {
     lrange [postComboboxAt [expr {[winfo screenheight .] - 80}] 150] 0 3
 } -cleanup {
     destroy .t

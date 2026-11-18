@@ -1428,7 +1428,9 @@ test Drag_and_Drop-14.16 {Drag beyond left edge is not allowed} -setup {
     set res
 } -result {200 20}
 
-test Drag_and_Drop-14.17 {Drag First Column} -setup {
+test Drag_and_Drop-14.17 {Drag First Column} -constraints {
+    sizedToplevels
+} -setup {
     columns_stretch .tv
 } -body {
     set res [list [.tv column #0 -width]]
@@ -1438,7 +1440,9 @@ test Drag_and_Drop-14.17 {Drag First Column} -setup {
     set res
 } -result {196 20}
 
-test Drag_and_Drop-14.18 {Drag Last Column} -setup {
+test Drag_and_Drop-14.18 {Drag Last Column} -constraints {
+    sizedToplevels
+} -setup {
     columns_stretch .tv
 } -body {
     set res [list [.tv column #3 -width]]
@@ -1448,7 +1452,8 @@ test Drag_and_Drop-14.18 {Drag Last Column} -setup {
     set res
 } -result {197 412}
 
-test Drag_and_Drop-14.19 {Shrink Column In Stretch Mode Adds Space to Next Column} -setup {
+test Drag_and_Drop-14.19 {Shrink Column In Stretch Mode Adds Space to Next Column} \
+	-constraints sizedToplevels -setup {
     columns_stretch .tv
 } -body {
     set res [list [.tv column #2 -width]]
@@ -1458,7 +1463,8 @@ test Drag_and_Drop-14.19 {Shrink Column In Stretch Mode Adds Space to Next Colum
     set res
 } -result {200 285}
 
-test Drag_and_Drop-14.20 {Expand Column In Stretch Mode Reduces Space in Next Column} -body {
+test Drag_and_Drop-14.20 {Expand Column In Stretch Mode Reduces Space in Next Column} \
+	-constraints sizedToplevels -body {
     set res [list [.tv column #2 -width]]
     .tv drag #1 500
     update
@@ -8631,11 +8637,15 @@ test Identify-89.6 {Invalid y} -body {
     .tv identify region 50 bogus
 } -result {expected screen distance but got "bogus"} -returnCodes {1}
 
-test Identify-89.7 {Region Heading Columns} -body {
+test Identify-89.7 {Region Heading Columns} -constraints {
+    sizedToplevels
+} -body {
     list [.tv identify region 100 10] [.tv identify region 300 10] [.tv identify region 500 10] [.tv identify region 700 10]
 } -result [lrepeat 4 heading]
 
-test Identify-89.8 {Region Heading Columns mm} -body {
+test Identify-89.8 {Region Heading Columns mm} -constraints {
+    sizedToplevels
+} -body {
     list [.tv identify region [mm 100] [mm 10]] [.tv identify region [mm 300] [mm 10]] [.tv identify region [mm 500] [mm 10]] [.tv identify region [mm 700] [mm 10]]
 } -result [lrepeat 4 heading]
 
@@ -8647,11 +8657,15 @@ test Identify-89.10 {Region Tree Rows mm} -body {
     list [.tv identify region [mm 10] [mm 30]] [.tv identify region [mm 30] [mm 50]] [.tv identify region [mm 50] [mm 70]] [.tv identify region [mm 70] [mm 90]]
 } -result [lrepeat 4 tree]
 
-test Identify-89.11 {Region Cell} -body {
+test Identify-89.11 {Region Cell} -constraints {
+    sizedToplevels
+} -body {
     list [.tv identify region 100 30] [.tv identify region 300 50] [.tv identify region 500 70] [.tv identify region 700 90]
 } -result {tree cell cell cell}
 
-test Identify-89.12 {Region Cell mm} -body {
+test Identify-89.12 {Region Cell mm} -constraints {
+    sizedToplevels
+} -body {
     list [.tv identify region [mm 100] [mm 30]] [.tv identify region [mm 300] [mm 50]] [.tv identify region [mm 500] [mm 70]] [.tv identify region [mm 700] [mm 90]]
 } -result {tree cell cell cell}
 
@@ -8765,7 +8779,9 @@ test Identify-89.37 {Identify Columns mm} -body {
     update idletasks
 } -result {{#0} Float Decimal Hex}
 
-test Identify-89.38 {Identify Scrolled Columns Bug #2381555} -setup {
+test Identify-89.38 {Identify Scrolled Columns Bug #2381555} -constraints {
+    sizedToplevels
+} -setup {
     columns_no_stretch .tv
     .tv xview 200
     update
@@ -8773,7 +8789,9 @@ test Identify-89.38 {Identify Scrolled Columns Bug #2381555} -setup {
     list [get_col_id .tv 100 30] [get_col_id .tv 300 50] [get_col_id .tv 500 70] [get_col_id .tv 700 90]
 } -result {{#0} Hex Decimal Float}
 
-test Identify-89.39 {Identify Scrolled Cells Bug #2381555} -body {
+test Identify-89.39 {Identify Scrolled Cells Bug #2381555} -constraints {
+    sizedToplevels
+} -body {
     list [.tv identify cell 100 30] [.tv identify cell 300 50] [.tv identify cell 500 70] [.tv identify cell 700 90]
 } -cleanup {
     .tv xview 0

@@ -25,6 +25,15 @@ tk appname tktest
 wm title . tktest
 if {[tk windowingsystem] eq "android"} {
     wm resizable . 0 0
+
+    # The tests of Ttk test its themes as they are, without the sizes for
+    # fingers which touch.tcl gives them, and lay their widgets out in the
+    # size they give the main window, which is squeezed into the screen
+    # instead of scrolling.
+    if {[file tail [tcltest::configure -testdir]] eq "ttk"} {
+	::tk::touch::Unstyle
+	wm attributes . -overflow squeeze
+    }
 }
 
 #

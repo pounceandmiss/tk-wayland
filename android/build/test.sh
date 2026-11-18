@@ -14,7 +14,9 @@
 #	window) for the tests with the AVD in TK_ANDROID_AVD, or else the only
 #	AVD there is, and stopped after. A device which is not an emulator is
 #	only used if ANDROID_SERIAL names it. ANDROID_ABI is x86_64 by
-#	default; TK_ANDROID_TIMEOUT is the time the tests may take, in seconds
+#	default; TK_ANDROID_SUITES the suites run, each in a process of its
+#	own ("all.tcl ttk/all.tcl" by default: the tests of Tk, then those of
+#	Ttk); TK_ANDROID_TIMEOUT the time each suite may take, in seconds
 #	(3600 by default).
 #
 # Copyright © 2026 The Tk developers.
@@ -31,6 +33,7 @@ adb=$ANDROID_HOME/platform-tools/adb
 emulator=$ANDROID_HOME/emulator/emulator
 apk=$top/build/android-$ANDROID_ABI/tktest.apk
 package=tk.wish.test
+suites=${TK_ANDROID_SUITES:-all.tcl ttk/all.tcl}
 timeout=${TK_ANDROID_TIMEOUT:-3600}
 
 # Build the APK.
@@ -79,40 +82,48 @@ if [ -z "$ANDROID_SERIAL" ]; then
 fi
 export ANDROID_SERIAL
 
-# Run the tests: wait until the application has written tktest.done (after
-# the tests of Tk and those of Ttk, each ending with a summary), or dies, or
-# the time is up.
+# Run the suites, each in a process of its own: for each, wait until the
+# application has written tktest.done, or dies, or the time is up, and print
+# its output. The files of the application are made by its first run.
 
 "$adb" install -r "$apk" > /dev/null || exit 1
-"$adb" shell am force-stop $package
-"$adb" shell run-as $package rm -f files/tktest.done
-"$adb" logcat -c
-"$adb" shell am start -W -n $package/tk.android.TkActivity > /dev/null
-t=0
-status=1
-while [ $t -lt $timeout ]; do
-    sleep 5
-    t=$((t + 5))
-    if "$adb" shell run-as $package ls files/tktest.done > /dev/null 2>&1
-    then
-	status=0
-	break
-    fi
-    if [ -z "$("$adb" shell pidof $package)" ]; then
-	if "$adb" shell run-as $package ls files/tktest.done > /dev/null 2>&1; then
-	    status=0
-	else
-	    echo "$0: the application died" >&2
+status=0
+for suite in $suites; do
+    "$adb" shell am force-stop $package
+    "$adb" shell run-as $package rm -f files/tktest.done
+    echo "$suite" | "$adb" shell run-as $package sh -c \
+	"'mkdir -p files && cat > files/tktest.suite'" || exit 1
+    "$adb" logcat -c
+    "$adb" shell am start -W -n $package/tk.android.TkActivity > /dev/null
+    t=0
+    done=0
+    while [ $t -lt $timeout ]; do
+	sleep 5
+	t=$((t + 5))
+	if "$adb" shell run-as $package ls files/tktest.done > /dev/null 2>&1
+	then
+	    done=1
+	    break
 	fi
-	break
+	if [ -z "$("$adb" shell pidof $package)" ]; then
+	    if "$adb" shell run-as $package ls files/tktest.done \
+		    > /dev/null 2>&1; then
+		done=1
+	    else
+		echo "$0: the application died in $suite" >&2
+	    fi
+	    break
+	fi
+    done
+    if [ $t -ge $timeout ]; then
+	echo "$0: the tests of $suite did not end in $timeout seconds" >&2
+    fi
+    "$adb" shell run-as $package cat files/tktest.log files/tktest.err
+    if [ $done -eq 0 ]; then
+	"$adb" logcat -d -s Tk DEBUG libc AndroidRuntime | tail -40
+	status=1
     fi
 done
-if [ $t -ge $timeout ]; then
-    echo "$0: the tests did not end in $timeout seconds" >&2
-fi
-"$adb" shell run-as $package cat files/tktest.log files/tktest.err
-if [ $status -ne 0 ]; then
-    "$adb" logcat -d -s Tk DEBUG libc AndroidRuntime | tail -40
-fi
+"$adb" shell run-as $package rm -f files/tktest.suite
 "$adb" shell am force-stop $package
 exit $status

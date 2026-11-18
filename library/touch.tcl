@@ -77,7 +77,8 @@ proc ::tk::touch::Adapt {} {
 
 # ::tk::touch::Style --
 #
-#	Give the styles of the current ttk theme sizes for fingers.
+#	Give the styles of the current ttk theme sizes for fingers, unless
+#	Unstyle was called. The values they replace are kept for Unstyle.
 #
 # Results:
 #	None.
@@ -85,26 +86,65 @@ proc ::tk::touch::Adapt {} {
 # Side effects:
 #	The styles are configured.
 
+namespace eval ::tk::touch {
+    # Whether the styles of the themes get sizes for fingers, and the values
+    # these replaced, by theme, style and option.
+    variable styled 1
+    variable saved
+    array set saved {}
+}
+
 proc ::tk::touch::Style {} {
-    ttk::style configure TButton -padding {9p 6p}
-    ttk::style configure TMenubutton -padding {9p 6p} -arrowsize 6
-    ttk::style configure Toolbutton -padding 6p
-    foreach style {TCheckbutton TRadiobutton} {
-	ttk::style configure $style -padding 4.5p
+    variable styled
+    variable saved
+    if {!$styled} {
+	return
     }
-    foreach style {TEntry TCombobox} {
-	ttk::style configure $style -padding 4.5p
+    set theme [ttk::style theme use]
+    foreach {style option value} [list \
+	    TButton -padding {9p 6p} \
+	    TMenubutton -padding {9p 6p} TMenubutton -arrowsize 6 \
+	    Toolbutton -padding 6p \
+	    TCheckbutton -padding 4.5p TRadiobutton -padding 4.5p \
+	    TEntry -padding 4.5p TCombobox -padding 4.5p \
+	    TCombobox -arrowsize 6 \
+	    TSpinbox -padding {4.5p 4.5p 9p 4.5p} TSpinbox -arrowsize 5 \
+	    TScrollbar -width 13.5p TScrollbar -arrowsize 6 \
+	    TScale -sliderthickness 18p \
+	    TNotebook.Tab -padding {9p 6p} \
+	    Heading -padding 4.5p \
+	    Sash -sashthickness 9p \
+	    Treeview -rowheight [expr {[font metrics TkDefaultFont -linespace]
+		+ [winfo pixels . 12p]}]] {
+	if {![info exists saved($theme,$style,$option)]} {
+	    set saved($theme,$style,$option) \
+		    [ttk::style configure $style $option]
+	}
+	ttk::style configure $style $option $value
     }
-    ttk::style configure TCombobox -arrowsize 6
-    ttk::style configure TSpinbox -padding {4.5p 4.5p 9p 4.5p} -arrowsize 5
-    ttk::style configure TScrollbar -width 13.5p -arrowsize 6
-    ttk::style configure TScale -sliderthickness 18p
-    ttk::style configure TNotebook.Tab -padding {9p 6p}
-    ttk::style configure Heading -padding 4.5p
-    ttk::style configure Sash -sashthickness 9p
-    ttk::style configure Treeview -rowheight \
-	    [expr {[font metrics TkDefaultFont -linespace]
-		   + [winfo pixels . 12p]}]
+}
+
+# ::tk::touch::Unstyle --
+#
+#	Give the styles of the ttk themes back the values Style replaced, and
+#	stop Style (the tests of Ttk test the themes as they are).
+#
+# Results:
+#	None.
+#
+# Side effects:
+#	The styles of the themes Style configured are configured.
+
+proc ::tk::touch::Unstyle {} {
+    variable styled
+    variable saved
+    set styled 0
+    foreach key [array names saved] {
+	lassign [split $key ,] theme style option
+	ttk::style theme settings $theme [list \
+		ttk::style configure $style $option $saved($key)]
+    }
+    array unset saved
 }
 
 # The selection of a widget which edits text, while it is shown with

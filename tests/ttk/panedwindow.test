@@ -134,7 +134,9 @@ test panedwindow-1.end "Cleanup" -body {
 
 # Resize behavior:
 #
-test panedwindow-2.1 "..." -body {
+test panedwindow-2.1 "..." -constraints {
+    sizedToplevels
+} -body {
     ttk::panedwindow .pw -orient horizontal
 
     .pw add [listbox .pw.l1]
@@ -155,7 +157,9 @@ test panedwindow-2.1 "..." -body {
     expr {$w2 < $w1}
 } -result 1
 
-test panedwindow-2.2 "..., cont'd" -body {
+test panedwindow-2.2 "..., cont'd" -constraints {
+    sizedToplevels
+} -body {
 
     # This should keep the window from shrinking:
     wm geometry . [wm geometry .]
@@ -174,7 +178,9 @@ test panedwindow-2.2 "..., cont'd" -body {
     # How to (a) check for this, and (b) fix it?
 } -result 1
 
-test panedwindow-2.3 "..., cont'd" -body {
+test panedwindow-2.3 "..., cont'd" -constraints {
+    sizedToplevels
+} -body {
 
     .pw add [listbox .pw.l5]
     update
