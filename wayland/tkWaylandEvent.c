@@ -540,6 +540,9 @@ PointerButton(
 
     tkXeDisplay->lastSerial = serial;
     tkXeDisplay->lastTime = time;
+    if (state == WL_POINTER_BUTTON_STATE_PRESSED) {
+	tkXeDisplay->pressSerial = serial;
+    }
     switch (button) {
     case BTN_LEFT:
 	mask = Button1Mask;
@@ -910,6 +913,7 @@ TouchDown(
     int slot = TouchSlot(-1);
 
     tkXeDisplay->lastSerial = serial;
+    tkXeDisplay->pressSerial = serial;
     tkXeDisplay->lastTime = time;
     if (slot < 0) {
 	return;
@@ -1432,6 +1436,9 @@ KeyboardKey(
 {
     tkXeDisplay->lastSerial = serial;
     tkXeDisplay->lastTime = time;
+    if (state == WL_KEYBOARD_KEY_STATE_PRESSED) {
+	tkXeDisplay->pressSerial = serial;
+    }
     if (tkXeDisplay->repeatTimer) {
 	Tcl_DeleteTimerHandler(tkXeDisplay->repeatTimer);
 	tkXeDisplay->repeatTimer = NULL;

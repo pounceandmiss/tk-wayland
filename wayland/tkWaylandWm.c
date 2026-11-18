@@ -1530,8 +1530,8 @@ TkXeWmActivate(
     token = xdg_activation_v1_get_activation_token(tkXeDisplay->activation);
     xdg_activation_token_v1_add_listener(token, &tokenListener,
 	    (void *)(uintptr_t)surfPtr->winPtr->id);
-    if (tkXeDisplay->seat && tkXeDisplay->lastSerial) {
-	xdg_activation_token_v1_set_serial(token, tkXeDisplay->lastSerial,
+    if (tkXeDisplay->seat && tkXeDisplay->pressSerial) {
+	xdg_activation_token_v1_set_serial(token, tkXeDisplay->pressSerial,
 		tkXeDisplay->seat);
     }
     if (tkXeDisplay->keyboardSurface) {
@@ -2000,6 +2000,7 @@ MapPopup(
 	int x = winPtr->x - parentWinPtr->x;
 	int y = winPtr->y - parentWinPtr->y;
 	int anchorX = x, anchorY = y;
+	int frameX = 0, frameY = 0;
 
 	/*
 	 * The anchor must be within the parent; the rest of the distance is
@@ -2016,9 +2017,21 @@ MapPopup(
 	} else if (anchorY > parentWinPtr->height - 1) {
 	    anchorY = parentWinPtr->height - 1;
 	}
+
+	/*
+	 * The positioner is relative to the window geometry of the parent,
+	 * which includes the decorations libdecor draws (the title bar on
+	 * GNOME and Weston): the menu of a menubar was shown over it.
+	 */
+
+	if (parentPtr->frame) {
+	    libdecor_frame_translate_coordinate(parentPtr->frame, 0, 0,
+		    &frameX, &frameY);
+	}
 	xdg_positioner_set_size(positioner, width > 0 ? width : 1,
 		height > 0 ? height : 1);
-	xdg_positioner_set_anchor_rect(positioner, anchorX, anchorY, 1, 1);
+	xdg_positioner_set_anchor_rect(positioner, frameX + anchorX,
+		frameY + anchorY, 1, 1);
 	xdg_positioner_set_offset(positioner, x - anchorX, y - anchorY);
 	xdg_positioner_set_anchor(positioner, XDG_POSITIONER_ANCHOR_TOP_LEFT);
 	xdg_positioner_set_gravity(positioner,
@@ -2037,7 +2050,7 @@ MapPopup(
 	surfPtr->popupParent = parentPtr;
 	if (PopupGrabs(winPtr) && tkXeDisplay->seat) {
 	    xdg_popup_grab(surfPtr->xdgPopup, tkXeDisplay->seat,
-		    tkXeDisplay->lastSerial);
+		    tkXeDisplay->pressSerial);
 	    surfPtr->popupGrab = true;
 	}
     } else {

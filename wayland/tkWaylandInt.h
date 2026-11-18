@@ -263,6 +263,10 @@ struct TkXeDisplay {
     Tcl_TimerToken repeatTimer;
 
     uint32_t lastSerial;	/* Serial of the last input event. */
+    uint32_t pressSerial;	/* Serial of the last button press, touch
+				 * down or key press, which grabs, moves,
+				 * resizes and activations need (Mutter
+				 * refuses that of a release). */
     uint32_t lastTime;		/* Time of the last input event. */
 };
 

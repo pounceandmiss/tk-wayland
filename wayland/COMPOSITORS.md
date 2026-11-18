@@ -65,6 +65,16 @@ or leaves it alone. The tests run on each with `make test-sway`,
 - Restoring a window unmaximized twice gave it the size of the screen: the
   vertical and horizontal maximizations, which Tk changes together, are
   requested once.
+- Refuses a grab (`xdg_popup.grab`, and moves, resizes, the window menu and
+  activation tokens) with the serial of a button release or of a motion:
+  cascades, posted while the pointer moves, did not open (Mutter 51.1). The
+  port gives the serial of the last button press, touch or key press.
+- Positions popups relative to the window geometry of their parent, which
+  includes the title bar libdecor draws: menus were shown over the menubar,
+  by the height of the title bar, and tooltips under the pointer, which made
+  them flash (the pointer left the widget, which removed them). The anchor is
+  translated by the decorations of the frame (Mutter 51.1, libdecor 0.2.5;
+  also Weston, whose decorations libdecor draws as well).
 - Draws no decorations: libdecor's GTK plugin does (see below).
 
 ## KWin (KDE)

@@ -684,10 +684,10 @@ StartMoveCmd(
     }
     if (surfPtr->frame) {
 	libdecor_frame_move(surfPtr->frame, tkXeDisplay->seat,
-		tkXeDisplay->lastSerial);
+		tkXeDisplay->pressSerial);
     } else {
 	xdg_toplevel_move(surfPtr->xdgToplevel, tkXeDisplay->seat,
-		tkXeDisplay->lastSerial);
+		tkXeDisplay->pressSerial);
     }
     wl_display_flush(tkXeDisplay->wlDisplay);
     return TCL_OK;
@@ -753,10 +753,10 @@ StartResizeCmd(
     }
     if (surfPtr->frame) {
 	libdecor_frame_resize(surfPtr->frame, tkXeDisplay->seat,
-		tkXeDisplay->lastSerial, decorEdges[edge]);
+		tkXeDisplay->pressSerial, decorEdges[edge]);
     } else {
 	xdg_toplevel_resize(surfPtr->xdgToplevel, tkXeDisplay->seat,
-		tkXeDisplay->lastSerial, xdgEdges[edge]);
+		tkXeDisplay->pressSerial, xdgEdges[edge]);
     }
     wl_display_flush(tkXeDisplay->wlDisplay);
     return TCL_OK;
@@ -810,10 +810,10 @@ WindowMenuCmd(
     }
     if (surfPtr->frame) {
 	libdecor_frame_show_window_menu(surfPtr->frame, tkXeDisplay->seat,
-		tkXeDisplay->lastSerial, x, y);
+		tkXeDisplay->pressSerial, x, y);
     } else {
 	xdg_toplevel_show_window_menu(surfPtr->xdgToplevel, tkXeDisplay->seat,
-		tkXeDisplay->lastSerial, x, y);
+		tkXeDisplay->pressSerial, x, y);
     }
     wl_display_flush(tkXeDisplay->wlDisplay);
     return TCL_OK;
@@ -941,8 +941,8 @@ ActivationTokenCmd(
     }
     token = xdg_activation_v1_get_activation_token(tkXeDisplay->activation);
     xdg_activation_token_v1_add_listener(token, &tokenListener, &resultObj);
-    if (tkXeDisplay->seat && tkXeDisplay->lastSerial) {
-	xdg_activation_token_v1_set_serial(token, tkXeDisplay->lastSerial,
+    if (tkXeDisplay->seat && tkXeDisplay->pressSerial) {
+	xdg_activation_token_v1_set_serial(token, tkXeDisplay->pressSerial,
 		tkXeDisplay->seat);
     }
     if (tkXeDisplay->keyboardSurface) {
