@@ -251,7 +251,7 @@ touchscreens can adapt the widgets in the same way with
 .
 Returns the current Tk windowing system, one of
 \fBx11\fR (X11-based), \fBwayland\fR (Wayland), \fBandroid\fR (Android),
-\fBwin32\fR (MS Windows), or \fBaqua\fR (macOS Aqua).
+\fBhaiku\fR (Haiku), \fBwin32\fR (MS Windows), or \fBaqua\fR (macOS Aqua).
 .SH "SEE ALSO"
 attribtable(n), busy(n), fontchooser(n), print(n), send(n), sysnotify(n),
 systray(n), winfo(n)

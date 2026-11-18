@@ -383,7 +383,7 @@ foreach mode $modes {
     if {!$mode} {
 
 	test filebox-7.1-$mode "tk_getOpenFile - directory not readable" \
-	    -constraints nonUnixUserInteraction \
+	    -constraints {nonUnixUserInteraction unreadableDirectories} \
 	    -setup {
 		rename ::tk_messageBox ::saved_messageBox
 		set ::gotmessage {}

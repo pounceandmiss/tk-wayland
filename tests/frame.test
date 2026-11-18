@@ -1152,7 +1152,7 @@ test frame-12.3 {FrameWorldChanged procedure} -setup {
     # Check reaction on font change
     font create myfont -family courier -size -13
     labelframe .f -font myfont -text Mupp
-    place .f -x 0 -y 0 -width 40 -height 40
+    place .f -x 0 -y 0 -width 40 -height 60
     pack [frame .f.f] -fill both -expand 1
     update
     set h1 [font metrics myfont -linespace]

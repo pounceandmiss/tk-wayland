@@ -1547,10 +1547,16 @@ WAYLAND_PROTOCOL_idle-inhibit-unstable-v1 = \
 WAYLAND_PROTOCOL_xdg-output-unstable-v1 = \
 	unstable/xdg-output/xdg-output-unstable-v1.xml
 
-# Shared files which include tkXemuInt.h, and with it tkWaylandInt.h on
-# Wayland, need the protocol headers (the variable is empty for the other
-# windowing systems).
-tkCanvas.o tkPointer.o: $(@TK_WINDOWINGSYSTEM@_PROTOCOL_HDRS)
+# Shared files which include tkXemuInt.h, and with it the header of the port
+# (which defines the surfaces and the display) and, on Wayland, the protocol
+# headers (the variables are empty for the other windowing systems).
+WAYLAND_INT_HDRS = $(WAYLAND_DIR)/tkWaylandInt.h
+ANDROID_INT_HDRS = $(ANDROID_DIR)/tkAndroidInt.h $(ANDROID_DIR)/tkAndroid.h
+HAIKU_INT_HDRS = $(HAIKU_DIR)/tkHaikuInt.h $(HAIKU_DIR)/tkHaiku.h \
+	$(XEMU_DIR)/tkXemuXkb.h
+
+tkCanvas.o tkPointer.o tkUnixWm.o: $(@TK_WINDOWINGSYSTEM@_PROTOCOL_HDRS) \
+		$(@TK_WINDOWINGSYSTEM@_INT_HDRS)
 
 %-client-protocol.h:
 	$(WAYLAND_SCANNER) client-header \
@@ -1565,7 +1571,8 @@ tkCanvas.o tkPointer.o: $(@TK_WINDOWINGSYSTEM@_PROTOCOL_HDRS)
 
 tkXemu%.o: $(XEMU_DIR)/tkXemu%.c $(XEMU_DIR)/tkXemuInt.h \
 		$(XEMU_DIR)/tkXemuDraw.h $(XEMU_DIR)/tkXemuPort.h \
-		$(@TK_WINDOWINGSYSTEM@_PROTOCOL_HDRS)
+		$(@TK_WINDOWINGSYSTEM@_PROTOCOL_HDRS) \
+		$(@TK_WINDOWINGSYSTEM@_INT_HDRS)
 	$(CC) -c $(CC_SWITCHES) $(XEMU_DIR)/tkXemu$*.c
 
 tkWayland%.o: $(WAYLAND_DIR)/tkWayland%.c $(WAYLAND_DIR)/tkWaylandInt.h \
@@ -2053,6 +2060,9 @@ dist: $(UNIX_DIR)/configure $(UNIX_DIR)/tkConfig.h.in $(UNIX_DIR)/tk.pc.in \
 		$(DISTDIR)/android/java/tk/android
 	$(DIST_INSTALL_DATA) $(ANDROID_DIR)/res/values/*.xml \
 		$(DISTDIR)/android/res/values
+	$(INSTALL_DATA_DIR) $(DISTDIR)/haiku
+	$(DIST_INSTALL_DATA) $(HAIKU_DIR)/*.[ch] $(HAIKU_DIR)/*.cpp \
+		$(HAIKU_DIR)/*.md $(TOP_DIR)/license.terms $(DISTDIR)/haiku
 	$(INSTALL_DATA_DIR) $(DISTDIR)/library
 	$(DIST_INSTALL_DATA) $(TOP_DIR)/license.terms $(TOP_DIR)/library/*.tcl \
 		$(TOP_DIR)/library/tclIndex \

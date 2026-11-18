@@ -2,12 +2,13 @@
 
 This directory holds an X server emulated inside the process, on which the
 ports of Tk to systems without X run the X11 code of Tk: the Wayland port
-(`../wayland`) and the Android port (`../android`). Like the Aqua and Windows
-ports, they compile against the X11 headers in `../xlib` and implement the
-part of Xlib which Tk uses (`tkIntXlibDecls.h`); unlike them, they emulate it
-far enough that `tkUnixWm.c`, `tkUnixMenu.c`, `tkUnixEmbed.c` (within the
-process), `tkUnixSend.c` (within the process), the widgets and the library
-run as on X11. Both ports are configured with `TK_USE_XEMU` defined.
+(`../wayland`), the Android port (`../android`) and the Haiku port
+(`../haiku`). Like the Aqua and Windows ports, they compile against the X11
+headers in `../xlib` and implement the part of Xlib which Tk uses
+(`tkIntXlibDecls.h`); unlike them, they emulate it far enough that
+`tkUnixWm.c`, `tkUnixMenu.c`, `tkUnixEmbed.c` (within the process),
+`tkUnixSend.c` (within the process), the widgets and the library run as on
+X11. The ports are configured with `TK_USE_XEMU` defined.
 
 ## Design
 
@@ -50,7 +51,9 @@ events, and is the window manager. `tkXemuInt.h` lists what it provides: the
 structures of the surfaces and of the display, with the members the
 emulation uses, the functions of surfaces (`TkXeNewSurface`,
 `TkXeResizeBacking`, `TkXeAddDamage`, ...), of input (`TkXeCurrentTime`,
-`TkXeUpdateCursor`) and of the window manager (`TkXeWmMapSurface`,
-`TkXeWmPropertyChanged`, ...), and the part of xkbcommon which the Xlib
-emulation uses. Its header (`tkWaylandInt.h`, `tkAndroidInt.h`) is included
-at the end of `tkXemuInt.h`.
+`TkXeUpdateCursor`, `TkXeBell`) and of the window manager
+(`TkXeWmMapSurface`, `TkXeWmPropertyChanged`, ...), and the part of
+xkbcommon which the Xlib emulation uses: from xkbcommon on Wayland, from
+`tkXemuXkb.h` and `tkXemuKeysym.c` (the names of keysyms, and no keymap)
+on Android and Haiku. Its header (`tkWaylandInt.h`, `tkAndroidInt.h`,
+`tkHaikuInt.h`) is included at the end of `tkXemuInt.h`.

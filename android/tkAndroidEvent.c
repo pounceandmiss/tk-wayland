@@ -1295,6 +1295,27 @@ TkXeCurrentTime(void)
 /*
  *----------------------------------------------------------------------
  *
+ * TkXeBell --
+ *
+ *	Ring the bell: Android has none.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
+void
+TkXeBell(void)
+{
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
  * Keysyms --
  *
  *----------------------------------------------------------------------
@@ -1638,7 +1659,9 @@ TkpGetCapture(void)
  * XQueryPointer --
  *
  *	Where the pointer is (where the screen was last touched), and the
- *	state of the buttons and modifiers.
+ *	state of the buttons and modifiers. Any of the
+ *	pointers may be NULL: Tk passes NULL for what it does not need, as on
+ *	Aqua and Windows.
  *
  * Results:
  *	True.
@@ -1662,17 +1685,33 @@ XQueryPointer(
     int rootX = (int)floor(tkXeDisplay->pointerX);
     int rootY = (int)floor(tkXeDisplay->pointerY);
     int x, y;
+    Window child = None;
 
     TkXeNextRequest(display);
-    *rootPtr = RootWindow(display, 0);
-    *childPtr = None;
-    *rootXPtr = rootX;
-    *rootYPtr = rootY;
-    XTranslateCoordinates(display, *rootPtr, w, rootX, rootY, &x, &y,
-	    childPtr);
-    *winXPtr = x;
-    *winYPtr = y;
-    *maskPtr = tkXeDisplay->modState | tkXeDisplay->buttonState;
+    if (rootPtr) {
+	*rootPtr = RootWindow(display, 0);
+    }
+    if (rootXPtr) {
+	*rootXPtr = rootX;
+    }
+    if (rootYPtr) {
+	*rootYPtr = rootY;
+    }
+    XTranslateCoordinates(display, RootWindow(display, 0),
+	    (w != None) ? w : RootWindow(display, 0), rootX, rootY, &x, &y,
+	    &child);
+    if (childPtr) {
+	*childPtr = child;
+    }
+    if (winXPtr) {
+	*winXPtr = x;
+    }
+    if (winYPtr) {
+	*winYPtr = y;
+    }
+    if (maskPtr) {
+	*maskPtr = tkXeDisplay->modState | tkXeDisplay->buttonState;
+    }
     return True;
 }
 

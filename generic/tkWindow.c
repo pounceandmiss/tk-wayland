@@ -1380,7 +1380,7 @@ IsInEmbeddedToplevel(
  *--------------------------------------------------------------
  */
 
-#if defined(MAC_OSX_TK) || defined(_WIN32)
+#if defined(MAC_OSX_TK) || defined(_WIN32) || defined(TK_USE_XEMU)
 static void SendEnterLeaveForDestroy(
     Tk_Window tkwin)
 {

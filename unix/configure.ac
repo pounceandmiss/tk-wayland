@@ -291,8 +291,26 @@ AS_IF([test $tk_aqua = no], [
 	tk_wayland=no
     ])
 ])
+#--------------------------------------------------------------------
+#	The Haiku port runs on the X server emulation as well, with a
+#	BWindow for every toplevel.
+#--------------------------------------------------------------------
+
+tk_haiku=no
+AS_IF([test $tk_aqua = no], [
+    AC_MSG_CHECKING([whether to build for Haiku])
+    AC_ARG_ENABLE(haiku,
+	AS_HELP_STRING([--enable-haiku],
+	    [use the Haiku windowingsystem instead of X11 (default: no)]),
+	[tk_haiku=$enableval], [tk_haiku=no])
+    AC_MSG_RESULT([$tk_haiku])
+    AS_IF([test $tk_haiku = yes], [
+	tk_wayland=no
+	tk_android=no
+    ])
+])
 tk_xemu=no
-AS_IF([test $tk_wayland = yes -o $tk_android = yes], [
+AS_IF([test $tk_wayland = yes -o $tk_android = yes -o $tk_haiku = yes], [
     tk_xemu=yes
 ])
 
@@ -324,7 +342,7 @@ AS_IF([test $tk_aqua = yes], [
 ])
 
 #--------------------------------------------------------------------
-#	The ports on the X server emulation (Wayland and Android), like the
+#	The ports on the X server emulation (Wayland, Android, Haiku), like the
 #	Aqua and Windows ports, implement the part of Xlib that Tk uses, with
 #	the X11 headers in ../xlib.
 #--------------------------------------------------------------------
@@ -334,10 +352,31 @@ WAYLAND_LIBS=""
 WAYLAND_PROTOCOLS_DIR=""
 ANDROID_CFLAGS=""
 ANDROID_LIBS=""
+HAIKU_CFLAGS=""
+HAIKU_LIBS=""
+HAIKU_CXX=""
 AS_IF([test $tk_xemu = yes], [
     AC_DEFINE(TK_USE_XEMU, 1, [Are we building Tk on the X server emulation?])
 ])
-AS_IF([test $tk_android = yes], [
+AS_IF([test $tk_haiku = yes], [
+    AC_DEFINE(TK_USE_HAIKU, 1, [Are we building Tk for Haiku?])
+    TK_WINDOWINGSYSTEM=HAIKU
+    tk_haiku_pkgs="cairo pixman-1 fontconfig freetype2"
+    AC_MSG_CHECKING([for $tk_haiku_pkgs])
+    AS_IF([pkg-config --exists $tk_haiku_pkgs], [
+	AC_MSG_RESULT([yes])
+    ], [
+	AC_MSG_RESULT([no])
+	AC_MSG_ERROR([--enable-haiku requires the development files of:
+    $tk_haiku_pkgs])
+    ])
+    HAIKU_CFLAGS="`pkg-config --cflags $tk_haiku_pkgs`"
+    HAIKU_LIBS="`pkg-config --libs $tk_haiku_pkgs` -lbe -lgame -lstdc++ -lm"
+    AC_CHECK_PROGS(HAIKU_CXX, [g++ c++ clang++], no)
+    AS_IF([test "$HAIKU_CXX" = no], [
+	AC_MSG_ERROR([--enable-haiku requires a C++ compiler])
+    ])
+], [test $tk_android = yes], [
     AC_DEFINE(TK_USE_ANDROID, 1, [Are we building Tk for Android?])
     TK_WINDOWINGSYSTEM=ANDROID
     tk_android_pkgs="cairo pixman-1 fontconfig freetype2"
@@ -377,6 +416,9 @@ AC_SUBST(WAYLAND_LIBS)
 AC_SUBST(WAYLAND_PROTOCOLS_DIR)
 AC_SUBST(ANDROID_CFLAGS)
 AC_SUBST(ANDROID_LIBS)
+AC_SUBST(HAIKU_CFLAGS)
+AC_SUBST(HAIKU_LIBS)
+AC_SUBST(HAIKU_CXX)
 
 #--------------------------------------------------------------------
 #	Various manipulations on the search path used at runtime to
@@ -619,7 +661,7 @@ Please install the HarfBuzz development package:
     AC_SUBST(FONTSYSTEM)
 
 ], [test $tk_xemu = yes], [
-    # X server emulation (Wayland, Android): the bidi font code of X11
+    # X server emulation (Wayland, Android, Haiku): the bidi font code of X11
     # (tkUnixBidiFont.c) runs on the Xft emulation of tkXemuXft.c if
     # HarfBuzz is available, otherwise tkXemuFont.c is used.
     enable_xft=no

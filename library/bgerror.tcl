@@ -168,7 +168,7 @@ proc ::tk::dialog::error::bgerror {err {flag 1}} {
     wm iconname $dlg ErrorDialog
     wm protocol $dlg WM_DELETE_WINDOW [namespace code DeleteByProtocol]
 
-    if {$windowingsystem in {x11 wayland android}} {
+    if {$windowingsystem in {x11 wayland android haiku}} {
 	wm attributes $dlg -type dialog
     }
 

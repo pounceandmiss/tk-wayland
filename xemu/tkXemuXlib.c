@@ -2123,6 +2123,7 @@ XBell(
     TCL_UNUSED(int))
 {
     TkXeNextRequest(display);
+    TkXeBell();
     return Success;
 }
 

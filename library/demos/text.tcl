@@ -95,7 +95,7 @@ insertion cursor.  Control-z undoes the last editing action performed,
 and }
 
 switch [tk windowingsystem] {
-    "aqua" - "x11" - "wayland" - "android" {
+    "aqua" - "x11" - "wayland" - "android" - "haiku" {
 	$w.text insert end "Control-Shift-z"
     }
     "win32" {

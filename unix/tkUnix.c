@@ -83,6 +83,9 @@ TkGetDefaultScreenName(
 #if defined(TK_USE_ANDROID)
 	(void)interp;
 	screenName = "android";
+#elif defined(TK_USE_HAIKU)
+	(void)interp;
+	screenName = "haiku";
 #elif defined(TK_USE_WAYLAND)
 	screenName = Tcl_GetVar2(interp, "env", "WAYLAND_DISPLAY",
 		TCL_GLOBAL_ONLY);

@@ -349,7 +349,7 @@ proc ::tk::dialog::file::Create {w class} {
     global tk_library
 
     toplevel $w -class $class
-    if {[tk windowingsystem] in {x11 wayland android}} {
+    if {[tk windowingsystem] in {x11 wayland android haiku}} {
 	wm attributes $w -type dialog
     }
     pack [ttk::frame $w.contents] -expand 1 -fill both

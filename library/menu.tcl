@@ -146,7 +146,7 @@ bind Menu <Enter> {
     set tk::Priv(window) %W
     if {[%W cget -type] eq "tearoff"} {
 	if {"%m" ne "NotifyUngrab"} {
-	    if {[tk windowingsystem] in {x11 wayland android}} {
+	    if {[tk windowingsystem] in {x11 wayland android haiku}} {
 		tk_menuSetFocus %W
 	    }
 	}
@@ -201,7 +201,7 @@ bind Menu <Key> {
 # The following bindings apply to all windows, and are used to
 # implement keyboard menu traversal.
 
-if {[tk windowingsystem] in {x11 wayland android}} {
+if {[tk windowingsystem] in {x11 wayland android haiku}} {
     bind all <Alt-Key> {
 	tk::TraverseToMenu %W %A
     }
@@ -295,7 +295,7 @@ proc ::tk::MbPost {w {x {}} {y {}}} {
     if {$menu eq "" || ![winfo exists $menu]} {
 	return
     }
-    set tearoff [expr {[tk windowingsystem] in {x11 wayland android} \
+    set tearoff [expr {[tk windowingsystem] in {x11 wayland android haiku} \
 	    || [$menu cget -type] eq "tearoff"}]
     if {[string first $w $menu] != 0} {
 	return -code error -errorcode {TK MENUBUTTON POST_NONCHILD} \
@@ -338,7 +338,7 @@ proc ::tk::MbPost {w {x {}} {y {}}} {
     }
 
     set Priv(tearoff) $tearoff
-    if {$tearoff == 0 && [tk windowingsystem] ni {x11 wayland android}} {
+    if {$tearoff == 0 && [tk windowingsystem] ni {x11 wayland android haiku}} {
 	# A native menu is already closed here. [Bug 2128087]
 	MenuUnpost {}
 	return
@@ -448,7 +448,7 @@ proc ::tk::MenuUnpost menu {
 	    }
 	    set Priv(menuBar) {}
 	}
-	if {[tk windowingsystem] ni {x11 wayland android}} {
+	if {[tk windowingsystem] ni {x11 wayland android haiku}} {
 	    set Priv(tearoff) 0
 	}
     }
@@ -508,7 +508,7 @@ proc ::tk::MbButtonUp w {
 
     unset -nocomplain Priv(pressed)
     set menu [$w cget -menu]
-    set tearoff [expr {[tk windowingsystem] in {x11 wayland android} || \
+    set tearoff [expr {[tk windowingsystem] in {x11 wayland android haiku} || \
 	    ($menu ne "" && [winfo exists $menu] && [$menu cget -type] eq "tearoff")}]
     if {($tearoff != 0) && $Priv(postedMb) eq $w \
 	    && $Priv(inMenubutton) eq $w} {
@@ -635,7 +635,7 @@ proc ::tk::MenuButtonDown menu {
 	# Must re-grab even if the grab window hasn't changed, in order
 	# to release the implicit grab from the button press.
 
-	if {[tk windowingsystem] in {x11 wayland android}} {
+	if {[tk windowingsystem] in {x11 wayland android haiku}} {
 	    grab -global $menu
 	}
     }
@@ -1201,7 +1201,7 @@ proc ::tk::TraverseToMenu {w char} {
 	return 0
     }
     if {[winfo class $w] eq "Menu"} {
-	if {[tk windowingsystem] ni {x11 wayland android}} {
+	if {[tk windowingsystem] ni {x11 wayland android haiku}} {
 	    # A native menubar handles the key itself.
 	    return 0
 	}
@@ -1297,7 +1297,7 @@ proc ::tk::MenuFirstEntry menu {
     if {$menu eq ""} {
 	return
     }
-    if {[tk windowingsystem] ni {x11 wayland android}
+    if {[tk windowingsystem] ni {x11 wayland android haiku}
 	    && ![winfo ismapped $menu]} {
 	# A native menu which is already closed.
 	return
@@ -1744,7 +1744,7 @@ proc ::tk_popup {menu x y {entry {}}} {
     if {$Priv(popup) ne "" || $Priv(postedMb) ne ""} {
 	tk::MenuUnpost {}
     }
-    if {$entry eq "" && [tk windowingsystem] in {x11 wayland android}} {
+    if {$entry eq "" && [tk windowingsystem] in {x11 wayland android haiku}} {
 	# Otherwise the menu would be moved over the point to fit on the
 	# screen, and the release of the click which popped it up would
 	# invoke the entry under the pointer.
@@ -1761,7 +1761,7 @@ proc ::tk_popup {menu x y {entry {}}} {
 	}
     }
     tk::PostOverPoint $menu $x $y $entry
-    if {[tk windowingsystem] in {x11 wayland android} && [winfo exists $menu]
+    if {[tk windowingsystem] ni {aqua win32} && [winfo exists $menu]
 	    && [winfo viewable $menu]} {
 	tk::SaveGrabInfo $menu
 	grab -global $menu

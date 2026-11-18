@@ -2,8 +2,8 @@
  * tkXemuInt.h --
  *
  *	Declarations of the X server emulation shared by the ports of Tk to
- *	systems without X (Wayland and Android), which run the X11 code of Tk
- *	on an X server emulated inside the process:
+ *	systems without X (Wayland, Android and Haiku), which run the X11 code
+ *	of Tk on an X server emulated inside the process:
  *
  *	- Every X window is a TkXeWindow in a window tree rooted at an
  *	  emulated root window. The children of the root window (the wrapper
@@ -23,9 +23,9 @@
  *
  *	A port (a backend) shows the backing images of the surfaces, gives
  *	Tk its input as X events, and is the window manager. Its header
- *	(tkWaylandInt.h, tkAndroidInt.h), included at the end of this one,
- *	defines the structures of the surfaces and of the display, with at
- *	least the members which the emulation uses:
+ *	(tkWaylandInt.h, tkAndroidInt.h, tkHaikuInt.h), included at the end
+ *	of this one, defines the structures of the surfaces and of the
+ *	display, with at least the members which the emulation uses:
  *
  *	struct TkXeSurface:
  *	    TkXeWindow *winPtr		The window of the surface.
@@ -300,9 +300,10 @@ MODULE_SCOPE void	TkXeAddDamage(TkXeSurface *surfPtr,
 MODULE_SCOPE bool	TkXeIntegralScale(TkXeSurface *surfPtr);
 MODULE_SCOPE void	TkXeFlush(void);
 
-/* Input. */
+/* Input, and the bell. */
 MODULE_SCOPE Time	TkXeCurrentTime(void);
 MODULE_SCOPE void	TkXeUpdateCursor(void);
+MODULE_SCOPE void	TkXeBell(void);
 
 /* The window manager. */
 MODULE_SCOPE void	TkXeWmMapSurface(TkXeSurface *surfPtr);
@@ -318,6 +319,8 @@ MODULE_SCOPE void	TkXeWmActivate(TkXeSurface *surfPtr);
 
 #if defined(TK_USE_ANDROID)
 #include "tkAndroidInt.h"
+#elif defined(TK_USE_HAIKU)
+#include "tkHaikuInt.h"
 #elif defined(TK_USE_WAYLAND)
 #include "tkWaylandInt.h"
 #endif

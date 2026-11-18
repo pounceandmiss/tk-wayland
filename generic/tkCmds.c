@@ -1412,6 +1412,8 @@ WindowingsystemCmd(
     windowingsystem = "aqua";
 #elif defined(TK_USE_ANDROID)
     windowingsystem = "android";
+#elif defined(TK_USE_HAIKU)
+    windowingsystem = "haiku";
 #elif defined(TK_USE_WAYLAND)
     windowingsystem = "wayland";
 #else

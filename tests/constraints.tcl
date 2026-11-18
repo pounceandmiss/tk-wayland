@@ -30,14 +30,28 @@ testConstraint aquaOrWin32 [expr {
 }]
 testConstraint haveDISPLAY [expr {[info exists env(DISPLAY)] && [testConstraint x11]}]
 
-# The X server emulation of the Wayland and Android ports serves only the
-# process: other processes cannot reach its windows (send, embedding) or take
-# the keyboard focus from it. The pointer cannot be warped, there is a single
-# colormap, and the compositor places the toplevels.
-foreach c {otherProcesses pointerWarp multipleColormaps placedToplevels} {
+# The X server emulation of the Wayland, Android and Haiku ports serves only
+# the process: other processes cannot reach its windows (send, embedding) or
+# take the keyboard focus from it, and there is a single colormap. On Wayland
+# and Android, the pointer cannot be warped, and the compositor places the
+# toplevels.
+foreach c {otherProcesses multipleColormaps} {
+    testConstraint $c [expr {[tk windowingsystem] ni {wayland android haiku}}]
+}
+foreach c {pointerWarp placedToplevels} {
     testConstraint $c [expr {[tk windowingsystem] ni {wayland android}}]
 }
 unset c
+# A directory can be made unreadable (not for root, as on Haiku, whose user
+# is root).
+testConstraint unreadableDirectories [apply {{} {
+    set dir [makeDirectory unreadableProbe]
+    catch {file attributes $dir -permissions 0300}
+    set result [expr {![file readable $dir]}]
+    catch {file attributes $dir -permissions 0700}
+    removeDirectory unreadableProbe
+    return $result
+}}]
 # Another process of the interpreter can be started (not on Android).
 testConstraint childProcesses [file executable [interpreter]]
 # Toplevels take the size and position they ask for (on Android, those which
@@ -190,9 +204,10 @@ if {![string match {{22 3 6 15} {31 18 [34] 15}} $x]} {
 
 testConstraint withXft [expr {[tk::build-info x11] && ![tk::build-info no-xft]}]
 # Text drawn with a stipple shows only the pixels of the stipple (Xft, and the
-# Xft emulation of Wayland and Android, ignore the stipple: bug 220796).
+# Xft emulation of Wayland, Android and Haiku, ignore the stipple: bug
+# 220796).
 testConstraint stippledText [expr {
-    ![testConstraint withXft] && [tk windowingsystem] ni {wayland android}
+    ![testConstraint withXft] && [tk windowingsystem] ni {wayland android haiku}
 }]
 
 # Expected results of some tests on Linux rely on availability of the "times"

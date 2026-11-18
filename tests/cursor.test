@@ -48,7 +48,7 @@ switch [tk windowingsystem] {
 	testConstraint cursorFile 1
 	testConstraint cursorAnim 1
     }
-    wayland - android {
+    wayland - android - haiku {
 	set cursorFile {}
 	set cursorAnimFile {}
 	testConstraint cursorFile 0

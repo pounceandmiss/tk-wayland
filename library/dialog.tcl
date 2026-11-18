@@ -71,13 +71,13 @@ proc ::tk_dialog {w title text bitmap default args} {
 	wm transient $w [winfo toplevel [winfo parent $w]]
     }
 
-    if {$windowingsystem in {x11 wayland android}} {
+    if {$windowingsystem in {x11 wayland android haiku}} {
 	wm attributes $w -type dialog
     }
 
     frame $w.bot
     frame $w.top
-    if {$windowingsystem in {x11 wayland android}} {
+    if {$windowingsystem in {x11 wayland android haiku}} {
 	$w.bot configure -relief raised -bd 1
 	$w.top configure -relief raised -bd 1
     }

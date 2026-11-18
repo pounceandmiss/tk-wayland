@@ -4,7 +4,8 @@
  *	The window part of the X server emulation: the window tree, the
  *	visible regions of windows and Expose events. The surfaces of the
  *	children of the root window, which present the images Tk draws into,
- *	are given by the port (tkWaylandSurface.c, tkAndroidSurface.c).
+ *	are given by the port (tkWaylandSurface.c, tkAndroidSurface.c,
+ *	tkHaikuSurface.c).
  *
  * Copyright © 2026 The Tk developers.
  *

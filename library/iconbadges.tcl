@@ -193,7 +193,7 @@ image create photo ::tk::icons::!-badge -data {
 }
 
 
-if {[tk windowingsystem] in {x11 wayland android}} {
+if {[tk windowingsystem] in {x11 wayland android haiku}} {
 
     # ::tk::icons::IconBadge --
     # This procedure creates an icon with an overlay badge on systems that

@@ -696,12 +696,15 @@ XFT_LIBS
 XFT_CFLAGS
 HB_LIBS
 HB_CFLAGS
+HAIKU_LIBS
+HAIKU_CFLAGS
 ANDROID_LIBS
 ANDROID_CFLAGS
 WAYLAND_PROTOCOLS_DIR
 WAYLAND_LIBS
 WAYLAND_CFLAGS
 WAYLAND_SCANNER
+HAIKU_CXX
 XMKMF
 LDFLAGS_DEFAULT
 CFLAGS_DEFAULT
@@ -818,6 +821,7 @@ enable_symbols
 enable_aqua
 enable_wayland
 enable_android
+enable_haiku
 with_x
 enable_xft
 enable_bidi
@@ -1492,6 +1496,8 @@ Optional Features:
   --enable-wayland        use Wayland windowingsystem instead of X11 (default:
                           no)
   --enable-android        build for Android, with the NDK (default: no)
+  --enable-haiku          use the Haiku windowingsystem instead of X11
+                          (default: no)
   --enable-xft            use freetype/fontconfig/xft for antialiased fonts
                           (default: yes)
   --enable-bidi           enable bidirectional/RTL text support using
@@ -8271,8 +8277,39 @@ then :
 fi
 
 fi
+#--------------------------------------------------------------------
+#	The Haiku port runs on the X server emulation as well, with a
+#	BWindow for every toplevel.
+#--------------------------------------------------------------------
+
+tk_haiku=no
+if test $tk_aqua = no
+then :
+
+    { printf '%s\n' "$as_me:${as_lineno-$LINENO}: checking whether to build for Haiku" >&5
+printf %s "checking whether to build for Haiku... " >&6; }
+    # Check whether --enable-haiku was given.
+if test ${enable_haiku+y}
+then :
+  enableval=$enable_haiku; tk_haiku=$enableval
+else case e in #(
+  e) tk_haiku=no ;;
+esac
+fi
+
+    { printf '%s\n' "$as_me:${as_lineno-$LINENO}: result: $tk_haiku" >&5
+printf '%s\n' "$tk_haiku" >&6; }
+    if test $tk_haiku = yes
+then :
+
+	tk_wayland=no
+	tk_android=no
+
+fi
+
+fi
 tk_xemu=no
-if test $tk_wayland = yes -o $tk_android = yes
+if test $tk_wayland = yes -o $tk_android = yes -o $tk_haiku = yes
 then :
 
     tk_xemu=yes
@@ -8695,7 +8732,7 @@ esac
 fi
 
 #--------------------------------------------------------------------
-#	The ports on the X server emulation (Wayland and Android), like the
+#	The ports on the X server emulation (Wayland, Android, Haiku), like the
 #	Aqua and Windows ports, implement the part of Xlib that Tk uses, with
 #	the X11 headers in ../xlib.
 #--------------------------------------------------------------------
@@ -8705,6 +8742,9 @@ WAYLAND_LIBS=""
 WAYLAND_PROTOCOLS_DIR=""
 ANDROID_CFLAGS=""
 ANDROID_LIBS=""
+HAIKU_CFLAGS=""
+HAIKU_LIBS=""
+HAIKU_CXX=""
 if test $tk_xemu = yes
 then :
 
@@ -8713,7 +8753,90 @@ printf '%s\n' "#define TK_USE_XEMU 1" >>confdefs.h
 
 
 fi
-if test $tk_android = yes
+if test $tk_haiku = yes
+then :
+
+
+printf '%s\n' "#define TK_USE_HAIKU 1" >>confdefs.h
+
+    TK_WINDOWINGSYSTEM=HAIKU
+    tk_haiku_pkgs="cairo pixman-1 fontconfig freetype2"
+    { printf '%s\n' "$as_me:${as_lineno-$LINENO}: checking for $tk_haiku_pkgs" >&5
+printf %s "checking for $tk_haiku_pkgs... " >&6; }
+    if pkg-config --exists $tk_haiku_pkgs
+then :
+
+	{ printf '%s\n' "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+printf '%s\n' "yes" >&6; }
+
+else case e in #(
+  e)
+	{ printf '%s\n' "$as_me:${as_lineno-$LINENO}: result: no" >&5
+printf '%s\n' "no" >&6; }
+	as_fn_error $? "--enable-haiku requires the development files of:
+    $tk_haiku_pkgs" "$LINENO" 5
+     ;;
+esac
+fi
+    HAIKU_CFLAGS="`pkg-config --cflags $tk_haiku_pkgs`"
+    HAIKU_LIBS="`pkg-config --libs $tk_haiku_pkgs` -lbe -lgame -lstdc++ -lm"
+    for ac_prog in g++ c++ clang++
+do
+  # Extract the first word of "$ac_prog", so it can be a program name with args.
+set dummy $ac_prog; ac_word=$2
+{ printf '%s\n' "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
+printf %s "checking for $ac_word... " >&6; }
+if test ${ac_cv_prog_HAIKU_CXX+y}
+then :
+  printf %s "(cached) " >&6
+else case e in #(
+  e) if test -n "$HAIKU_CXX"; then
+  ac_cv_prog_HAIKU_CXX="$HAIKU_CXX" # Let the user override the test.
+else
+as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+for as_dir in $PATH
+do
+  IFS=$as_save_IFS
+  case $as_dir in #(((
+    '') as_dir=./ ;;
+    */) ;;
+    *) as_dir=$as_dir/ ;;
+  esac
+    for ac_exec_ext in '' $ac_executable_extensions; do
+  if as_fn_executable_p "$as_dir$ac_word$ac_exec_ext"; then
+    ac_cv_prog_HAIKU_CXX="$ac_prog"
+    printf '%s\n' "$as_me:${as_lineno-$LINENO}: found $as_dir$ac_word$ac_exec_ext" >&5
+    break 2
+  fi
+done
+  done
+IFS=$as_save_IFS
+
+fi ;;
+esac
+fi
+HAIKU_CXX=$ac_cv_prog_HAIKU_CXX
+if test -n "$HAIKU_CXX"; then
+  { printf '%s\n' "$as_me:${as_lineno-$LINENO}: result: $HAIKU_CXX" >&5
+printf '%s\n' "$HAIKU_CXX" >&6; }
+else
+  { printf '%s\n' "$as_me:${as_lineno-$LINENO}: result: no" >&5
+printf '%s\n' "no" >&6; }
+fi
+
+
+  test -n "$HAIKU_CXX" && break
+done
+test -n "$HAIKU_CXX" || HAIKU_CXX="no"
+
+    if test "$HAIKU_CXX" = no
+then :
+
+	as_fn_error $? "--enable-haiku requires a C++ compiler" "$LINENO" 5
+
+fi
+
+elif test $tk_android = yes
 then :
 
 
@@ -8825,6 +8948,9 @@ then :
 fi
 
 fi
+
+
+
 
 
 
@@ -9570,7 +9696,7 @@ fi
 elif test $tk_xemu = yes
 then :
 
-    # X server emulation (Wayland, Android): the bidi font code of X11
+    # X server emulation (Wayland, Android, Haiku): the bidi font code of X11
     # (tkUnixBidiFont.c) runs on the Xft emulation of tkXemuXft.c if
     # HarfBuzz is available, otherwise tkXemuFont.c is used.
     enable_xft=no

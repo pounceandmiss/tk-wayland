@@ -180,7 +180,7 @@ namespace eval ttk::theme::default {
 	}
     }
 
-    if {[tk windowingsystem] in {x11 wayland android}} {
+    if {[tk windowingsystem] in {x11 wayland android haiku}} {
 	seedColors
     }
 

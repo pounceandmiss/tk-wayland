@@ -402,6 +402,8 @@ typedef struct WaitRestrictInfo {
 
 static bool		ComputeReparentGeometry(WmInfo *wmPtr);
 static void		ComputeUnparentedGeometry(WmInfo *wmPtr);
+static bool		InDecorationsAbove(TkDisplay *dispPtr, Window root,
+			    Window child, int x, int y);
 static bool		GetFrameExtents(WmInfo *wmPtr, int *leftPtr,
 			    int *rightPtr, int *topPtr, int *bottomPtr);
 static bool		GetWorkArea(WmInfo *wmPtr, int *xPtr, int *yPtr,
@@ -6861,6 +6863,76 @@ Tk_GetRootCoords(
  *----------------------------------------------------------------------
  */
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * InDecorationsAbove --
+ *
+ *	Whether a point of the root window is in the decorations of one of
+ *	our toplevels which is stacked above a child of the root window (or
+ *	above all of them if the child is None), drawn by a window manager
+ *	which does not reparent the toplevel and reports them in
+ *	_NET_FRAME_EXTENTS. Such decorations are not windows, but they cover
+ *	what is below them, as the windows of the decorations of reparenting
+ *	window managers do.
+ *
+ * Results:
+ *	True if the point is in such decorations.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static bool
+InDecorationsAbove(
+    TkDisplay *dispPtr,		/* The display. */
+    Window root,		/* Its root window. */
+    Window child,		/* The child of the root window at the point,
+				 * or None. */
+    int x, int y)		/* The point, in root coordinates. */
+{
+    Window rootReturn, parentReturn, *children = NULL;
+    unsigned int numChildren, i;
+    bool result = false;
+
+    if (!XQueryTree(dispPtr->display, root, &rootReturn, &parentReturn,
+	    &children, &numChildren)) {
+	return false;
+    }
+    for (i = numChildren; !result && i-- > 0 && children[i] != child; ) {
+	WmInfo *wmPtr;
+
+	for (wmPtr = (WmInfo *) dispPtr->firstWmPtr; wmPtr != NULL;
+		wmPtr = wmPtr->nextPtr) {
+	    TkWindow *wrapperPtr = wmPtr->wrapperPtr;
+	    XWindowChanges *changesPtr;
+	    int left, right, top, bottom;
+
+	    if (wrapperPtr == NULL || wrapperPtr->window != children[i]) {
+		continue;
+	    }
+	    changesPtr = &wrapperPtr->changes;
+	    if (wmPtr->reparent == None && (wmPtr->winPtr->flags & TK_MAPPED)
+		    && GetFrameExtents(wmPtr, &left, &right, &top, &bottom)
+		    && x >= changesPtr->x - left
+		    && x < changesPtr->x + changesPtr->width
+			    + 2 * changesPtr->border_width + right
+		    && y >= changesPtr->y - top
+		    && y < changesPtr->y + changesPtr->height
+			    + 2 * changesPtr->border_width + bottom) {
+		result = true;
+	    }
+	    break;
+	}
+    }
+    if (children != NULL) {
+	XFree(children);
+    }
+    return result;
+}
+
 static int PointInWindow(
     int x,
     int y,
@@ -6934,6 +7006,11 @@ Tk_CoordsToWindow(
 	     * deleted
 	     */
 
+	    Tk_DeleteErrorHandler(handler);
+	    return NULL;
+	}
+	if (window == RootWindowOfScreen(Tk_Screen(tkwin))
+		&& InDecorationsAbove(dispPtr, window, child, childX, childY)) {
 	    Tk_DeleteErrorHandler(handler);
 	    return NULL;
 	}

@@ -79,7 +79,7 @@ proc waitForWm {w cond} {
     update
 }
 proc zoomWindow {w zoomed} {
-    if {[tk windowingsystem] in {x11 wayland android}} {
+    if {[tk windowingsystem] in {x11 wayland android haiku}} {
 	wm attributes $w -zoomed $zoomed
 	waitForWm $w {[wm attributes $w -zoomed] == $zoomed}
     } else {
@@ -1503,7 +1503,7 @@ test wm-maxsize-2.7 {the default max size fits in the work area - bug 3598564fff
     toplevel .t
     update
     zoomWindow .t 1
-    if {[tk windowingsystem] in {x11 wayland android}} {
+    if {[tk windowingsystem] in {x11 wayland android haiku}} {
 	set zoomed [wm attributes .t -zoomed]
 	# At a fractional scale KWin can make a zoomed window a pixel smaller
 	# than the work area it reports.

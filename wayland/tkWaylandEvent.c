@@ -2551,6 +2551,28 @@ TkXeCurrentTime(void)
 /*
  *----------------------------------------------------------------------
  *
+ * TkXeBell --
+ *
+ *	Ring the bell. Wayland clients have none (xdg-system-bell is not
+ *	used yet).
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
+void
+TkXeBell(void)
+{
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
  * Keysyms --
  *
  *----------------------------------------------------------------------
@@ -2988,7 +3010,9 @@ TkpGetCapture(void)
  * XQueryPointer --
  *
  *	The position of the pointer, in root coordinates and in a window, and
- *	the state of the modifiers and buttons.
+ *	the state of the modifiers and buttons. Any of the
+ *	pointers may be NULL: Tk passes NULL for what it does not need, as on
+ *	Aqua and Windows.
  *
  * Results:
  *	True if the pointer is on a surface of the application, else False
@@ -3012,21 +3036,37 @@ XQueryPointer(
 {
     TkXeSurface *surfPtr = tkXeDisplay->pointerSurface;
     int rootX = 0, rootY = 0, x, y;
+    Window child = None;
 
     TkXeNextRequest(display);
     if (surfPtr) {
 	SurfaceToRoot(surfPtr, (int)floor(tkXeDisplay->pointerX),
 		(int)floor(tkXeDisplay->pointerY), &rootX, &rootY);
     }
-    *rootPtr = RootWindow(display, 0);
-    *childPtr = None;
-    *rootXPtr = rootX;
-    *rootYPtr = rootY;
-    XTranslateCoordinates(display, *rootPtr, w, rootX, rootY, &x, &y,
-	    childPtr);
-    *winXPtr = x;
-    *winYPtr = y;
-    *maskPtr = CurrentState();
+    if (rootPtr) {
+	*rootPtr = RootWindow(display, 0);
+    }
+    if (rootXPtr) {
+	*rootXPtr = rootX;
+    }
+    if (rootYPtr) {
+	*rootYPtr = rootY;
+    }
+    XTranslateCoordinates(display, RootWindow(display, 0),
+	    (w != None) ? w : RootWindow(display, 0), rootX, rootY, &x, &y,
+	    &child);
+    if (childPtr) {
+	*childPtr = child;
+    }
+    if (winXPtr) {
+	*winXPtr = x;
+    }
+    if (winYPtr) {
+	*winYPtr = y;
+    }
+    if (maskPtr) {
+	*maskPtr = CurrentState();
+    }
     return surfPtr != NULL;
 }
 

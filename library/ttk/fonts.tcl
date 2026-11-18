@@ -114,7 +114,7 @@ switch -- [tk windowingsystem] {
 	font configure TkSmallCaptionFont -family $family -size $labelsize
     }
     default -
-    x11 - wayland - android {
+    x11 - wayland - android - haiku {
 	if {![catch {tk::pkgconfig get fontsystem} fs]
 		&& $fs in {xft fontconfig}} {
 	    set family "sans-serif"
