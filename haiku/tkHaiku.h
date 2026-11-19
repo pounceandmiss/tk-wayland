@@ -56,6 +56,8 @@ typedef enum {
     TKHAIKU_SCREEN,		/* The screen changed. */
     TKHAIKU_CLIPBOARD,		/* The system clipboard changed. */
     TKHAIKU_KEYMAP,		/* The user chose another keymap. */
+    TKHAIKU_SCRIPT,		/* A scripting request for the widgets
+				 * of Tk (see TkHaikuGetScript). */
     TKHAIKU_QUIT		/* The user asked the application to quit
 				 * (from the Deskbar). */
 } TkHaikuEventType;
@@ -126,6 +128,8 @@ typedef struct TkHaikuEvent {
 	    char bytes[8];	/* The characters typed, in UTF-8. */
 	} key;			/* TKHAIKU_KEY. */
 	uint32_t modifiers;	/* TKHAIKU_MODIFIERS: the new modifiers. */
+	void *script;		/* TKHAIKU_SCRIPT: the request, to be
+				 * answered with TkHaikuScriptReply. */
 	bool active;		/* TKHAIKU_ACTIVATED. */
 	bool minimized;		/* TKHAIKU_MINIMIZED. */
 	struct {
@@ -167,6 +171,24 @@ typedef struct TkHaikuEvent {
 					 * applications (topmost). */
 
 typedef struct TkHaikuWindow TkHaikuWindow;
+
+/*
+ * A scripting request of Haiku (as hey sends them) for the property
+ * "Widget" of the application or of a window (the window of the event), as
+ * TkHaikuGetScript reads it. The strings are freed by TkHaikuScriptReply.
+ */
+
+typedef struct TkHaikuScript {
+    const char *verb;		/* "get", "set", "do" or "count". */
+    char *property;		/* The property of the widget (Text, ...),
+				 * or "" for do and count. */
+    const char *form;		/* How the widget is given: "name",
+				 * "index", "reverse" (an index from the
+				 * end, 1 for the last), or "" for
+				 * count. */
+    char *widget;		/* Its name or index. */
+    char *value;		/* The value to set, or "". */
+} TkHaikuScript;
 
 /*
  * The name of the view of a window, from its X window (see TkView).
@@ -243,6 +265,11 @@ extern uint32_t		TkHaikuClipboardCount(void);
 extern int		TkHaikuKeymapChars(int key, uint32_t modifiers,
 			    char *buffer, int size);
 extern void		TkHaikuModifierKeys(int keys[8]);
+extern bool		TkHaikuGetScript(void *request,
+			    TkHaikuScript *scriptPtr);
+extern void		TkHaikuScriptReply(void *request,
+			    TkHaikuScript *scriptPtr, const char *error,
+			    const char *type, const char *value);
 extern void		TkHaikuKeymapChanged(void);
 
 #ifdef __cplusplus

@@ -96,6 +96,57 @@ namespace eval ::tk::test::haiku {
 	exec clipboard -p
     }
 
+    # Send a scripting request to this application with hey, and return
+    # what hey prints (with -o, the result only), or raise an error with it
+    # if the request fails. Tk answers the requests for its widgets, so hey
+    # runs while the event loop does.
+    proc hey {args} {
+	variable heyDone
+	variable heyOutput
+	set options {-o}
+	if {[lindex $args 0] eq "-message"} {
+	    set options {}
+	    set args [lrange $args 1 end]
+	}
+	set f [open |[list hey {*}$options [pid] {*}$args 2>@1] r]
+	fconfigure $f -blocking 0
+	set heyOutput {}
+	set heyDone 0
+	fileevent $f readable [namespace code [list HeyRead $f]]
+	vwait [namespace current]::heyDone
+	fconfigure $f -blocking 1
+	set failed [catch {close $f}]
+	set output [string trim $heyOutput]
+	if {$failed} {
+	    return -code error $output
+	}
+	return $output
+    }
+
+    proc HeyRead {f} {
+	variable heyDone
+	variable heyOutput
+	append heyOutput [read $f]
+	if {[eof $f]} {
+	    set heyDone 1
+	}
+    }
+
+    # A small form of widgets.
+    proc makeForm {} {
+	makeToplevel .t 300x220+300+300
+	label .t.l -text User
+	entry .t.e
+	checkbutton .t.c -text Remember -variable ::remember
+	ttk::scale .t.s -from 0 -to 10
+	button .t.b -text OK -command {incr ::pressed}
+	button .t.d -text Disabled -state disabled
+	pack .t.l .t.e .t.c .t.s .t.b .t.d
+	set ::pressed 0
+	set ::remember 0
+	waitShown .t
+    }
+
 test haiku-1.1 {the windowing system} -constraints haiku -body {
     tk windowingsystem
 } -result haiku
@@ -363,6 +414,142 @@ test haiku-6.2 {hey presses a button} -constraints {
     destroy .t
     unset -nocomplain ::pressed view where what buttons
 } -result 1
+
+# The widgets of Tk for the scripting of Haiku
+
+test haiku-8.1 {the suites of the scripting of Tk} -constraints {
+    haiku hey
+} -setup {
+    makeToplevel .t
+} -body {
+    set window [hey -message getsuites of Window [heyName [wm title .t]]]
+    set widget [hey -message getsuites of Widget .t of Window \
+	    [heyName [wm title .t]]]
+    list [string match *suite/x-vnd.tcl-tk-widgets* $window] \
+	    [string match *suite/x-vnd.tcl-tk-widget\"* $widget] \
+	    [regexp {Text +B_GET_PROPERTY B_SET_PROPERTY} $widget]
+} -cleanup {
+    destroy .t
+    unset -nocomplain window widget
+} -result {1 1 1}
+
+test haiku-8.2 {count, and widgets by index} -constraints {
+    haiku hey
+} -setup {
+    makeForm
+} -body {
+    set window [heyName [wm title .t]]
+    list [hey count Widget of Window $window] \
+	    [hey get Path of Widget 2 of Window $window] \
+	    [hey get Path of Widget -1 of Window $window] \
+	    [hey get Class of Widget 0 of Window $window]
+} -cleanup {
+    destroy .t
+    unset -nocomplain window
+} -result {7 .t.e .t.d Toplevel}
+
+test haiku-8.3 {the application has the widgets of all its windows} \
+	-constraints {haiku hey} -setup {
+    makeForm
+} -body {
+    list [hey get Class of Widget .t.e] \
+	    [expr {[hey count Widget] >= 7}]
+} -cleanup {
+    destroy .t
+} -result {Entry 1}
+
+test haiku-8.4 {Text of an entry and of a text widget} -constraints {
+    haiku hey
+} -setup {
+    makeForm
+    pack [text .t.x -height 2]
+    update
+} -body {
+    hey set Text of Widget .t.e to "from hey"
+    hey set Text of Widget .t.x to "two\nlines"
+    list [.t.e get] [hey get Text of Widget .t.e] \
+	    [hey get Text of Widget .t.x]
+} -cleanup {
+    destroy .t
+} -result {{from hey} {from hey} {two
+lines}}
+
+test haiku-8.5 {Value of a check button and a scale, by label} -constraints {
+    haiku hey
+} -setup {
+    makeForm
+} -body {
+    hey set Value of Widget Remember to true
+    set result [list $::remember [hey get Value of Widget Remember]]
+    hey set Value of Widget .t.s to 7.5
+    lappend result [.t.s get] [hey get Value of Widget .t.s]
+    pack [ttk::checkbutton .t.tc -text Ttk -variable ::ttk]
+    update
+    hey set Value of Widget Ttk to true
+    lappend result $::ttk [hey get Value of Widget Ttk]
+    hey set Value of Widget Ttk to false
+    lappend result $::ttk [hey get Value of Widget Ttk]
+} -cleanup {
+    destroy .t
+    unset -nocomplain result ::remember ::ttk
+} -result {1 1 7.5 7.500000 1 1 0 0}
+
+test haiku-8.6 {do Widget invokes a button} -constraints {
+    haiku hey
+} -setup {
+    makeForm
+} -body {
+    hey do Widget OK of Window [heyName [wm title .t]]
+    hey do Widget .t.b
+    list $::pressed [catch {hey do Widget Disabled} msg] $msg
+} -cleanup {
+    destroy .t
+    unset -nocomplain ::pressed msg
+} -match glob -result {2 1 {*.t.d is disabled*}}
+
+test haiku-8.7 {Enabled and Focus} -constraints {
+    haiku hey
+} -setup {
+    makeForm
+} -body {
+    hey set Enabled of Widget OK to false
+    set result [list [.t.b cget -state] [hey get Enabled of Widget OK]]
+    hey set Focus of Widget .t.e to true
+    lappend result [focus] [hey get Focus of Widget .t.e]
+} -cleanup {
+    destroy .t
+    unset -nocomplain result
+} -result {disabled false .t.e true}
+
+test haiku-8.8 {Frame of a widget, on the screen} -constraints {
+    haiku hey
+} -setup {
+    makeForm
+} -body {
+    regexp {BRect\(([-0-9.]+), ([-0-9.]+), ([-0-9.]+), ([-0-9.]+)\)} \
+	    [hey -message get Frame of Widget .t.b] -> l t r b
+    expr {int($l) == [winfo rootx .t.b] && int($t) == [winfo rooty .t.b]
+	    && int($r) == [winfo rootx .t.b] + [winfo width .t.b] - 1
+	    && int($b) == [winfo rooty .t.b] + [winfo height .t.b] - 1}
+} -cleanup {
+    destroy .t
+    unset -nocomplain l t r b
+} -result 1
+
+test haiku-8.9 {errors} -constraints {
+    haiku hey
+} -setup {
+    makeForm
+} -body {
+    list [catch {hey get Text of Widget nothing} msg] $msg \
+	    [catch {hey get Text of Widget OK} msg] $msg \
+	    [catch {hey get Color of Widget OK} msg] $msg \
+	    [catch {hey set Path of Widget OK to x} msg] $msg
+} -cleanup {
+    destroy .t
+    unset -nocomplain msg
+} -match glob -result {1 {no widget "nothing"*} 1 {Button has no Text*}\
+    1 {unknown property "Color"*} 1 {Path cannot be set*}}
 
 # Fonts
 

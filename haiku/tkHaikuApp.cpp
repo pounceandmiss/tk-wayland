@@ -27,6 +27,7 @@
 #include <Font.h>
 #include <Input.h>
 #include <InterfaceDefs.h>
+#include <PropertyInfo.h>
 #include <Screen.h>
 #include <String.h>
 #include <View.h>
@@ -90,6 +91,124 @@ public:
 /*
  *----------------------------------------------------------------------
  *
+ * ScriptHandler --
+ *
+ *	The widgets of Tk for the scripting of Haiku: the property "Widget" of
+ *	the application and of the windows resolves to a handler, which posts
+ *	the requests to Tk (the window or application thread never waits for
+ *	Tk). Tk answers them (tkHaikuScript.c, library/haiku.tcl) with
+ *	TkHaikuScriptReply.
+ *
+ *----------------------------------------------------------------------
+ */
+
+#define TKHAIKU_WIDGETS_SUITE	"suite/x-vnd.tcl-tk-widgets"
+#define TKHAIKU_WIDGET_SUITE	"suite/x-vnd.tcl-tk-widget"
+
+/*
+ * The property "Widget" of the application and of the windows, and the
+ * properties of a widget.
+ */
+
+static property_info widgetsProperties[] = {
+    {"Widget", {B_COUNT_PROPERTIES, 0}, {B_DIRECT_SPECIFIER, 0},
+	"Returns the number of widgets of Tk.", 0, {B_INT32_TYPE}},
+    {"Widget", {B_EXECUTE_PROPERTY, 0},
+	{B_NAME_SPECIFIER, B_INDEX_SPECIFIER, B_REVERSE_INDEX_SPECIFIER, 0},
+	"Invokes a button, by its path name, label or index.", 0, {}},
+    {"Widget", {}, {B_NAME_SPECIFIER, B_INDEX_SPECIFIER,
+	B_REVERSE_INDEX_SPECIFIER, 0},
+	"Directs the scripting message to a widget of Tk.", 0, {}},
+    {0}
+};
+
+static property_info widgetProperties[] = {
+    {"Path", {B_GET_PROPERTY, 0}, {B_DIRECT_SPECIFIER, 0},
+	"The path name of the widget.", 0, {B_STRING_TYPE}},
+    {"Class", {B_GET_PROPERTY, 0}, {B_DIRECT_SPECIFIER, 0},
+	"The class of the widget.", 0, {B_STRING_TYPE}},
+    {"Label", {B_GET_PROPERTY, 0}, {B_DIRECT_SPECIFIER, 0},
+	"The text of a button or label.", 0, {B_STRING_TYPE}},
+    {"Text", {B_GET_PROPERTY, B_SET_PROPERTY, 0}, {B_DIRECT_SPECIFIER, 0},
+	"The text of an entry or text widget.", 0, {B_STRING_TYPE}},
+    {"Value", {B_GET_PROPERTY, B_SET_PROPERTY, 0}, {B_DIRECT_SPECIFIER, 0},
+	"The value of a check or radio button, scale or spinbox.", 0,
+	{B_INT32_TYPE, B_FLOAT_TYPE}},
+    {"Enabled", {B_GET_PROPERTY, B_SET_PROPERTY, 0},
+	{B_DIRECT_SPECIFIER, 0}, "Whether the widget is enabled.", 0,
+	{B_BOOL_TYPE}},
+    {"Focus", {B_GET_PROPERTY, B_SET_PROPERTY, 0}, {B_DIRECT_SPECIFIER, 0},
+	"Whether the widget has the focus.", 0, {B_BOOL_TYPE}},
+    {"Frame", {B_GET_PROPERTY, 0}, {B_DIRECT_SPECIFIER, 0},
+	"The rectangle of the widget on the screen.", 0, {B_RECT_TYPE}},
+    {0}
+};
+
+/*
+ * Whether a scripting request is for the widgets of Tk, and the suites of
+ * the property "Widget", which the application and the windows have, and of
+ * the widgets.
+ */
+
+static bool
+IsWidgetProperty(
+    const char *property)
+{
+    return property && strcmp(property, "Widget") == 0;
+}
+
+static void
+AddWidgetSuite(
+    BMessage *data,
+    bool widget)		/* The properties of a widget, or the
+				 * property "Widget". */
+{
+    BPropertyInfo info(widget ? widgetProperties : widgetsProperties);
+
+    data->AddString("suites", widget ? TKHAIKU_WIDGET_SUITE
+	    : TKHAIKU_WIDGETS_SUITE);
+    data->AddFlat("messages", &info);
+}
+
+class ScriptHandler : public BHandler {
+public:
+    ScriptHandler(unsigned long xid) : BHandler("tk widgets"), fXid(xid) {}
+
+    virtual BHandler *ResolveSpecifier(BMessage *, int32, BMessage *,
+	    int32, const char *) {
+	return this;
+    }
+
+    virtual status_t GetSupportedSuites(BMessage *data) {
+	AddWidgetSuite(data, true);
+	return BHandler::GetSupportedSuites(data);
+    }
+
+    virtual void MessageReceived(BMessage *message) {
+	switch (message->what) {
+	case B_GET_PROPERTY:
+	case B_SET_PROPERTY:
+	case B_EXECUTE_PROPERTY:
+	case B_COUNT_PROPERTIES: {
+	    TkHaikuEvent event;
+
+	    InitEvent(&event, TKHAIKU_SCRIPT, fXid, 0);
+	    event.u.script = Looper()->DetachCurrentMessage();
+	    TkHaikuPostEvent(&event);
+	    return;
+	}
+	}
+	BHandler::MessageReceived(message);
+    }
+
+private:
+    unsigned long fXid;		/* The X window of the window, or 0 for
+				 * the application. */
+};
+
+/*
+ *----------------------------------------------------------------------
+ *
  * TkApp --
  *
  *	The application, when Tk creates it: it runs in a thread of its own,
@@ -102,11 +221,27 @@ public:
 class TkApp : public BApplication {
 public:
     TkApp(const char *signature, status_t *statusPtr)
-	: BApplication(signature, statusPtr) {}
+	: BApplication(signature, statusPtr), fScript(NULL) {}
 
     virtual void ReadyToRun() {
 	(new ClipboardWatcher())->Start();
+	fScript = new ScriptHandler(0);
+	AddHandler(fScript);
 	release_sem(readySem);
+    }
+
+    virtual BHandler *ResolveSpecifier(BMessage *message, int32 index,
+	    BMessage *specifier, int32 what, const char *property) {
+	if (IsWidgetProperty(property) && fScript) {
+	    return fScript;
+	}
+	return BApplication::ResolveSpecifier(message, index, specifier,
+		what, property);
+    }
+
+    virtual status_t GetSupportedSuites(BMessage *data) {
+	AddWidgetSuite(data, false);
+	return BApplication::GetSupportedSuites(data);
     }
 
     virtual void MessageReceived(BMessage *message) {
@@ -127,6 +262,9 @@ public:
 	TkHaikuPostEvent(&event);
 	return false;
     }
+
+private:
+    ScriptHandler *fScript;
 };
 
 /*
@@ -436,6 +574,22 @@ public:
 	fView = new TkView(Bounds(), xid);
 	AddChild(fView);
 	fView->MakeFocus(true);
+	fScript = new ScriptHandler(xid);
+	AddHandler(fScript);
+    }
+
+    virtual BHandler *ResolveSpecifier(BMessage *message, int32 index,
+	    BMessage *specifier, int32 what, const char *property) {
+	if (IsWidgetProperty(property)) {
+	    return fScript;
+	}
+	return BWindow::ResolveSpecifier(message, index, specifier, what,
+		property);
+    }
+
+    virtual status_t GetSupportedSuites(BMessage *data) {
+	AddWidgetSuite(data, false);
+	return BWindow::GetSupportedSuites(data);
     }
 
     virtual bool QuitRequested() {
@@ -588,6 +742,7 @@ private:
 
     unsigned long fXid;
     TkView *fView;
+    ScriptHandler *fScript;
     bool fShown;
     bool fPopup;		/* Override-redirect: always floating. */
     int fLevel;			/* TKHAIKU_NORMAL or TKHAIKU_ABOVE. */
@@ -1261,6 +1416,175 @@ uint32_t
 TkHaikuClipboardCount(void)
 {
     return be_clipboard->SystemCount();
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkHaikuGetScript, TkHaikuScriptReply, ScriptValue --
+ *
+ *	Read a scripting request for the widgets of Tk, and answer it, from
+ *	the thread of Tk.
+ *
+ * Results:
+ *	TkHaikuGetScript returns whether the request is one for Tk, and fills
+ *	in the TkHaikuScript.
+ *
+ * Side effects:
+ *	TkHaikuScriptReply sends the reply (the result, of the type Tk gives:
+ *	bool, int32, float, rect or string; or the error), and deletes the
+ *	request and the strings of the TkHaikuScript.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static char *
+ScriptValue(
+    BMessage *message,
+    const char *name)		/* The field. */
+{
+    type_code type;
+    BString value;
+
+    if (message->GetInfo(name, &type) != B_OK) {
+	return strdup("");
+    }
+    switch (type) {
+    case B_STRING_TYPE:
+	value = message->GetString(name, "");
+	break;
+    case B_BOOL_TYPE:
+	value = message->GetBool(name, false) ? "1" : "0";
+	break;
+    case B_INT8_TYPE:
+	value << (int32)message->GetInt8(name, 0);
+	break;
+    case B_INT16_TYPE:
+	value << (int32)message->GetInt16(name, 0);
+	break;
+    case B_INT32_TYPE:
+	value << message->GetInt32(name, 0);
+	break;
+    case B_INT64_TYPE:
+	value << message->GetInt64(name, 0);
+	break;
+    case B_FLOAT_TYPE:
+	value << message->GetFloat(name, 0);
+	break;
+    case B_DOUBLE_TYPE:
+	value << message->GetDouble(name, 0);
+	break;
+    }
+    return strdup(value.String());
+}
+
+bool
+TkHaikuGetScript(
+    void *request,		/* The request, a BMessage. */
+    TkHaikuScript *scriptPtr)	/* Returns what it asks. */
+{
+    BMessage *message = (BMessage *)request;
+    BMessage specifier;
+    int32 i;
+
+    memset(scriptPtr, 0, sizeof(TkHaikuScript));
+    switch (message->what) {
+    case B_GET_PROPERTY:
+	scriptPtr->verb = "get";
+	break;
+    case B_SET_PROPERTY:
+	scriptPtr->verb = "set";
+	break;
+    case B_EXECUTE_PROPERTY:
+	scriptPtr->verb = "do";
+	break;
+    case B_COUNT_PROPERTIES:
+	scriptPtr->verb = "count";
+	break;
+    default:
+	return false;
+    }
+    scriptPtr->form = "";
+    for (i = 0; message->FindMessage("specifiers", i, &specifier) == B_OK;
+	    i++) {
+	const char *property = specifier.GetString("property", "");
+	BString widget;
+
+	if (!IsWidgetProperty(property)) {
+	    if (strcmp(property, "Window") != 0 && !scriptPtr->property) {
+		scriptPtr->property = strdup(property);
+	    }
+	    continue;
+	}
+	switch (specifier.what) {
+	case B_NAME_SPECIFIER:
+	    scriptPtr->form = "name";
+	    widget = specifier.GetString("name", "");
+	    break;
+	case B_INDEX_SPECIFIER:
+	    scriptPtr->form = "index";
+	    widget << specifier.GetInt32("index", 0);
+	    break;
+	case B_REVERSE_INDEX_SPECIFIER:
+	    scriptPtr->form = "reverse";
+	    widget << specifier.GetInt32("index", 0);
+	    break;
+	}
+	free(scriptPtr->widget);
+	scriptPtr->widget = strdup(widget.String());
+    }
+    if (!scriptPtr->property) {
+	scriptPtr->property = strdup("");
+    }
+    if (!scriptPtr->widget) {
+	scriptPtr->widget = strdup("");
+    }
+    scriptPtr->value = ScriptValue(message, "data");
+    return true;
+}
+
+void
+TkHaikuScriptReply(
+    void *request,		/* The request, a BMessage. */
+    TkHaikuScript *scriptPtr,	/* What TkHaikuGetScript filled in. */
+    const char *error,		/* The error, or NULL. */
+    const char *type,		/* The type of the result, or NULL. */
+    const char *value)		/* The result. */
+{
+    BMessage *message = (BMessage *)request;
+    BMessage reply(error ? (uint32)B_MESSAGE_NOT_UNDERSTOOD
+	    : (uint32)B_REPLY);
+
+    if (error) {
+	reply.AddString("message", error);
+	reply.AddInt32("error", B_BAD_VALUE);
+    } else {
+	if (type == NULL || strcmp(type, "none") == 0) {
+	    /* No result. */
+	} else if (strcmp(type, "bool") == 0) {
+	    reply.AddBool("result", atoi(value) != 0);
+	} else if (strcmp(type, "int32") == 0) {
+	    reply.AddInt32("result", (int32)strtol(value, NULL, 10));
+	} else if (strcmp(type, "float") == 0) {
+	    reply.AddFloat("result", strtof(value, NULL));
+	} else if (strcmp(type, "rect") == 0) {
+	    float l = 0, t = 0, r = 0, b = 0;
+
+	    sscanf(value, "%f %f %f %f", &l, &t, &r, &b);
+	    reply.AddRect("result", BRect(l, t, r, b));
+	} else {
+	    reply.AddString("result", value);
+	}
+	reply.AddInt32("error", B_OK);
+    }
+    message->SendReply(&reply);
+    delete message;
+    if (scriptPtr) {
+	free(scriptPtr->property);
+	free(scriptPtr->widget);
+	free(scriptPtr->value);
+	memset(scriptPtr, 0, sizeof(TkHaikuScript));
+    }
 }
 
 /*

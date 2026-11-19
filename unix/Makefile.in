@@ -513,7 +513,7 @@ HAIKU_OBJS = tkUnix.o tkUnix3d.o tkUnixAccessibility.o tkUnixButton.o \
 	tkUnixPrint.o tkPointer.o xcolors.o xdraw.o xgc.o ximage.o \
 	$(XEMU_OBJS) tkXemuKeysym.o \
 	tkHaikuApp.o tkHaikuCursor.o tkHaikuEvent.o tkHaikuKey.o \
-	tkHaikuSelect.o tkHaikuSurface.o tkHaikuWm.o
+	tkHaikuScript.o tkHaikuSelect.o tkHaikuSurface.o tkHaikuWm.o
 
 OBJS =  $(GENERIC_OBJS) $(WIDG_OBJS) $(CANV_OBJS) $(IMAGE_OBJS) $(TEXT_OBJS) \
 	$(STUB_OBJS) $(TTK_OBJS) \

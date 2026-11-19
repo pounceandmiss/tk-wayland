@@ -284,3 +284,4 @@ set auto_index(::tk::ListBoxKeyAccel_Unset) [list source [file join $dir xmfbox.
 set auto_index(::tk::ListBoxKeyAccel_Key) [list source [file join $dir xmfbox.tcl]]
 set auto_index(::tk::ListBoxKeyAccel_Goto) [list source [file join $dir xmfbox.tcl]]
 set auto_index(::tk::ListBoxKeyAccel_Reset) [list source [file join $dir xmfbox.tcl]]
+set auto_index(::tk::haiku::Script) [list source [file join $dir haiku.tcl]]

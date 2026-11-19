@@ -273,6 +273,9 @@ HandleEvent(
     case TKHAIKU_CLIPBOARD:
 	TkHaikuClipboardChanged();
 	break;
+    case TKHAIKU_SCRIPT:
+	TkHaikuHandleScript(eventPtr);
+	break;
     case TKHAIKU_KEYMAP: {
 	XEvent event;
 

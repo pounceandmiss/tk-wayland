@@ -194,6 +194,9 @@ MODULE_SCOPE void	TkHaikuPointerLeaveSurface(TkXeSurface *surfPtr);
 /* tkHaikuCursor.c */
 MODULE_SCOPE void	TkHaikuForgetCursorWindow(TkHaikuWindow *window);
 
+/* tkHaikuScript.c */
+MODULE_SCOPE void	TkHaikuHandleScript(TkHaikuEvent *eventPtr);
+
 /* tkHaikuSelect.c */
 MODULE_SCOPE void	TkHaikuClipboardChanged(void);
 

@@ -72,15 +72,46 @@ threads:
 - `tkHaikuCursor.c`: the cursors of the X cursor font are shown as the
   system cursors of Haiku closest to them; bitmap cursors as images.
 
-The view of a window is named after its X window, `tk 0x<id>`, so that
-scripting can address it: the messages of the mouse which `hey` sends it
-are input, as from the app_server. For instance, to click at (10, 10) in the
-first window of the application of team 1234:
+## Scripting
 
-    hey 1234 _MDN View 0 of Window 0 with be:view_where="BPoint(10,10)" \
-        and buttons="int32(1)"
-    hey 1234 _MUP View 0 of Window 0 with be:view_where="BPoint(10,10)" \
-        and buttons="int32(0)"
+The widgets of Tk can be scripted as the other applications of Haiku are,
+with `hey` or any program sending scripting messages: the application and
+its windows have the property `Widget` (suite `suite/x-vnd.tcl-tk-widgets`),
+and a widget, named by its path name or its label (or accessible name), or
+by its index in stacking order, has these properties (suite
+`suite/x-vnd.tcl-tk-widget`):
+
+| Property  | Verbs    | Of                                             |
+|-----------|----------|------------------------------------------------|
+| `Path`    | get      | any widget                                     |
+| `Class`   | get      | any widget                                     |
+| `Label`   | get      | buttons, labels                                |
+| `Text`    | get, set | entries, spinboxes, comboboxes, text widgets   |
+| `Value`   | get, set | check, radio buttons (1/0), scales, spinboxes  |
+| `Enabled` | get, set | any widget with a state                        |
+| `Focus`   | get, set | any widget                                     |
+| `Frame`   | get      | any widget (on the screen)                     |
+
+and `do` invokes a button, check or radio button. For instance:
+
+    hey MyApp count Widget
+    hey MyApp get Path of Widget 3
+    hey MyApp set Text of Widget .user to "me"
+    hey MyApp set Value of Widget Remember to true
+    hey MyApp do Widget OK of Window Login
+
+The window thread which gets a request posts it to Tk, which does it
+(`tkHaikuScript.c`, with `::tk::haiku::Script` of `../library/haiku.tcl`)
+and replies, so that a request waits for Tk while the windows do not. A
+script of the application itself must not send requests to it while it
+waits for them (with a blocking `exec hey`): the reply needs its event
+loop.
+
+The view of a window is named after its X window, `tk 0x` and the id in
+hex, and the messages of the mouse which scripting sends it are input, as
+from the app_server: `hey MyApp _MDN View 0 of Window 0 with
+be:view_where="BPoint(10,10)" and buttons="int32(1)"` presses the button at
+(10, 10) of the first window.
 
 Logical pixels have 96 dpi, times the scale of the fonts the user chose
 (Haiku scales its interface with the size of the plain font, 12 by default),
@@ -104,7 +135,8 @@ in the build directory. Behaviour the port cannot have (such as windows
 which the app_server constrains) skips tests through constraints of
 `../tests/constraints.tcl`. `../tests/haiku.test` tests the port itself: the
 window manager, input, input while Tk is busy, the clipboard (with the
-`clipboard` command of Haiku) and scripting (with `hey`). Its input comes
+`clipboard` command of Haiku) and scripting (with `hey`, of the widgets and
+of input). Its input comes
 from the commands of `tkHaikuTest.cpp` in `tktest`, which make it the way
 the user does: the pointer moves through the app_server, and the buttons
 and keys are delivered by the threads of the windows, as messages of the
