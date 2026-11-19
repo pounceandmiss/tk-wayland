@@ -521,6 +521,30 @@ ExposeIdle(
 /*
  *----------------------------------------------------------------------
  *
+ * TkXeTreeGeneration --
+ *
+ *	A number which changes whenever the window tree changes in a way
+ *	which can change what is visible, so that a port can tell whether the
+ *	window under the pointer may have changed.
+ *
+ * Results:
+ *	The generation of the window tree.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
+unsigned long
+TkXeTreeGeneration(void)
+{
+    return clipGeneration;
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
  * TkXeTreeChanged --
  *
  *	Called when the window tree changes in a way which can change what is

@@ -227,6 +227,7 @@ TkXeGetPixmap(
 MODULE_SCOPE TkXeWindow *TkXeCreateRootWindow(Display *display, int width,
 			    int height);
 MODULE_SCOPE void	TkXeTreeChanged(TkXeWindow *winPtr);
+MODULE_SCOPE unsigned long TkXeTreeGeneration(void);
 MODULE_SCOPE TkXeWindow *TkXeTopWindow(TkXeWindow *winPtr);
 MODULE_SCOPE bool	TkXeIsViewable(TkXeWindow *winPtr);
 MODULE_SCOPE void	TkXeWindowOrigin(TkXeWindow *winPtr, int *xPtr,

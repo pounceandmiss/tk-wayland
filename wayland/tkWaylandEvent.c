@@ -3010,9 +3010,9 @@ TkpGetCapture(void)
  * XQueryPointer --
  *
  *	The position of the pointer, in root coordinates and in a window, and
- *	the state of the modifiers and buttons. Any of the
- *	pointers may be NULL: Tk passes NULL for what it does not need, as on
- *	Aqua and Windows.
+ *	the state of the modifiers and buttons. Any of the pointers may be
+ *	NULL: Tk passes NULL for what it does not need, as on Aqua and
+ *	Windows.
  *
  * Results:
  *	True if the pointer is on a surface of the application, else False

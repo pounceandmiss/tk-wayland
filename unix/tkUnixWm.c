@@ -6846,26 +6846,6 @@ Tk_GetRootCoords(
 /*
  *----------------------------------------------------------------------
  *
- * Tk_CoordsToWindow --
- *
- *	Given the (virtual) root coordinates of a point, this function returns
- *	the token for the top-most window covering that point, if there exists
- *	such a window in this application.
- *
- * Results:
- *	The return result is either a token for the window corresponding to
- *	rootX and rootY, or else NULL to indicate that there is no such
- *	window.
- *
- * Side effects:
- *	None.
- *
- *----------------------------------------------------------------------
- */
-
-/*
- *----------------------------------------------------------------------
- *
  * InDecorationsAbove --
  *
  *	Whether a point of the root window is in the decorations of one of
@@ -6896,14 +6876,27 @@ InDecorationsAbove(
     Window rootReturn, parentReturn, *children = NULL;
     unsigned int numChildren, i;
     bool result = false;
+    WmInfo *wmPtr;
 
+    /*
+     * Reparenting window managers, the usual ones on X11, draw windows:
+     * nothing to look for then.
+     */
+
+    for (wmPtr = (WmInfo *) dispPtr->firstWmPtr; wmPtr != NULL;
+	    wmPtr = wmPtr->nextPtr) {
+	if (wmPtr->reparent == None && (wmPtr->winPtr->flags & TK_MAPPED)) {
+	    break;
+	}
+    }
+    if (wmPtr == NULL) {
+	return false;
+    }
     if (!XQueryTree(dispPtr->display, root, &rootReturn, &parentReturn,
 	    &children, &numChildren)) {
 	return false;
     }
     for (i = numChildren; !result && i-- > 0 && children[i] != child; ) {
-	WmInfo *wmPtr;
-
 	for (wmPtr = (WmInfo *) dispPtr->firstWmPtr; wmPtr != NULL;
 		wmPtr = wmPtr->nextPtr) {
 	    TkWindow *wrapperPtr = wmPtr->wrapperPtr;
@@ -6932,6 +6925,26 @@ InDecorationsAbove(
     }
     return result;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Tk_CoordsToWindow --
+ *
+ *	Given the (virtual) root coordinates of a point, this function returns
+ *	the token for the top-most window covering that point, if there exists
+ *	such a window in this application.
+ *
+ * Results:
+ *	The return result is either a token for the window corresponding to
+ *	rootX and rootY, or else NULL to indicate that there is no such
+ *	window.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static int PointInWindow(
     int x,

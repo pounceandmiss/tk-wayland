@@ -38,6 +38,14 @@ static QueuedEvent *queueHead = NULL;
 static QueuedEvent *queueTail = NULL;
 static int queuePipe[2] = {-1, -1};
 
+/*
+ * The thread which opened the display: Tk runs in it, and only it can use
+ * the display (whose state is that of the process).
+ */
+
+static pthread_mutex_t openMutex = PTHREAD_MUTEX_INITIALIZER;
+static Tcl_ThreadId displayThread = NULL;
+
 typedef struct {
     bool initialized;
 } ThreadSpecificData;
@@ -64,6 +72,15 @@ static TkXeSurface *captureSurface = NULL;
  */
 
 static bool pointerIdlePending = false;
+static bool pointerMayEnter = false;
+
+/*
+ * The buttons pressed out of the tree of a local grab, whose events are
+ * dropped until they are released.
+ */
+
+static unsigned int droppedButtons = 0;	/* A window was shown or grew: the
+					 * pointer may now be in Tk. */
 
 static void		ConfigureFonts(void);
 static void		DisplayExitHandler(void *clientData);
@@ -81,6 +98,7 @@ static void		ProcessQueue(void);
 static void		QueueFocusEvent(int type, Window w);
 static void		QueueFocusDetail(int type, Window w, int detail);
 static bool		IsAncestor(Window ancestor, Window w);
+static bool		OutOfLocalGrab(Tk_Window tkwin);
 static void		QueueKeyEvent(int type, KeySym keysym,
 			    unsigned int keycode, const char *chars,
 			    int length);
@@ -255,6 +273,21 @@ HandleEvent(
     case TKHAIKU_CLIPBOARD:
 	TkHaikuClipboardChanged();
 	break;
+    case TKHAIKU_KEYMAP: {
+	XEvent event;
+
+	/*
+	 * Tk reads the keymap again when it gets MappingNotify.
+	 */
+
+	TkHaikuKeymapChanged();
+	memset(&event, 0, sizeof(event));
+	event.xmapping.type = MappingNotify;
+	event.xmapping.display = dispPtr->display;
+	event.xmapping.request = MappingKeyboard;
+	Tk_QueueWindowEvent(&event, TCL_QUEUE_TAIL);
+	break;
+    }
     case TKHAIKU_QUIT:
 	TkHaikuWmQuit();
 	break;
@@ -357,7 +390,9 @@ UpdatePointer(void)
  *	moved, or another was mapped under it), which gets crossing events at
  *	idle time, as the X server generates them. (The app_server sends
  *	events too, but with the time of the last move of the mouse, from
- *	before a warp.)
+ *	before a warp.) Out of Tk, the pointer can only come into a window of
+ *	Tk shown or grown under it (mayEnter); otherwise it may be in a window
+ *	of another application which covers a window of Tk.
  *
  * Results:
  *	None.
@@ -369,8 +404,10 @@ UpdatePointer(void)
  */
 
 void
-TkHaikuPointerWindowChanged(void)
+TkHaikuPointerWindowChanged(
+    bool mayEnter)		/* A window was shown or grew. */
 {
+    pointerMayEnter |= mayEnter;
     if (!pointerIdlePending) {
 	pointerIdlePending = true;
 	Tcl_DoWhenIdle(PointerIdle, NULL);
@@ -384,9 +421,10 @@ PointerIdle(
     TkXeDisplay *dispPtr = tkXeDisplay;
 
     pointerIdlePending = false;
-    if (dispPtr->display == NULL) {
+    if (!dispPtr->pointerInside && !pointerMayEnter) {
 	return;
     }
+    pointerMayEnter = false;
     dispPtr->pointerSurface = TkHaikuSurfaceAt((int)floor(dispPtr->pointerX),
 	    (int)floor(dispPtr->pointerY), NULL);
     dispPtr->pointerInside = (dispPtr->pointerSurface != NULL);
@@ -456,6 +494,7 @@ HandlePointer(
     uint32_t b = eventPtr->u.pointer.buttons;
     TkXeSurface *eventSurfPtr = TkXeGetSurface((Window)eventPtr->window);
     TkXeSurface *atPtr;
+    unsigned int pressed;
 
     if (dispPtr->warpPending) {
 	/*
@@ -480,11 +519,21 @@ HandlePointer(
     dispPtr->pointerX = TkHaikuFromScreen(eventPtr->u.pointer.x);
     dispPtr->pointerY = TkHaikuFromScreen(eventPtr->u.pointer.y);
     dispPtr->modState = TkHaikuModState(eventPtr->u.pointer.modifiers);
-    dispPtr->buttonState = ((b & TKHAIKU_BUTTON1) ? Button1Mask : 0)
-	    | ((b & TKHAIKU_BUTTON3) ? Button2Mask : 0)
-	    | ((b & TKHAIKU_BUTTON2) ? Button3Mask : 0);
     atPtr = TkHaikuSurfaceAt((int)floor(dispPtr->pointerX),
 	    (int)floor(dispPtr->pointerY), NULL);
+
+    /*
+     * As with X, the buttons pressed in a window of the application out of
+     * the tree of a local grab do nothing.
+     */
+
+    pressed = TkHaikuButtonState(b) & ~dispPtr->buttonState & ~droppedButtons;
+    if (pressed && OutOfLocalGrab(WindowAtPoint((int)floor(dispPtr->pointerX),
+	    (int)floor(dispPtr->pointerY)))) {
+	droppedButtons |= pressed;
+    }
+    droppedButtons &= TkHaikuButtonState(b);
+    dispPtr->buttonState = TkHaikuButtonState(b) & ~droppedButtons;
     if (eventPtr->u.pointer.action == TKHAIKU_EXIT) {
 	/*
 	 * The pointer left a window: it is still in Tk if it went into
@@ -503,6 +552,40 @@ HandlePointer(
 	dispPtr->pointerSurface = dispPtr->pointerInside ? atPtr : NULL;
     }
     UpdatePointer();
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * OutOfLocalGrab --
+ *
+ *	Whether a window of Tk is out of the tree of a local grab of its
+ *	application, where X gives no button events (Tk_UpdatePointer would
+ *	give them to the grab window).
+ *
+ * Results:
+ *	True if it is.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static bool
+OutOfLocalGrab(
+    Tk_Window tkwin)		/* The window under the pointer, or NULL. */
+{
+    TkWindow *winPtr = (TkWindow *)tkwin;
+    TkWindow *grabWinPtr;
+
+    if (winPtr == NULL) {
+	return false;
+    }
+    grabWinPtr = winPtr->dispPtr->grabWinPtr;
+    return grabWinPtr != NULL && !winPtr->dispPtr->grabFlags
+	    && grabWinPtr->mainPtr == winPtr->mainPtr
+	    && TkPositionInTree(winPtr, grabWinPtr) != TK_GRAB_IN_TREE;
 }
 
 /*
@@ -769,9 +852,7 @@ HandleKey(
 	    buf[0] = (char)(keysym & 0x1F);
 	    chars = buf;
 	    len = 1;
-	} else if (c >= 0x20 && c != 0x7F
-		&& !(keysym >= XK_KP_Space && keysym <= XK_KP_Equal
-		&& keysym != XK_KP_Enter && c < 0x20)) {
+	} else if (c >= 0x20 && c != 0x7F) {
 	    chars = eventPtr->u.key.bytes;
 	    len = (int)strlen(chars);
 	} else if (keysym == XK_Return || keysym == XK_KP_Enter) {
@@ -816,7 +897,7 @@ static void
 HandleModifiers(
     TkHaikuEvent *eventPtr)	/* A TKHAIKU_MODIFIERS event. */
 {
-    tkXeDisplay->modState = TkHaikuModState(eventPtr->u.modifiers.modifiers);
+    tkXeDisplay->modState = TkHaikuModState(eventPtr->u.modifiers);
 }
 
 /*
@@ -996,19 +1077,27 @@ TkpOpenDisplay(
     uint32_t buttons;
     double dpi;
 
-    if (tkXeDisplay) {
-	/*
-	 * Only one display per process; any name refers to it.
-	 */
+    /*
+     * Only one display per process, which any name refers to, used by one
+     * thread: the first which opened it.
+     */
 
+    pthread_mutex_lock(&openMutex);
+    if (displayThread != NULL && displayThread != Tcl_GetCurrentThread()) {
+	pthread_mutex_unlock(&openMutex);
+	return NULL;
+    }
+    if (tkXeDisplay) {
 	for (dispPtr = TkGetDisplayList(); dispPtr;
 		dispPtr = dispPtr->nextPtr) {
 	    if (dispPtr->display == tkXeDisplay->display) {
+		pthread_mutex_unlock(&openMutex);
 		return NULL;
 	    }
 	}
     } else {
 	if (pipe(queuePipe) < 0) {
+	    pthread_mutex_unlock(&openMutex);
 	    return NULL;
 	}
 	fcntl(queuePipe[0], F_SETFD, FD_CLOEXEC);
@@ -1019,6 +1108,7 @@ TkpOpenDisplay(
 	    close(queuePipe[0]);
 	    close(queuePipe[1]);
 	    queuePipe[0] = queuePipe[1] = -1;
+	    pthread_mutex_unlock(&openMutex);
 	    return NULL;
 	}
 	tkXeDisplay = (TkXeDisplay *)Tcl_Alloc(sizeof(TkXeDisplay));
@@ -1028,14 +1118,18 @@ TkpOpenDisplay(
 	ConfigureFonts();
     }
 
+    displayThread = Tcl_GetCurrentThread();
+    pthread_mutex_unlock(&openMutex);
+
     TkHaikuScreenSize(&width, &height, &dpi);
-    TkHaikuGetMouse(&mouseX, &mouseY, &buttons);
-    tkXeDisplay->pointerX = mouseX;
-    tkXeDisplay->pointerY = mouseY;
     tkXeDisplay->display = TkXeOpenXDisplay(
 	    displayNameStr ? displayNameStr : "haiku", tkXeDisplay->eventFd,
 	    width, height, 0, 0);
     TkHaikuUpdateScreen();
+    TkHaikuWmScreenChanged();
+    TkHaikuGetMouse(&mouseX, &mouseY, &buttons);
+    tkXeDisplay->pointerX = TkHaikuFromScreen(mouseX);
+    tkXeDisplay->pointerY = TkHaikuFromScreen(mouseY);
 
     dispPtr = (TkDisplay *)Tcl_Alloc(sizeof(TkDisplay));
     memset(dispPtr, 0, sizeof(TkDisplay));
@@ -1547,15 +1641,17 @@ TkHaikuUpdateCapture(void)
 /*
  *----------------------------------------------------------------------
  *
- * TkHaikuForgetSurface --
+ * TkHaikuForgetSurface, TkHaikuForgetWindow --
  *
- *	Forget a surface which is destroyed.
+ *	Forget a surface which is destroyed, or its BWindow (which a new one
+ *	may replace).
  *
  * Results:
  *	None.
  *
  * Side effects:
- *	The surface no longer has the keyboard or the pointer events.
+ *	The surface no longer has the keyboard, or its BWindow the pointer
+ *	events; TkHaikuUpdateCapture gives them to a new BWindow.
  *
  *----------------------------------------------------------------------
  */
@@ -1564,11 +1660,18 @@ void
 TkHaikuForgetSurface(
     TkXeSurface *surfPtr)	/* The surface. */
 {
-    if (captureSurface == surfPtr) {
-	captureSurface = NULL;
-    }
+    TkHaikuForgetWindow(surfPtr);
     if (keyboardSurface == surfPtr) {
 	keyboardSurface = NULL;
+    }
+}
+
+void
+TkHaikuForgetWindow(
+    TkXeSurface *surfPtr)	/* The surface. */
+{
+    if (captureSurface == surfPtr) {
+	captureSurface = NULL;
     }
 }
 
@@ -1577,9 +1680,10 @@ TkHaikuForgetSurface(
  *
  * XQueryPointer --
  *
- *	Where the pointer is, and the state of the buttons and modifiers. Any of the
- *	pointers may be NULL: Tk passes NULL for what it does not need, as on
- *	Aqua and Windows.
+ *	Where the pointer is, and the state of the buttons and modifiers: as
+ *	the events Tk handled tell while the pointer is in Tk, as the
+ *	app_server tells otherwise. Any of the pointers may be NULL: Tk
+ *	passes NULL for what it does not need, as on Aqua and Windows.
  *
  * Results:
  *	True.
@@ -1600,18 +1704,33 @@ XQueryPointer(
     int *winXPtr, int *winYPtr,
     unsigned int *maskPtr)
 {
+    TkXeDisplay *dispPtr = tkXeDisplay;
     int x, y, rootX, rootY;
-    uint32_t buttons;
+    unsigned int mask;
     Window root = RootWindow(display, 0), child = None;
 
     TkXeNextRequest(display);
-    TkHaikuGetMouse(&x, &y, &buttons);
-    rootX = (int)floor(TkHaikuFromScreen(x));
-    rootY = (int)floor(TkHaikuFromScreen(y));
-    if (tkXeDisplay->warpPending
-	    && TkHaikuSystemTime() < tkXeDisplay->warpTime + 500) {
-	rootX = tkXeDisplay->warpX;
-	rootY = tkXeDisplay->warpY;
+    if (dispPtr->warpPending
+	    && TkHaikuSystemTime() < dispPtr->warpTime + 500) {
+	rootX = dispPtr->warpX;
+	rootY = dispPtr->warpY;
+	mask = dispPtr->modState | dispPtr->buttonState;
+    } else if (dispPtr->pointerInside) {
+	/*
+	 * The pointer is where the events Tk handled put it.
+	 */
+
+	rootX = (int)floor(dispPtr->pointerX);
+	rootY = (int)floor(dispPtr->pointerY);
+	mask = dispPtr->modState | dispPtr->buttonState;
+    } else {
+	uint32_t buttons;
+
+	TkHaikuGetMouse(&x, &y, &buttons);
+	rootX = (int)floor(TkHaikuFromScreen(x));
+	rootY = (int)floor(TkHaikuFromScreen(y));
+	mask = TkHaikuModState(TkHaikuModifiers())
+		| TkHaikuButtonState(buttons);
     }
     if (rootPtr) {
 	*rootPtr = root;
@@ -1634,10 +1753,7 @@ XQueryPointer(
 	*winYPtr = y;
     }
     if (maskPtr) {
-	*maskPtr = TkHaikuModState(TkHaikuModifiers())
-		| ((buttons & TKHAIKU_BUTTON1) ? Button1Mask : 0)
-		| ((buttons & TKHAIKU_BUTTON3) ? Button2Mask : 0)
-		| ((buttons & TKHAIKU_BUTTON2) ? Button3Mask : 0);
+	*maskPtr = mask;
     }
     return True;
 }

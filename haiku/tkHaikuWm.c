@@ -64,6 +64,9 @@ static void		ChangeState(TkXeSurface *surfPtr, Atom state,
 static void		DeleteWindow(TkXeSurface *surfPtr);
 static void		DeactivatedTimer(void *clientData);
 static void		FollowActivation(void);
+static TkXeSurface *	ActiveSurface(void);
+static void		GetFrame(TkXeWindow *winPtr, int *leftPtr,
+			    int *rightPtr, int *topPtr, int *bottomPtr);
 static void		IconifyIdle(void *clientData);
 static void		FollowFrame(TkXeSurface *surfPtr);
 static long *		GetLongs(TkXeWindow *winPtr, Atom property,
@@ -121,14 +124,15 @@ InitAtoms(
 /*
  *----------------------------------------------------------------------
  *
- * GetLongs, HasState --
+ * GetLongs, HasState, GetFrame --
  *
  *	Read the hints in the properties of a window.
  *
  * Results:
  *	GetLongs returns the data of a property of format 32 with at least
  *	minItems items, or NULL. HasState returns whether _NET_WM_STATE
- *	contains a state.
+ *	contains a state. GetFrame stores the widths of the decorations, in
+ *	_NET_FRAME_EXTENTS (0 without).
  *
  * Side effects:
  *	None.
@@ -149,6 +153,20 @@ GetLongs(
 	return NULL;
     }
     return (long *)(void *)propPtr->data;
+}
+
+static void
+GetFrame(
+    TkXeWindow *winPtr,		/* The window. */
+    int *leftPtr, int *rightPtr,/* Return the widths of the decorations. */
+    int *topPtr, int *bottomPtr)
+{
+    long *frame = GetLongs(winPtr, atoms._NET_FRAME_EXTENTS, 4);
+
+    *leftPtr = frame ? (int)frame[0] : 0;
+    *rightPtr = frame ? (int)frame[1] : 0;
+    *topPtr = frame ? (int)frame[2] : 0;
+    *bottomPtr = frame ? (int)frame[3] : 0;
 }
 
 static bool
@@ -369,19 +387,14 @@ Place(
 	width = screen->width;
 	height = screen->height;
     } else if (surfPtr->maximized) {
-	long *frame = GetLongs(winPtr, atoms._NET_FRAME_EXTENTS, 4);
-	int ax, ay, aw, ah;
-	int wx, wy, ww, wh;
+	int left, right, top, bottom, wx, wy, ww, wh;
 
+	GetFrame(winPtr, &left, &right, &top, &bottom);
 	TkHaikuWorkArea(&wx, &wy, &ww, &wh);
-	ax = (int)ceil(TkHaikuFromScreen(wx));
-	ay = (int)ceil(TkHaikuFromScreen(wy));
-	aw = (int)floor(TkHaikuFromScreen(ww));
-	ah = (int)floor(TkHaikuFromScreen(wh));
-	x = ax + (frame ? (int)frame[0] : 0);
-	y = ay + (frame ? (int)frame[2] : 0);
-	width = aw - (frame ? (int)(frame[0] + frame[1]) : 0);
-	height = ah - (frame ? (int)(frame[2] + frame[3]) : 0);
+	x = (int)ceil(TkHaikuFromScreen(wx)) + left;
+	y = (int)ceil(TkHaikuFromScreen(wy)) + top;
+	width = (int)floor(TkHaikuFromScreen(ww)) - left - right;
+	height = (int)floor(TkHaikuFromScreen(wh)) - top - bottom;
     } else {
 	x = surfPtr->savedX;
 	y = surfPtr->savedY;
@@ -457,7 +470,7 @@ TkHaikuWmConfigured(
     TkXeSurface *surfPtr)	/* The surface. */
 {
     TkXeWindow *winPtr = surfPtr->winPtr;
-    long *frame;
+    int left, right, top, bottom;
 
     if (surfPtr->inConfigure) {
 	surfPtr->wmX = winPtr->x;
@@ -470,9 +483,8 @@ TkHaikuWmConfigured(
 	return;
     }
     InitAtoms(winPtr->display);
-    frame = GetLongs(winPtr, atoms._NET_FRAME_EXTENTS, 4);
-    WmMoveResize(surfPtr, winPtr->x + (frame ? (int)frame[0] : 0),
-	    winPtr->y + (frame ? (int)frame[2] : 0), winPtr->width,
+    GetFrame(winPtr, &left, &right, &top, &bottom);
+    WmMoveResize(surfPtr, winPtr->x + left, winPtr->y + top, winPtr->width,
 	    winPtr->height);
 }
 
@@ -650,9 +662,7 @@ TkXeWmMapSurface(
 	}
     }
     if (surfPtr->window && surfPtr->popup != popup) {
-	TkHaikuWindowDestroy(surfPtr->window);
-	surfPtr->window = NULL;
-	surfPtr->shown = false;
+	TkHaikuDestroyWindow(surfPtr);
     }
     if (surfPtr->window == NULL) {
 	surfPtr->popup = popup;
@@ -667,10 +677,10 @@ TkXeWmMapSurface(
 	SetFrameExtents(surfPtr);
 	hints = GetLongs(winPtr, XA_WM_NORMAL_HINTS, SH_NUM);
 	if (!surfPtr->placed) {
-	    long *frame = GetLongs(winPtr, atoms._NET_FRAME_EXTENTS, 4);
-	    int left = frame ? (int)frame[0] : 0;
-	    int top = frame ? (int)frame[2] : 0;
+	    int left, right, top, bottom;
 	    int x = winPtr->x, y = winPtr->y;
+
+	    GetFrame(winPtr, &left, &right, &top, &bottom);
 
 	    if (!(hints && (hints[SH_FLAGS] & (USPosition | PPosition)))) {
 		int wx, wy, ww, wh;
@@ -1017,7 +1027,7 @@ FollowFrame(
 /*
  *----------------------------------------------------------------------
  *
- * FollowActivation --
+ * FollowActivation, ActiveSurface --
  *
  *	Called when a BWindow was activated or deactivated: the toplevel
  *	whose BWindow is active now gets the keyboard, and its X window is
@@ -1026,7 +1036,8 @@ FollowFrame(
  *	windows come from different threads, in any order.
  *
  * Results:
- *	None.
+ *	ActiveSurface returns the surface of the toplevel whose BWindow is
+ *	active, or NULL.
  *
  * Side effects:
  *	The keyboard focus may move, and an X window be raised.
@@ -1034,21 +1045,28 @@ FollowFrame(
  *----------------------------------------------------------------------
  */
 
-static void
-FollowActivation(void)
+static TkXeSurface *
+ActiveSurface(void)
 {
-    TkXeSurface *surfPtr, *activePtr = NULL, *keyboardPtr;
+    TkXeSurface *surfPtr;
 
     for (surfPtr = tkXeDisplay->surfaces; surfPtr;
 	    surfPtr = surfPtr->nextPtr) {
 	if (!surfPtr->popup && surfPtr->window && surfPtr->winPtr->mapped
 		&& !surfPtr->iconic
 		&& TkHaikuWindowIsActive(surfPtr->window)) {
-	    activePtr = surfPtr;
-	    break;
+	    return surfPtr;
 	}
     }
-    keyboardPtr = TkHaikuKeyboardSurface();
+    return NULL;
+}
+
+static void
+FollowActivation(void)
+{
+    TkXeSurface *activePtr = ActiveSurface();
+    TkXeSurface *keyboardPtr = TkHaikuKeyboardSurface();
+
     if (activePtr == NULL) {
 	/*
 	 * Another application is active, or another BWindow is about to be:
@@ -1096,17 +1114,10 @@ static void
 DeactivatedTimer(
     TCL_UNUSED(void *))
 {
-    TkXeSurface *surfPtr;
-
     deactivatedPending = false;
-    for (surfPtr = tkXeDisplay->surfaces; surfPtr;
-	    surfPtr = surfPtr->nextPtr) {
-	if (!surfPtr->popup && surfPtr->window && surfPtr->winPtr->mapped
-		&& TkHaikuWindowIsActive(surfPtr->window)) {
-	    return;
-	}
+    if (ActiveSurface() == NULL) {
+	TkHaikuSetKeyboardSurface(NULL);
     }
-    TkHaikuSetKeyboardSurface(NULL);
 }
 
 /*

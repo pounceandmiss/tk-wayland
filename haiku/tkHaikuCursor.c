@@ -350,6 +350,32 @@ TkpSetCursor(
     TkXeUpdateCursor();
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkHaikuForgetCursorWindow --
+ *
+ *	Forget a BWindow which is destroyed, if it has the cursor (a new
+ *	BWindow could have its address).
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The cursor is set on the next window which gets it.
+ *
+ *----------------------------------------------------------------------
+ */
+
+void
+TkHaikuForgetCursorWindow(
+    TkHaikuWindow *window)	/* The BWindow. */
+{
+    if (cursorWindow == window) {
+	cursorWindow = NULL;
+    }
+}
+
 void
 TkXeUpdateCursor(void)
 {

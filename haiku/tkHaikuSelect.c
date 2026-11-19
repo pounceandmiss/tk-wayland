@@ -28,6 +28,7 @@ static bool exportPending = false;
 static int		AppendProc(void *clientData, Tcl_Interp *interp,
 			    const char *portion);
 static void		ExportIdle(void *clientData);
+static void		ScheduleExport(void);
 
 /*
  *----------------------------------------------------------------------
@@ -68,11 +69,64 @@ XSetSelectionOwner(
 	exportedCount = TkHaikuClipboardCount();
     }
     clipboardOwner = owner;
-    if (owner != None && !exportPending) {
+    if (owner != None) {
+	ScheduleExport();
+    }
+    return Success;
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * ScheduleExport --
+ *
+ *	Copy the CLIPBOARD to the system clipboard at idle time, once the
+ *	script has appended its text.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	An idle callback may be scheduled.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static void
+ScheduleExport(void)
+{
+    if (!exportPending) {
 	exportPending = true;
 	Tcl_DoWhenIdle(ExportIdle, NULL);
     }
-    return Success;
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkSelUpdateClipboard --
+ *
+ *	Called by Tk when the text of the CLIPBOARD changed, which Tk
+ *	otherwise only tells by claiming the selection (XSetSelectionOwner)
+ *	the first time: the system clipboard is set again, at idle time.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	An idle callback may be scheduled.
+ *
+ *----------------------------------------------------------------------
+ */
+
+void
+TkSelUpdateClipboard(
+    TCL_UNUSED(TkWindow *),
+    TCL_UNUSED(clipboardOption))
+{
+    if (clipboardOwner != None) {
+	ScheduleExport();
+    }
 }
 
 /*

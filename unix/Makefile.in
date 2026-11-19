@@ -467,6 +467,7 @@ AQUA_OBJS = tkMacOSXAccessibility.o tkMacOSXBitmap.o tkMacOSXButton.o tkMacOSXCl
 	ttkMacOSXTheme.o
 
 AQUA_TKTEST_OBJS = tkMacOSXTest.o
+HAIKU_TKTEST_OBJS = tkHaikuTest.o
 
 # The Wayland port shares the X11 code, which runs on the Xlib emulation of
 # the port; tkPointer.c and xlib/ are shared with the Aqua and Windows ports.
@@ -1627,6 +1628,10 @@ tkAndroid%.o: $(ANDROID_DIR)/tkAndroid%.c $(ANDROID_DIR)/tkAndroidInt.h \
 tkHaikuApp.o: $(HAIKU_DIR)/tkHaikuApp.cpp $(HAIKU_DIR)/tkHaiku.h
 	$(HAIKU_CXX) -c $(CFLAGS) $(SHLIB_CFLAGS) -I$(HAIKU_DIR) \
 		$(HAIKU_DIR)/tkHaikuApp.cpp
+
+tkHaikuTest.o: $(HAIKU_DIR)/tkHaikuTest.cpp $(HAIKU_DIR)/tkHaiku.h
+	$(HAIKU_CXX) -c $(CFLAGS) $(TCL_INCLUDES) -I$(GENERIC_DIR) \
+		-I$(XLIB_DIR) -I$(HAIKU_DIR) $(HAIKU_DIR)/tkHaikuTest.cpp
 
 tkHaiku%.o: $(HAIKU_DIR)/tkHaiku%.c $(HAIKU_DIR)/tkHaikuInt.h \
 		$(HAIKU_DIR)/tkHaiku.h $(XEMU_DIR)/tkXemuInt.h \

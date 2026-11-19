@@ -147,6 +147,20 @@ TkHaikuFromScreen(
 }
 
 /*
+ * The X state of the buttons of the mouse: the middle button is Button2,
+ * the right one Button3.
+ */
+
+static inline unsigned int
+TkHaikuButtonState(
+    uint32_t buttons)		/* TKHAIKU_PRIMARY_BUTTON etc. */
+{
+    return ((buttons & TKHAIKU_PRIMARY_BUTTON) ? Button1Mask : 0)
+	    | ((buttons & TKHAIKU_TERTIARY_BUTTON) ? Button2Mask : 0)
+	    | ((buttons & TKHAIKU_SECONDARY_BUTTON) ? Button3Mask : 0);
+}
+
+/*
  * Functions shared between the files of the Haiku port.
  */
 
@@ -156,6 +170,7 @@ MODULE_SCOPE void	TkHaikuPresent(void);
 MODULE_SCOPE void	TkHaikuSyncFrame(TkXeSurface *surfPtr);
 MODULE_SCOPE TkXeSurface *TkHaikuSurfaceAt(int x, int y,
 			    TkXeSurface *exceptPtr);
+MODULE_SCOPE void	TkHaikuDestroyWindow(TkXeSurface *surfPtr);
 
 /* tkHaikuWm.c */
 MODULE_SCOPE void	TkHaikuWmUnmapSurface(TkXeSurface *surfPtr);
@@ -172,8 +187,12 @@ MODULE_SCOPE TkXeSurface *TkHaikuKeyboardSurface(void);
 MODULE_SCOPE void	TkHaikuUpdateScreen(void);
 MODULE_SCOPE void	TkHaikuUpdateCapture(void);
 MODULE_SCOPE void	TkHaikuForgetSurface(TkXeSurface *surfPtr);
-MODULE_SCOPE void	TkHaikuPointerWindowChanged(void);
+MODULE_SCOPE void	TkHaikuForgetWindow(TkXeSurface *surfPtr);
+MODULE_SCOPE void	TkHaikuPointerWindowChanged(bool mayEnter);
 MODULE_SCOPE void	TkHaikuPointerLeaveSurface(TkXeSurface *surfPtr);
+
+/* tkHaikuCursor.c */
+MODULE_SCOPE void	TkHaikuForgetCursorWindow(TkHaikuWindow *window);
 
 /* tkHaikuSelect.c */
 MODULE_SCOPE void	TkHaikuClipboardChanged(void);

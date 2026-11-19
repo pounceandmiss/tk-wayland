@@ -89,6 +89,17 @@ static const KeyInfo specialKeys[] = {
     {0, NoSymbol, NoSymbol}
 };
 
+/*
+ * The keysyms of the modifier keys, in the order of TkHaikuModifierKeys:
+ * which keys they are is in the keymap (the user may swap Control and
+ * Command). The table above has the keys of the default keymap.
+ */
+
+static const KeySym modifierKeysyms[8] = {
+    XK_Shift_L, XK_Shift_R, XK_Alt_L, XK_Alt_R,
+    XK_Control_L, XK_Control_R, XK_Super_L, XK_Super_R
+};
+
 static KeySym		CharKeySym(const char *chars);
 
 /*
@@ -149,9 +160,16 @@ TkHaikuKeySym(
 {
     const KeyInfo *infoPtr;
     char buf[16];
+    int keys[8], i;
 
     if (key == 0x26 && (modifiers & TKHAIKU_SHIFT)) {
 	return XK_ISO_Left_Tab;
+    }
+    TkHaikuModifierKeys(keys);
+    for (i = 0; i < 8; i++) {
+	if (keys[i] > 0 && keys[i] == key) {
+	    return modifierKeysyms[i];
+	}
     }
     for (infoPtr = specialKeys; infoPtr->keysym != NoSymbol; infoPtr++) {
 	if (infoPtr->key == key) {
@@ -197,13 +215,19 @@ TkHaikuKeyCode(
     bool *shiftPtr)		/* Returns whether Shift gives the keysym. */
 {
     const KeyInfo *infoPtr;
-    int key, level;
+    int key, level, keys[8], i;
     char buf[16];
 
     *shiftPtr = false;
     if (keysym == XK_ISO_Left_Tab) {
 	*shiftPtr = true;
 	return 0x26 + 8;
+    }
+    TkHaikuModifierKeys(keys);
+    for (i = 0; i < 8; i++) {
+	if (modifierKeysyms[i] == keysym && keys[i] > 0) {
+	    return (KeyCode)(keys[i] + 8);
+	}
     }
     for (infoPtr = specialKeys; infoPtr->keysym != NoSymbol; infoPtr++) {
 	if (infoPtr->keysym == keysym) {

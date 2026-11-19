@@ -133,7 +133,9 @@
 
 #define TkpButtonSetDefaults() {}
 #define TkpDestroyButton(butPtr) {}
+#ifndef TK_USE_XEMU
 #define TkSelUpdateClipboard(a,b) {}
+#endif
 #ifndef __CYGWIN__
 #define TkSetPixmapColormap(p,c) {}
 #endif

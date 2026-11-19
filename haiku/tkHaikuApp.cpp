@@ -28,6 +28,7 @@
 #include <Input.h>
 #include <InterfaceDefs.h>
 #include <Screen.h>
+#include <String.h>
 #include <View.h>
 #include <Window.h>
 #include <WindowScreen.h>
@@ -39,41 +40,80 @@
 #include "tkHaiku.h"
 
 /*
- * The semaphore released when the application is running.
+ * The semaphore released when the application is running, or could not be
+ * created (appStatus).
  */
 
 static sem_id readySem = -1;
+static status_t appStatus = B_OK;
 
-static void		Post(TkHaikuEvent *eventPtr, unsigned long window,
+static void		InitEvent(TkHaikuEvent *eventPtr,
+			    TkHaikuEventType type, unsigned long window,
 			    bigtime_t when);
 
 /*
  *----------------------------------------------------------------------
  *
- * TkApp --
+ * ClipboardWatcher --
  *
- *	The application. It runs in a thread of its own, started by
- *	TkHaikuStartApp. It watches the clipboard, and turns the request to
- *	quit into an event for Tk.
+ *	A handler of the application, which watches the system clipboard and
+ *	posts its changes.
  *
  *----------------------------------------------------------------------
  */
 
-class TkApp : public BApplication {
+class ClipboardWatcher : public BHandler {
 public:
-    TkApp(const char *signature) : BApplication(signature) {}
+    ClipboardWatcher() : BHandler("tk clipboard") {}
 
-    virtual void ReadyToRun() {
+    /*
+     * Called with the application locked.
+     */
+
+    void Start() {
+	be_app->AddHandler(this);
 	be_clipboard->StartWatching(BMessenger(this));
-	release_sem(readySem);
     }
 
     virtual void MessageReceived(BMessage *message) {
 	if (message->what == B_CLIPBOARD_CHANGED) {
 	    TkHaikuEvent event;
 
-	    Post(&event, 0, system_time());
-	    event.type = TKHAIKU_CLIPBOARD;
+	    InitEvent(&event, TKHAIKU_CLIPBOARD, 0, system_time());
+	    TkHaikuPostEvent(&event);
+	    return;
+	}
+	BHandler::MessageReceived(message);
+    }
+};
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkApp --
+ *
+ *	The application, when Tk creates it: it runs in a thread of its own,
+ *	started by TkHaikuStartApp, and turns the request to quit into an
+ *	event for Tk.
+ *
+ *----------------------------------------------------------------------
+ */
+
+class TkApp : public BApplication {
+public:
+    TkApp(const char *signature, status_t *statusPtr)
+	: BApplication(signature, statusPtr) {}
+
+    virtual void ReadyToRun() {
+	(new ClipboardWatcher())->Start();
+	release_sem(readySem);
+    }
+
+    virtual void MessageReceived(BMessage *message) {
+	if (message->what == B_KEY_MAP_LOADED) {
+	    TkHaikuEvent event;
+
+	    InitEvent(&event, TKHAIKU_KEYMAP, 0, system_time());
 	    TkHaikuPostEvent(&event);
 	    return;
 	}
@@ -83,8 +123,7 @@ public:
     virtual bool QuitRequested() {
 	TkHaikuEvent event;
 
-	Post(&event, 0, system_time());
-	event.type = TKHAIKU_QUIT;
+	InitEvent(&event, TKHAIKU_QUIT, 0, system_time());
 	TkHaikuPostEvent(&event);
 	return false;
     }
@@ -93,28 +132,61 @@ public:
 /*
  *----------------------------------------------------------------------
  *
- * Post --
+ * InitEvent --
  *
- *	Initialize an event.
+ *	Initialize an event, before it is posted.
  *
  * Results:
  *	None.
  *
  * Side effects:
- *	The event is cleared, and its window and time set.
+ *	The event is cleared, and its type, window and time set.
  *
  *----------------------------------------------------------------------
  */
 
 static void
-Post(
+InitEvent(
     TkHaikuEvent *eventPtr,
-    unsigned long window,
+    TkHaikuEventType type,
+    unsigned long window,	/* The X window, or 0. */
     bigtime_t when)		/* In microseconds. */
 {
     memset(eventPtr, 0, sizeof(TkHaikuEvent));
+    eventPtr->type = type;
     eventPtr->window = window;
     eventPtr->time = (long long)(when / 1000);
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * When --
+ *
+ *	The time of an event of the app_server: its "when". Messages sent by
+ *	scripting have none, and are input made now. The app_server sends
+ *	messages without one too, when windows change under the pointer (Tk
+ *	makes its own crossing events then): they are older than anything,
+ *	and dropped after a warp of the pointer (tkHaikuEvent.c).
+ *
+ * Results:
+ *	The time, in microseconds since boot.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static bigtime_t
+When(
+    BMessage *message)		/* The message, or NULL. */
+{
+    if (message == NULL) {
+	return system_time();
+    }
+    return message->GetInt64("when",
+	    message->HasSpecifiers() ? system_time() : 0);
 }
 
 /*
@@ -123,7 +195,9 @@ Post(
  * TkView --
  *
  *	The view which fills a window: it draws the bitmap of the window, and
- *	posts the input it gets.
+ *	posts the input it gets. It is named after the X window, as "tk
+ *	0x<id>" (TKHAIKU_VIEW_NAME), which identifies it for the tests and
+ *	for scripting.
  *
  *----------------------------------------------------------------------
  */
@@ -131,7 +205,9 @@ Post(
 class TkView : public BView {
 public:
     TkView(BRect frame, unsigned long xid)
-	: BView(frame, "tk", B_FOLLOW_ALL_SIDES, B_WILL_DRAW),
+	: BView(frame, BString().SetToFormat(TKHAIKU_VIEW_NAME,
+		xid).String(),
+		B_FOLLOW_ALL_SIDES, B_WILL_DRAW),
 	  fXid(xid), fBitmap(NULL), fCaptured(false) {
 	SetViewColor(B_TRANSPARENT_COLOR);
 	SetHighColor(0xd9, 0xd9, 0xd9);
@@ -183,21 +259,17 @@ public:
     }
 
     virtual void MessageReceived(BMessage *message) {
+	if (message->HasSpecifiers() && ScriptedInput(message)) {
+	    return;
+	}
 	if (message->what == B_MOUSE_WHEEL_CHANGED) {
 	    TkHaikuEvent event;
-	    float dx = 0, dy = 0;
-	    int32 modifiers = 0;
-	    bigtime_t when = system_time();
 
-	    message->FindFloat("be:wheel_delta_x", &dx);
-	    message->FindFloat("be:wheel_delta_y", &dy);
-	    message->FindInt32("modifiers", &modifiers);
-	    message->FindInt64("when", &when);
-	    Post(&event, fXid, when);
-	    event.type = TKHAIKU_WHEEL;
-	    event.u.wheel.dx = dx;
-	    event.u.wheel.dy = dy;
-	    event.u.wheel.modifiers = (uint32_t)modifiers;
+	    InitEvent(&event, TKHAIKU_WHEEL, fXid, When(message));
+	    event.u.wheel.dx = message->GetFloat("be:wheel_delta_x", 0);
+	    event.u.wheel.dy = message->GetFloat("be:wheel_delta_y", 0);
+	    event.u.wheel.modifiers = (uint32_t)message->GetInt32("modifiers",
+		    (int32)::modifiers());
 	    TkHaikuPostEvent(&event);
 	    return;
 	}
@@ -265,37 +337,69 @@ public:
     }
 
 private:
+    /*
+     * Messages of the mouse sent by scripting (as with hey, to the view
+     * named after the X window), which BView takes for scripting requests
+     * because of their specifiers, are taken as input. The keys need
+     * nothing: the window posts them whatever their target.
+     */
+
+    bool ScriptedInput(BMessage *message) {
+	BPoint where;
+
+	switch (message->what) {
+	case B_MOUSE_DOWN:
+	case B_MOUSE_UP:
+	case B_MOUSE_MOVED:
+	    break;
+	default:
+	    return false;
+	}
+	if (message->FindPoint("be:view_where", &where) != B_OK
+		&& message->FindPoint("where", &where) != B_OK) {
+	    return false;
+	}
+	if (message->what == B_MOUSE_DOWN) {
+	    MouseDown(where);
+	} else if (message->what == B_MOUSE_UP) {
+	    MouseUp(where);
+	} else {
+	    MouseMoved(where, Bounds().Contains(where) ? B_INSIDE_VIEW
+		    : B_OUTSIDE_VIEW, NULL);
+	}
+	if (message->IsSourceWaiting()) {
+	    BMessage reply(B_REPLY);
+
+	    reply.AddInt32("error", B_OK);
+	    message->SendReply(&reply);
+	}
+	return true;
+    }
+
     void PostPointer(int action, BPoint where, bool inside) {
 	BMessage *message = Window()->CurrentMessage();
 	TkHaikuEvent event;
-	int32 buttons = 0, modifiers = 0, clicks = 1;
-	bigtime_t when = system_time();
+	int32 buttons, modifiers;
+	bigtime_t when = When(message);
 
-	if (message) {
-	    message->FindInt32("buttons", &buttons);
-	    message->FindInt32("modifiers", &modifiers);
-	    message->FindInt32("clicks", &clicks);
-	    message->FindInt64("when", &when);
-	}
-	if (message == NULL || !message->HasInt32("buttons")) {
+	if (message && message->HasInt32("buttons")) {
+	    buttons = message->GetInt32("buttons", 0);
+	} else {
 	    BPoint point;
 	    uint32 b = 0;
 
 	    get_mouse(&point, &b);
 	    buttons = (int32)b;
 	}
-	if (message == NULL || !message->HasInt32("modifiers")) {
-	    modifiers = (int32)::modifiers();
-	}
+	modifiers = message ? message->GetInt32("modifiers",
+		(int32)::modifiers()) : (int32)::modifiers();
 	where = ConvertToScreen(where);
-	Post(&event, fXid, when);
-	event.type = TKHAIKU_POINTER;
+	InitEvent(&event, TKHAIKU_POINTER, fXid, when);
 	event.u.pointer.action = action;
 	event.u.pointer.x = where.x;
 	event.u.pointer.y = where.y;
 	event.u.pointer.buttons = (uint32_t)buttons;
 	event.u.pointer.modifiers = (uint32_t)modifiers;
-	event.u.pointer.clicks = clicks;
 	event.u.pointer.inside = inside;
 	TkHaikuPostEvent(&event);
     }
@@ -327,7 +431,8 @@ public:
 		| B_NOT_CLOSABLE | B_NOT_ZOOMABLE | B_NOT_MINIMIZABLE
 		| B_NOT_RESIZABLE | B_WILL_ACCEPT_FIRST_CLICK
 		| B_NO_WORKSPACE_ACTIVATION) : B_WILL_ACCEPT_FIRST_CLICK),
-	  fXid(xid), fShown(false) {
+	  fXid(xid), fShown(false), fPopup(kind == TKHAIKU_POPUP),
+	  fLevel(TKHAIKU_NORMAL) {
 	fView = new TkView(Bounds(), xid);
 	AddChild(fView);
 	fView->MakeFocus(true);
@@ -341,8 +446,7 @@ public:
     virtual void WindowActivated(bool active) {
 	TkHaikuEvent event;
 
-	Post(&event, fXid, system_time());
-	event.type = TKHAIKU_ACTIVATED;
+	InitEvent(&event, TKHAIKU_ACTIVATED, fXid, system_time());
 	event.u.active = active;
 	TkHaikuPostEvent(&event);
     }
@@ -350,8 +454,7 @@ public:
     virtual void FrameMoved(BPoint where) {
 	TkHaikuEvent event;
 
-	Post(&event, fXid, system_time());
-	event.type = TKHAIKU_MOVED;
+	InitEvent(&event, TKHAIKU_MOVED, fXid, system_time());
 	event.u.frame.x = (int)where.x;
 	event.u.frame.y = (int)where.y;
 	TkHaikuPostEvent(&event);
@@ -360,8 +463,7 @@ public:
     virtual void FrameResized(float width, float height) {
 	TkHaikuEvent event;
 
-	Post(&event, fXid, system_time());
-	event.type = TKHAIKU_RESIZED;
+	InitEvent(&event, TKHAIKU_RESIZED, fXid, system_time());
 	event.u.frame.width = (int)width + 1;
 	event.u.frame.height = (int)height + 1;
 	TkHaikuPostEvent(&event);
@@ -371,8 +473,10 @@ public:
 	TkHaikuEvent event;
 
 	BWindow::Minimize(minimize);
-	Post(&event, fXid, system_time());
-	event.type = TKHAIKU_MINIMIZED;
+	if (!minimize) {
+	    ApplyLevel();
+	}
+	InitEvent(&event, TKHAIKU_MINIMIZED, fXid, system_time());
 	event.u.minimized = minimize;
 	TkHaikuPostEvent(&event);
     }
@@ -400,16 +504,10 @@ public:
 	    return;
 	case B_MODIFIERS_CHANGED: {
 	    TkHaikuEvent event;
-	    int32 modifiers = 0, old = 0;
-	    bigtime_t when = system_time();
 
-	    message->FindInt32("modifiers", &modifiers);
-	    message->FindInt32("be:old_modifiers", &old);
-	    message->FindInt64("when", &when);
-	    Post(&event, fXid, when);
-	    event.type = TKHAIKU_MODIFIERS;
-	    event.u.modifiers.modifiers = (uint32_t)modifiers;
-	    event.u.modifiers.old = (uint32_t)old;
+	    InitEvent(&event, TKHAIKU_MODIFIERS, fXid, When(message));
+	    event.u.modifiers = (uint32_t)message->GetInt32("modifiers",
+		    (int32)::modifiers());
 	    TkHaikuPostEvent(&event);
 	    return;
 	}
@@ -432,35 +530,56 @@ public:
 	return fView;
     }
 
+    /*
+     * Haiku does not minimize floating windows: a toplevel above the others
+     * (TKHAIKU_ABOVE) is a normal window while it is minimized.
+     */
+
+    void SetLevel(int level) {
+	fLevel = level;
+	if (!IsMinimized()) {
+	    ApplyLevel();
+	}
+    }
+
+    void MinimizeWindow(bool minimize) {
+	if (IsMinimized() == minimize) {
+	    return;
+	}
+	if (minimize && !fPopup) {
+	    SetFeel(B_NORMAL_WINDOW_FEEL);
+	}
+	BWindow::Minimize(minimize);
+	if (!minimize) {
+	    ApplyLevel();
+	}
+    }
+
 private:
+    void ApplyLevel() {
+	if (!fPopup) {
+	    SetFeel((fLevel == TKHAIKU_ABOVE) ? B_FLOATING_ALL_WINDOW_FEEL
+		    : B_NORMAL_WINDOW_FEEL);
+	}
+    }
+
     void PostSimple(TkHaikuEventType type) {
 	TkHaikuEvent event;
 
-	Post(&event, fXid, system_time());
-	event.type = type;
+	InitEvent(&event, type, fXid, system_time());
 	TkHaikuPostEvent(&event);
     }
 
     void PostKey(BMessage *message) {
 	TkHaikuEvent event;
-	int32 key = 0, modifiers = 0, rawChar = 0, repeat = 0;
-	const char *bytes = NULL;
-	bigtime_t when = system_time();
+	const char *bytes = message->GetString("bytes", NULL);
 
-	message->FindInt32("key", &key);
-	message->FindInt32("modifiers", &modifiers);
-	message->FindInt32("raw_char", &rawChar);
-	message->FindInt32("be:key_repeat", &repeat);
-	message->FindString("bytes", &bytes);
-	message->FindInt64("when", &when);
-	Post(&event, fXid, when);
-	event.type = TKHAIKU_KEY;
+	InitEvent(&event, TKHAIKU_KEY, fXid, When(message));
 	event.u.key.down = (message->what == B_KEY_DOWN
 		|| message->what == B_UNMAPPED_KEY_DOWN);
-	event.u.key.repeat = (repeat > 0);
-	event.u.key.key = key;
-	event.u.key.modifiers = (uint32_t)modifiers;
-	event.u.key.rawChar = rawChar;
+	event.u.key.key = (int)message->GetInt32("key", 0);
+	event.u.key.modifiers = (uint32_t)message->GetInt32("modifiers",
+		(int32)::modifiers());
 	if (bytes && message->what == B_KEY_DOWN) {
 	    strncpy(event.u.key.bytes, bytes, sizeof(event.u.key.bytes) - 1);
 	}
@@ -470,6 +589,8 @@ private:
     unsigned long fXid;
     TkView *fView;
     bool fShown;
+    bool fPopup;		/* Override-redirect: always floating. */
+    int fLevel;			/* TKHAIKU_NORMAL or TKHAIKU_ABOVE. */
 };
 
 /*
@@ -498,8 +619,15 @@ static int32
 AppThread(
     void *data)			/* The signature. */
 {
-    TkApp *app = new TkApp((const char *)data);
+    status_t status = B_OK;
+    TkApp *app = new TkApp((const char *)data, &status);
 
+    if (status != B_OK) {
+	delete app;
+	appStatus = status;
+	release_sem(readySem);
+	return status;
+    }
     app->Run();
     return 0;
 }
@@ -512,7 +640,10 @@ extern "C" {
  * TkHaikuStartApp --
  *
  *	Start the application in a thread of its own, unless the process
- *	already has one (Tk loaded into a Haiku application).
+ *	already has one (Tk loaded into a Haiku application), whose clipboard
+ *	changes are then watched. It is only tried once: an application which
+ *	failed to start, or is late (the app_server did not answer in ten
+ *	seconds) is not started again.
  *
  * Results:
  *	Whether there is an application.
@@ -527,18 +658,29 @@ bool
 TkHaikuStartApp(
     const char *signature)
 {
+    static bool tried = false;
     thread_id thread;
 
-    if (be_app) {
+    if (be_app && readySem < 0) {
+	if (!tried && be_app->Lock()) {
+	    (new ClipboardWatcher())->Start();
+	    be_app->Unlock();
+	}
+	tried = true;
 	return true;
     }
+    if (tried) {
+	return be_app != NULL && appStatus == B_OK;
+    }
+    tried = true;
     readySem = create_sem(0, "tk ready");
     thread = spawn_thread(AppThread, "tk application", B_NORMAL_PRIORITY,
 	    (void *)signature);
-    if (thread < 0 || resume_thread(thread) != B_OK) {
+    if (readySem < 0 || thread < 0 || resume_thread(thread) != B_OK) {
 	return false;
     }
-    return acquire_sem_etc(readySem, 1, B_RELATIVE_TIMEOUT, 10000000) == B_OK;
+    return acquire_sem_etc(readySem, 1, B_RELATIVE_TIMEOUT, 10000000) == B_OK
+	    && appStatus == B_OK;
 }
 
 /*
@@ -552,6 +694,13 @@ TkHaikuStartApp(
  *	mouse, the keyboard, the time of the events (in milliseconds since
  *	boot), the beep, and the size (Haiku scales its interface with it)
  *	and families of the fonts the user chose.
+ *
+ * Results:
+ *	As the names say; the functions which return several values store
+ *	them.
+ *
+ * Side effects:
+ *	TkHaikuSetMousePosition moves the pointer, TkHaikuBeep beeps.
  *
  *----------------------------------------------------------------------
  */
@@ -670,6 +819,13 @@ TkHaikuFontFamilies(
  *
  *	Create a window, hidden, or destroy it.
  *
+ * Results:
+ *	TkHaikuWindowCreate returns the window.
+ *
+ * Side effects:
+ *	A BWindow is created, with a thread of its own, or quits: its thread
+ *	ends, and the BWindow is deleted.
+ *
  *----------------------------------------------------------------------
  */
 
@@ -707,9 +863,25 @@ TkHaikuWindowDestroy(
 /*
  *----------------------------------------------------------------------
  *
- * The other functions on windows --
+ * TkHaikuWindowShow, TkHaikuWindowMoveResize, TkHaikuWindowSetTitle,
+ * TkHaikuWindowSetSizeLimits, TkHaikuWindowSetDecorated,
+ * TkHaikuWindowSetLevel, TkHaikuWindowMinimize, TkHaikuWindowActivate,
+ * TkHaikuWindowIsActive, TkHaikuWindowSendBehind, TkHaikuWindowGetFrame,
+ * TkHaikuWindowFrameExtents, TkHaikuWindowUpdate, TkHaikuWindowSetCursor,
+ * TkHaikuWindowCapture --
  *
- *	Called by Tk; each locks the window.
+ *	Change or ask a window, as the names say. Called by Tk; each locks
+ *	the window.
+ *
+ * Results:
+ *	TkHaikuWindowIsActive returns whether the window is active;
+ *	TkHaikuWindowGetFrame stores the position and size of its content,
+ *	TkHaikuWindowFrameExtents the widths of its decorations (0 if the
+ *	window cannot be locked).
+ *
+ * Side effects:
+ *	The window changes. TkHaikuWindowUpdate copies parts of the image of
+ *	Tk to the bitmap of the window, which draws them.
  *
  *----------------------------------------------------------------------
  */
@@ -832,8 +1004,7 @@ TkHaikuWindowSetLevel(
     TkWindow *window = WIN(winPtr);
 
     if (window->Lock()) {
-	window->SetFeel(level == TKHAIKU_ABOVE ? B_FLOATING_ALL_WINDOW_FEEL
-		: B_NORMAL_WINDOW_FEEL);
+	window->SetLevel(level);
 	window->Unlock();
     }
 }
@@ -846,9 +1017,7 @@ TkHaikuWindowMinimize(
     TkWindow *window = WIN(winPtr);
 
     if (window->Lock()) {
-	if (window->IsMinimized() != minimize) {
-	    window->BWindow::Minimize(minimize);
-	}
+	window->MinimizeWindow(minimize);
 	window->Unlock();
     }
 }
@@ -900,6 +1069,7 @@ TkHaikuWindowGetFrame(
 {
     TkWindow *window = WIN(winPtr);
 
+    *xPtr = *yPtr = *widthPtr = *heightPtr = 0;
     if (window->Lock()) {
 	BRect frame = window->Frame();
 
@@ -1022,6 +1192,14 @@ TkHaikuWindowCapture(
  *	The text of the system clipboard, emptying it, and the number of
  *	times it was changed (by any application).
  *
+ * Results:
+ *	TkHaikuClipboardGet returns whether the clipboard has text, and
+ *	stores it; TkHaikuClipboardCount returns the count.
+ *
+ * Side effects:
+ *	TkHaikuClipboardSet and TkHaikuClipboardClear change the clipboard of
+ *	the system.
+ *
  *----------------------------------------------------------------------
  */
 
@@ -1088,62 +1266,101 @@ TkHaikuClipboardCount(void)
 /*
  *----------------------------------------------------------------------
  *
- * TkHaikuKeymapChars --
+ * TkHaikuKeymapChars, TkHaikuModifierKeys, TkHaikuKeymapChanged,
+ * GetKeymap --
  *
- *	The characters a key types with modifiers, in the keymap of the user.
+ *	The keymap of the user, read when first needed, and again after
+ *	TkHaikuKeymapChanged: the characters a key types with modifiers, and
+ *	the keys which are the modifiers (the user may swap them).
  *
  * Results:
- *	The length of the characters, in UTF-8, stored in the buffer with a
- *	null byte, or 0.
+ *	TkHaikuKeymapChars: the length of the characters, in UTF-8, stored in
+ *	the buffer with a null byte, or 0. TkHaikuModifierKeys stores the key
+ *	codes of the modifiers (TKHAIKU_KEY_LEFT_SHIFT etc.), 0 where there
+ *	is none.
  *
  * Side effects:
- *	The keymap is read the first time.
+ *	The keymap may be read.
  *
  *----------------------------------------------------------------------
  */
 
+static key_map *keymap = NULL;	/* Called by Tk only. */
+static char *keymapChars = NULL;
+
+static bool
+GetKeymap(void)
+{
+    if (keymap == NULL) {
+	get_key_map(&keymap, &keymapChars);
+	if (keymap == NULL || keymapChars == NULL) {
+	    free(keymap);
+	    free(keymapChars);
+	    keymap = NULL;
+	    keymapChars = NULL;
+	    return false;
+	}
+    }
+    return true;
+}
+
+void
+TkHaikuKeymapChanged(void)
+{
+    free(keymap);
+    free(keymapChars);
+    keymap = NULL;
+    keymapChars = NULL;
+}
+
+void
+TkHaikuModifierKeys(
+    int keys[8])		/* Returns the key codes. */
+{
+    if (!GetKeymap()) {
+	memset(keys, 0, 8 * sizeof(int));
+	return;
+    }
+    keys[TKHAIKU_KEY_LEFT_SHIFT] = (int)keymap->left_shift_key;
+    keys[TKHAIKU_KEY_RIGHT_SHIFT] = (int)keymap->right_shift_key;
+    keys[TKHAIKU_KEY_LEFT_COMMAND] = (int)keymap->left_command_key;
+    keys[TKHAIKU_KEY_RIGHT_COMMAND] = (int)keymap->right_command_key;
+    keys[TKHAIKU_KEY_LEFT_CONTROL] = (int)keymap->left_control_key;
+    keys[TKHAIKU_KEY_RIGHT_CONTROL] = (int)keymap->right_control_key;
+    keys[TKHAIKU_KEY_LEFT_OPTION] = (int)keymap->left_option_key;
+    keys[TKHAIKU_KEY_RIGHT_OPTION] = (int)keymap->right_option_key;
+}
+
 int
 TkHaikuKeymapChars(
     int key,			/* Key code of the Be API. */
-    uint32_t modifiers,		/* B_SHIFT_KEY etc. */
+    uint32_t modifiers,		/* B_SHIFT_KEY, B_CAPS_LOCK and
+				 * B_OPTION_KEY are used. */
     char *buffer,
     int size)
 {
-    static key_map *keys = NULL;
-    static char *chars = NULL;
-    const int32 *map;
-    int32 offset;
-    int length;
-
-    if (keys == NULL) {
-	get_key_map(&keys, &chars);
-	if (keys == NULL || chars == NULL) {
-	    return 0;
-	}
-    }
-    if (key < 0 || key >= 128) {
-	return 0;
-    }
     bool shift = (modifiers & B_SHIFT_KEY) != 0;
     bool caps = (modifiers & B_CAPS_LOCK) != 0;
+    const int32 *map;
+    int length;
 
-    if (modifiers & B_CONTROL_KEY) {
-	map = keys->control_map;
-    } else if (modifiers & B_OPTION_KEY) {
-	map = (shift && caps) ? keys->option_caps_shift_map
-		: caps ? keys->option_caps_map
-		: shift ? keys->option_shift_map : keys->option_map;
-    } else {
-	map = (shift && caps) ? keys->caps_shift_map
-		: caps ? keys->caps_map
-		: shift ? keys->shift_map : keys->normal_map;
+    if (key < 0 || key >= 128 || !GetKeymap()) {
+	return 0;
     }
-    offset = map[key];
-    length = (unsigned char)chars[offset];
+    if (modifiers & B_OPTION_KEY) {
+	map = (shift && caps) ? keymap->option_caps_shift_map
+		: caps ? keymap->option_caps_map
+		: shift ? keymap->option_shift_map : keymap->option_map;
+    } else {
+	map = (shift && caps) ? keymap->caps_shift_map
+		: caps ? keymap->caps_map
+		: shift ? keymap->shift_map : keymap->normal_map;
+    }
+    length = (unsigned char)keymapChars[map[key]];
     if (length <= 0 || length >= size) {
 	return 0;
     }
-    memcpy(buffer, chars + offset + 1, length);
+    memcpy(buffer, keymapChars + map[key] + 1, length);
     buffer[length] = '\0';
     return length;
 }

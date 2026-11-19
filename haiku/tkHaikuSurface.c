@@ -92,13 +92,11 @@ TkXeDestroySurface(
     TkHaikuPointerLeaveSurface(surfPtr);
     TkHaikuWmUnmapSurface(surfPtr);
     TkHaikuForgetSurface(surfPtr);
-    TkHaikuPointerWindowChanged();
+    TkHaikuPointerWindowChanged(false);
     if (tkXeDisplay->pointerSurface == surfPtr) {
 	tkXeDisplay->pointerSurface = NULL;
     }
-    if (surfPtr->window) {
-	TkHaikuWindowDestroy(surfPtr->window);
-    }
+    TkHaikuDestroyWindow(surfPtr);
     if (surfPtr->backing) {
 	cairo_surface_destroy(surfPtr->backing);
     }
@@ -226,7 +224,7 @@ TkXeResizeBacking(
     TkHaikuWmConfigured(surfPtr);
     TkHaikuSyncFrame(surfPtr);
     TkHaikuWmRestack();
-    TkHaikuPointerWindowChanged();
+    TkHaikuPointerWindowChanged(true);
 }
 
 /*
@@ -302,7 +300,7 @@ TkXeSurfaceUnmapped(
 	TkHaikuShowSurface(surfPtr, false);
     }
     TkHaikuWmUnmapSurface(surfPtr);
-    TkHaikuPointerWindowChanged();
+    TkHaikuPointerWindowChanged(false);
 }
 
 /*
@@ -335,6 +333,7 @@ TkHaikuShowSurface(
 		(unsigned)surfPtr->width, (unsigned)surfPtr->height);
 	surfPtr->shown = true;
 	SchedulePresent();
+	TkHaikuPointerWindowChanged(true);
     } else if (surfPtr->shown) {
 	surfPtr->shown = false;
 	TkHaikuWindowShow(surfPtr->window, false);
@@ -410,6 +409,37 @@ TkXeIntegralScale(
     TkXeSurface *surfPtr)	/* The surface. */
 {
     return surfPtr->scale == floor(surfPtr->scale);
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkHaikuDestroyWindow --
+ *
+ *	Destroy the BWindow of a surface, when the surface is destroyed or
+ *	gets a BWindow of another kind.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	The BWindow is destroyed and forgotten.
+ *
+ *----------------------------------------------------------------------
+ */
+
+void
+TkHaikuDestroyWindow(
+    TkXeSurface *surfPtr)	/* The surface. */
+{
+    if (surfPtr->window == NULL) {
+	return;
+    }
+    TkHaikuForgetWindow(surfPtr);
+    TkHaikuForgetCursorWindow(surfPtr->window);
+    TkHaikuWindowDestroy(surfPtr->window);
+    surfPtr->window = NULL;
+    surfPtr->shown = false;
 }
 
 /*
@@ -494,8 +524,9 @@ PresentIdle(
  * TkHaikuPresent --
  *
  *	Copy the damaged parts of the backing images of the surfaces to
- *	their BWindows, and show the BWindows waiting for it. The window
- *	tree changed, so the window under the pointer may have too.
+ *	their BWindows, and show the BWindows waiting for it. When windows
+ *	were mapped, unmapped or moved in a toplevel, the window under the
+ *	pointer may have changed too.
  *
  * Results:
  *	None.
@@ -509,6 +540,7 @@ PresentIdle(
 void
 TkHaikuPresent(void)
 {
+    static unsigned long treeGeneration = 0;
     TkXeSurface *surfPtr;
 
     for (surfPtr = tkXeDisplay->surfaces; surfPtr;
@@ -518,7 +550,10 @@ TkHaikuPresent(void)
 	}
 	PresentSurface(surfPtr);
     }
-    TkHaikuPointerWindowChanged();
+    if (TkXeTreeGeneration() != treeGeneration) {
+	treeGeneration = TkXeTreeGeneration();
+	TkHaikuPointerWindowChanged(false);
+    }
 }
 
 /*

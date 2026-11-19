@@ -30,8 +30,10 @@ threads:
   every `BWindow` in another. Those threads never wait for Tk: what happens
   to the windows (input, moves and resizes by the user, activation, the
   clipboard) is posted as events, queued and read by Tk through a pipe
-  (`tkHaikuEvent.c`). Tk locks a window to change it; so a window thread
-  never blocks on Tk, and Tk only on a window busy posting an event.
+  (`tkHaikuEvent.c`), so that Tk may be busy for long (in a blocking read,
+  say) while the windows keep drawing and the input is kept for it. Tk
+  locks a window to change it, and may wait for the threads of the Be API,
+  which never wait for Tk: there is no deadlock.
 - `tkHaikuSurface.c`: the damaged parts of a backing image are copied at
   idle time to a `BBitmap` the view draws (the xRGB of Cairo is `B_RGB32`),
   with the window locked. A window is shown once its image was first copied.
@@ -60,13 +62,25 @@ threads:
   position of the key) plus 8; the keys which type characters have the
   keysym of the character in the keymap of the user, with Shift, the locks
   and Option. Alt (Command) is Mod1, Num Lock Mod2 and the Windows key
-  (Option) Mod4. The shortcuts of `BWindow` (Alt+Q, Alt+W, ...) are not
-  used: the bindings of Tk decide.
+  (Option) Mod4; which keys these are is read from the keymap (the user may
+  swap Control and Command), and when the user chooses another keymap, Tk
+  reads it again (`MappingNotify`). The shortcuts of `BWindow` (Alt+Q,
+  Alt+W, ...) are not used: the bindings of Tk decide.
 - `tkHaikuSelect.c`: the CLIPBOARD is shared with other applications through
   the system clipboard (text); when another application changes it, the owner
   in Tk gets a `SelectionClear` event.
 - `tkHaikuCursor.c`: the cursors of the X cursor font are shown as the
   system cursors of Haiku closest to them; bitmap cursors as images.
+
+The view of a window is named after its X window, `tk 0x<id>`, so that
+scripting can address it: the messages of the mouse which `hey` sends it
+are input, as from the app_server. For instance, to click at (10, 10) in the
+first window of the application of team 1234:
+
+    hey 1234 _MDN View 0 of Window 0 with be:view_where="BPoint(10,10)" \
+        and buttons="int32(1)"
+    hey 1234 _MUP View 0 of Window 0 with be:view_where="BPoint(10,10)" \
+        and buttons="int32(0)"
 
 Logical pixels have 96 dpi, times the scale of the fonts the user chose
 (Haiku scales its interface with the size of the plain font, 12 by default),
@@ -88,7 +102,14 @@ The tests run in the session of the desktop, with
 
 in the build directory. Behaviour the port cannot have (such as windows
 which the app_server constrains) skips tests through constraints of
-`../tests/constraints.tcl`.
+`../tests/constraints.tcl`. `../tests/haiku.test` tests the port itself: the
+window manager, input, input while Tk is busy, the clipboard (with the
+`clipboard` command of Haiku) and scripting (with `hey`). Its input comes
+from the commands of `tkHaikuTest.cpp` in `tktest`, which make it the way
+the user does: the pointer moves through the app_server, and the buttons
+and keys are delivered by the threads of the windows, as messages of the
+form the app_server sends (`testmovemouse` and `testpressbutton`, as on
+Aqua, also enable tests of `grab.test`, `menu.test` and `unixEmbed.test`).
 
 ## Not done yet
 

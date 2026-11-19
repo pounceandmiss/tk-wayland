@@ -1340,7 +1340,7 @@ MODULE_SCOPE Tcl_ObjCmdProc2 TkUnsupported1ObjCmd;
  * For Tktest.
  */
 MODULE_SCOPE Tcl_ObjCmdProc2 SquareObjCmd;
-#if !(defined(_WIN32) || defined(MAC_OSX_TK))
+#if !(defined(_WIN32) || defined(MAC_OSX_TK) || defined(TK_USE_HAIKU))
 #define TkplatformtestInit(x) TCL_OK
 #else
 MODULE_SCOPE int	TkplatformtestInit(Tcl_Interp *interp);

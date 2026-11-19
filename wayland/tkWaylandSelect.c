@@ -1055,6 +1055,30 @@ XSetSelectionOwner(
 /*
  *----------------------------------------------------------------------
  *
+ * TkSelUpdateClipboard --
+ *
+ *	Called by Tk when the text of the CLIPBOARD changed. Nothing to do:
+ *	the compositor asks for the text when another client pastes it.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
+void
+TkSelUpdateClipboard(
+    TCL_UNUSED(TkWindow *),
+    TCL_UNUSED(clipboardOption))
+{
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
  * ReceiveData --
  *
  *	Read the data of an offer in a MIME type. Wayland events are

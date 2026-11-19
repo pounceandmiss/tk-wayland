@@ -1659,9 +1659,8 @@ TkpGetCapture(void)
  * XQueryPointer --
  *
  *	Where the pointer is (where the screen was last touched), and the
- *	state of the buttons and modifiers. Any of the
- *	pointers may be NULL: Tk passes NULL for what it does not need, as on
- *	Aqua and Windows.
+ *	state of the buttons and modifiers. Any of the pointers may be NULL:
+ *	Tk passes NULL for what it does not need, as on Aqua and Windows.
  *
  * Results:
  *	True.

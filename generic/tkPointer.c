@@ -537,7 +537,7 @@ TkPointerClearButtons(void)
  *	None.
  *
  * Side effects:
- *	May release the current capture window, or forget the window
+ *	May move or release the capture of the pointer, or forget the window
  *	controlling the cursor.
  *
  *----------------------------------------------------------------------
@@ -571,16 +571,16 @@ TkPointerDeadWindow(
     if (winPtr == tsdPtr->cursorWinPtr) {
 	tsdPtr->cursorWinPtr = NULL;
     }
-    if (!(tsdPtr->restrictWinPtr || tsdPtr->grabWinPtr)) {
 
-	/*
-	 * Release mouse capture only if the dead window is the capturing
-	 * window.
-	 */
+    /*
+     * The capture of a dead window goes to the window still restricting
+     * the pointer events, or to the grab window, or is released: it must
+     * not stay with the dead window, which the port may use later.
+     */
 
-	if (winPtr == (TkWindow *)TkpGetCapture()) {
-	    TkpSetCapture(NULL);
-	}
+    if (winPtr == (TkWindow *)TkpGetCapture()) {
+	TkpSetCapture(tsdPtr->restrictWinPtr ? tsdPtr->restrictWinPtr
+		: tsdPtr->grabWinPtr);
     }
 }
 

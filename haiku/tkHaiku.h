@@ -9,10 +9,12 @@
  *	in another. Those threads never wait for Tk: what happens to the
  *	application and its windows (input, moves and resizes by the user,
  *	activation, the clipboard) is posted as events, which are queued and
- *	read by Tk through a pipe (tkHaikuEvent.c). Tk calls the functions
- *	below, which lock the window they change; so the threads of the
- *	windows never block on Tk, and Tk only on a window busy posting an
- *	event, which cannot deadlock.
+ *	read by Tk through a pipe (tkHaikuEvent.c), so that Tk may be busy
+ *	for long (in a blocking read, say) while the windows keep drawing and
+ *	the input is kept for it. Tk calls the functions below, which lock
+ *	the window they change, and may wait for the threads of the Be API
+ *	(for a lock, or the end of a window), which never wait for Tk: there
+ *	is no deadlock.
  *
  *	Coordinates are those of the screen, in pixels. The images Tk draws
  *	are 32-bit xRGB, which is also the layout of B_RGB32.
@@ -53,6 +55,7 @@ typedef enum {
     TKHAIKU_ZOOM,		/* The zoom button of a window. */
     TKHAIKU_SCREEN,		/* The screen changed. */
     TKHAIKU_CLIPBOARD,		/* The system clipboard changed. */
+    TKHAIKU_KEYMAP,		/* The user chose another keymap. */
     TKHAIKU_QUIT		/* The user asked the application to quit
 				 * (from the Deskbar). */
 } TkHaikuEventType;
@@ -70,9 +73,9 @@ typedef enum {
  * Buttons, as in the "buttons" of the messages of the Be API.
  */
 
-#define TKHAIKU_BUTTON1		0x1	/* B_PRIMARY_MOUSE_BUTTON */
-#define TKHAIKU_BUTTON2		0x2	/* B_SECONDARY_MOUSE_BUTTON */
-#define TKHAIKU_BUTTON3		0x4	/* B_TERTIARY_MOUSE_BUTTON */
+#define TKHAIKU_PRIMARY_BUTTON		0x1	/* The left button. */
+#define TKHAIKU_SECONDARY_BUTTON	0x2	/* The right button. */
+#define TKHAIKU_TERTIARY_BUTTON		0x4	/* The middle button. */
 
 /*
  * Modifiers, as the B_*_KEY bits of the Be API.
@@ -105,9 +108,9 @@ typedef struct TkHaikuEvent {
 	struct {
 	    int action;		/* TKHAIKU_MOVE etc. */
 	    float x, y;		/* Position on the screen. */
-	    uint32_t buttons;	/* Pressed buttons (TKHAIKU_BUTTON*). */
+	    uint32_t buttons;	/* Pressed buttons
+				 * (TKHAIKU_PRIMARY_BUTTON etc.). */
 	    uint32_t modifiers;	/* Modifier keys (B_SHIFT_KEY etc.). */
-	    int clicks;		/* Number of clicks, for TKHAIKU_DOWN. */
 	    bool inside;	/* The pointer is in the window. */
 	} pointer;		/* TKHAIKU_POINTER. */
 	struct {
@@ -117,18 +120,12 @@ typedef struct TkHaikuEvent {
 	} wheel;		/* TKHAIKU_WHEEL. */
 	struct {
 	    bool down;		/* Pressed or released. */
-	    bool repeat;	/* An automatic repetition. */
 	    int key;		/* The key code of the Be API (its position
 				 * on the keyboard). */
 	    uint32_t modifiers;	/* B_SHIFT_KEY etc. */
-	    int rawChar;	/* The character of the key without
-				 * modifiers. */
 	    char bytes[8];	/* The characters typed, in UTF-8. */
 	} key;			/* TKHAIKU_KEY. */
-	struct {
-	    uint32_t modifiers;	/* The new modifiers. */
-	    uint32_t old;	/* The previous modifiers. */
-	} modifiers;		/* TKHAIKU_MODIFIERS. */
+	uint32_t modifiers;	/* TKHAIKU_MODIFIERS: the new modifiers. */
 	bool active;		/* TKHAIKU_ACTIVATED. */
 	bool minimized;		/* TKHAIKU_MINIMIZED. */
 	struct {
@@ -138,6 +135,19 @@ typedef struct TkHaikuEvent {
 	} frame;
     } u;
 } TkHaikuEvent;
+
+/*
+ * The modifier keys of the keymap, in the order of TkHaikuModifierKeys.
+ */
+
+#define TKHAIKU_KEY_LEFT_SHIFT		0
+#define TKHAIKU_KEY_RIGHT_SHIFT		1
+#define TKHAIKU_KEY_LEFT_COMMAND	2
+#define TKHAIKU_KEY_RIGHT_COMMAND	3
+#define TKHAIKU_KEY_LEFT_CONTROL	4
+#define TKHAIKU_KEY_RIGHT_CONTROL	5
+#define TKHAIKU_KEY_LEFT_OPTION		6
+#define TKHAIKU_KEY_RIGHT_OPTION	7
 
 /*
  * Kinds of windows.
@@ -157,6 +167,12 @@ typedef struct TkHaikuEvent {
 					 * applications (topmost). */
 
 typedef struct TkHaikuWindow TkHaikuWindow;
+
+/*
+ * The name of the view of a window, from its X window (see TkView).
+ */
+
+#define TKHAIKU_VIEW_NAME	"tk 0x%lx"
 
 /*
  * Called by the glue, from any thread (tkHaikuEvent.c).
@@ -226,6 +242,8 @@ extern void		TkHaikuClipboardClear(void);
 extern uint32_t		TkHaikuClipboardCount(void);
 extern int		TkHaikuKeymapChars(int key, uint32_t modifiers,
 			    char *buffer, int size);
+extern void		TkHaikuModifierKeys(int keys[8]);
+extern void		TkHaikuKeymapChanged(void);
 
 #ifdef __cplusplus
 }

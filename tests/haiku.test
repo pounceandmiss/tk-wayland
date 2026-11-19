@@ -1,0 +1,382 @@
+# This file is a Tcl script to test the Haiku port of Tk: the window manager
+# (decorations, sizes the app_server refuses, minimized windows above the
+# others), input made as the user makes it, input while Tk is busy, the
+# system clipboard, scripting with hey, and the fonts of the preferences.
+#
+# The input comes from the test commands of tkHaikuTest.cpp: the pointer
+# moves through the app_server, and buttons and keys are delivered by the
+# threads of the windows, as messages of the same form as the app_server
+# sends. The windows of the tests are put away from the Deskbar; other
+# windows on the screen where they are can take the pointer events.
+#
+# Copyright © 2026 The Tk developers.
+#
+# See the file "license.terms" for information on usage and redistribution of
+# this file, and for a DISCLAIMER OF ALL WARRANTIES.
+
+#
+# TESTFILE INITIALIZATION
+#
+
+package require tcltest 2.2; # needed in mode -singleproc 0
+
+# Load the main script main.tcl, which takes care of:
+# - setup for the application and the root window
+# - importing commands from the tcltest namespace
+# - loading of the testutils mechanism along with its utility procs
+# - loading of Tk specific test constraints (additionally to constraints
+#   provided by the package tcltest)
+source [file join [tcltest::configure -testdir] main.tcl]
+
+testConstraint haiku [expr {[tk windowingsystem] eq "haiku"}]
+testConstraint haikuInput [expr {[testConstraint haiku]
+	&& [llength [info commands testhaikukeys]]}]
+testConstraint haikuClipboard [expr {[testConstraint haiku]
+	&& [llength [auto_execok clipboard]]}]
+testConstraint hey [expr {[testConstraint haiku]
+	&& [llength [auto_execok hey]]}]
+
+# Ensure a pristine initial window state
+resetWindows
+
+namespace eval ::tk::test::haiku {
+    namespace import -force ::tcltest::*
+
+    # Wait until a condition is true, processing events, for at most
+    # timeout milliseconds. Returns the value of the condition.
+    proc waitFor {condition {timeout 3000}} {
+	set end [expr {[clock milliseconds] + $timeout}]
+	while {![uplevel 1 [list expr $condition]]} {
+	    if {[clock milliseconds] > $end} {
+		return 0
+	    }
+	    after 20
+	    update
+	}
+	return 1
+    }
+
+    # Make a toplevel with a title, at a place of the screen, and wait for
+    # it to be shown and drawn.
+    proc makeToplevel {w {geometry 240x160+300+300}} {
+	destroy $w
+	toplevel $w
+	wm title $w "haiku.test $w"
+	wm geometry $w $geometry
+	waitShown $w
+	return $w
+    }
+
+    proc waitShown {w} {
+	waitFor {[winfo ismapped $w]}
+	update
+	after 100
+	update
+    }
+
+    # The middle of a window, in root coordinates.
+    proc middle {w} {
+	list [expr {[winfo rootx $w] + [winfo width $w] / 2}] \
+		[expr {[winfo rooty $w] + [winfo height $w] / 2}]
+    }
+
+    # Ask a property of the BWindow of a toplevel (or of what the words
+    # of the specifier say in it) with hey.
+    proc heyGet {w args} {
+	exec hey -o [pid] get {*}$args of Window [heyName [wm title $w]]
+    }
+
+    # A name for a specifier of hey.
+    proc heyName {name} {
+	return "\"$name\""
+    }
+
+    # The text of the system clipboard.
+    proc systemClipboard {} {
+	exec clipboard -p
+    }
+
+test haiku-1.1 {the windowing system} -constraints haiku -body {
+    tk windowingsystem
+} -result haiku
+
+# The window manager
+
+test haiku-2.1 {wm geometry places the decorations, as X window managers} \
+	-constraints haiku -setup {
+    makeToplevel .t 240x160+300+300
+} -body {
+    list [wm geometry .t] [expr {[winfo rootx .t] > 300}] \
+	    [expr {[winfo rooty .t] > 300}] \
+	    [expr {[lindex [wm frame .t] 0] ne ""}]
+} -cleanup {
+    destroy .t
+} -result {240x160+300+300 1 1 1}
+
+test haiku-2.2 {a size below the minimum of the app_server is kept} \
+	-constraints haiku -setup {
+    makeToplevel .t
+} -body {
+    wm geometry .t 20x10
+    waitFor {[winfo width .t] == 20}
+    after 200
+    update
+    list [winfo width .t] [winfo height .t] \
+	    [regexp {^20x10\+} [wm geometry .t]]
+} -cleanup {
+    destroy .t
+} -result {20 10 1}
+
+test haiku-2.3 {a toplevel above the others is minimized and restored} \
+	-constraints {haiku hey} -setup {
+    makeToplevel .t
+} -body {
+    wm attributes .t -topmost 1
+    update
+    # B_FLOATING_ALL_WINDOW_FEEL is 6.
+    set result [heyGet .t Feel]
+    wm iconify .t
+    waitFor {[heyGet .t Minimize] eq "true"}
+    lappend result [wm state .t] [heyGet .t Minimize]
+    wm deiconify .t
+    waitFor {[heyGet .t Minimize] eq "false"}
+    waitShown .t
+    lappend result [wm state .t] [heyGet .t Minimize] [heyGet .t Feel]
+} -cleanup {
+    destroy .t
+    unset -nocomplain result
+} -result {6 iconic true normal false 6}
+
+# Input made as the user makes it
+
+test haiku-3.1 {a click invokes a button} -constraints haikuInput -setup {
+    makeToplevel .t
+    set ::pressed 0
+    pack [button .t.b -text Press -command {incr ::pressed}] \
+	    -fill both -expand 1
+    waitShown .t
+} -body {
+    testpressbutton {*}[middle .t.b]
+    waitFor {$::pressed}
+    set ::pressed
+} -cleanup {
+    destroy .t
+    unset -nocomplain ::pressed
+} -result 1
+
+test haiku-3.2 {the pointer moves through the app_server} \
+	-constraints haikuInput -setup {
+    makeToplevel .t
+    pack [frame .t.f -width 240 -height 160]
+    waitShown .t
+    set ::events {}
+    bind .t.f <Enter> {lappend ::events [list Enter %X %Y]}
+    bind .t.f <Motion> {lappend ::events [list Motion %X %Y]}
+} -body {
+    lassign [middle .t.f] x y
+    testmovemouse [expr {[winfo rootx .t] - 50}] $y
+    update
+    set ::events {}
+    testmovemouse [expr {$x - 30}] [expr {$y - 30}]
+    waitFor {[llength $::events]}
+    testmovemouse $x $y
+    waitFor {[llength $::events] > 1}
+
+    # The pointer enters the frame at the first point, as with X.
+    list [lindex $::events 0 0] \
+	    [expr {[lindex $::events end] eq [list Motion $x $y]}] \
+	    [winfo containing $x $y]
+} -cleanup {
+    destroy .t
+    unset -nocomplain ::events x y
+} -result {Enter 1 .t.f}
+
+test haiku-3.3 {keys type with the keymap, Shift included} \
+	-constraints haikuInput -setup {
+    makeToplevel .t
+    pack [entry .t.e]
+    waitShown .t
+    focus -force .t.e
+    update
+} -body {
+    testhaikukeys .t.e "Hello, World!"
+    waitFor {[.t.e get] eq "Hello, World!"}
+    .t.e get
+} -cleanup {
+    destroy .t
+} -result {Hello, World!}
+
+test haiku-3.4 {keysyms of keys} -constraints haikuInput -setup {
+    makeToplevel .t
+    pack [frame .t.f -width 100 -height 100]
+    waitShown .t
+    focus -force .t.f
+    update
+    set ::keys {}
+    bind .t.f <KeyPress> {lappend ::keys %K}
+} -body {
+    testhaikukeys .t.f "aA1!\n\t"
+    waitFor {[llength $::keys] >= 6}
+    set ::keys
+} -cleanup {
+    destroy .t
+    unset -nocomplain ::keys
+} -result {a A 1 ! Return Tab}
+
+# Input while Tk is busy: the threads of the windows never wait for Tk, which
+# gets all the input once it is free again.
+
+test haiku-4.1 {keys typed while Tk is busy are all kept, in order} \
+	-constraints haikuInput -setup {
+    makeToplevel .t
+    pack [entry .t.e]
+    waitShown .t
+    focus -force .t.e
+    update
+} -body {
+    set text "typed while Tk was busy"
+    testhaikukeys -async 5 .t.e $text
+    after 1500
+    waitFor {[.t.e get] eq $text}
+    .t.e get
+} -cleanup {
+    destroy .t
+    unset -nocomplain text
+} -result {typed while Tk was busy}
+
+test haiku-4.2 {moves of the pointer while Tk is busy} \
+	-constraints haikuInput -setup {
+    makeToplevel .t 300x200+300+300
+    pack [frame .t.f -width 300 -height 200]
+    waitShown .t
+    set ::motions 0
+    set ::last {}
+    bind .t.f <Motion> {incr ::motions; set ::last [list %X %Y]}
+    bind .t.f <Enter> {set ::last [list %X %Y]}
+} -body {
+    lassign [list [expr {[winfo rootx .t.f] + 20}] \
+	    [expr {[winfo rooty .t.f] + 20}]] x y
+    testmovemouse $x $y
+    waitFor {$::last eq [list $x $y]}
+    set ::motions 0
+    testhaikumoves -async 2 $x $y [incr x 200] [incr y 100] 200
+    after 1500
+    waitFor {$::last eq [list $x $y]}
+
+    # Successive moves are compressed, as an X server does.
+    list [expr {$::last eq [list $x $y]}] [expr {$::motions < 20}]
+} -cleanup {
+    destroy .t
+    unset -nocomplain ::motions ::last x y
+} -result {1 1}
+
+test haiku-4.3 {a window destroyed with input for it in the queue} \
+	-constraints haikuInput -setup {
+    makeToplevel .t
+    pack [entry .t.e]
+    waitShown .t
+    focus -force .t.e
+    update
+} -body {
+    testhaikukeys -async 1 .t.e [string repeat x 200]
+    after 100
+    destroy .t
+    after 500
+    update
+    makeToplevel .t
+    winfo ismapped .t
+} -cleanup {
+    destroy .t
+} -result 1
+
+# The system clipboard
+
+test haiku-5.1 {the CLIPBOARD is copied to the system clipboard} \
+	-constraints haikuClipboard -body {
+    clipboard clear
+    clipboard append first
+    update
+    set result [systemClipboard]
+    clipboard clear
+    clipboard append second
+    update
+    lappend result [systemClipboard]
+} -cleanup {
+    clipboard clear
+    unset -nocomplain result
+} -result {first second}
+
+test haiku-5.2 {the system clipboard is the CLIPBOARD} \
+	-constraints haikuClipboard -setup {
+    update
+} -body {
+    exec clipboard -c "from another application"
+    waitFor {![catch {clipboard get} text]
+	    && $text eq "from another application"}
+    clipboard get
+} -cleanup {
+    unset -nocomplain text
+} -result {from another application}
+
+test haiku-5.3 {clearing the CLIPBOARD empties the system clipboard} \
+	-constraints haikuClipboard -body {
+    clipboard clear
+    clipboard append text
+    update
+    selection clear -selection CLIPBOARD
+    update
+    systemClipboard
+} -result {}
+
+# Scripting with hey
+
+test haiku-6.1 {the view of a window is named after its X window} \
+	-constraints {haiku hey testwrapper} -setup {
+    makeToplevel .t
+} -body {
+    expr {[heyGet .t InternalName of View 0]
+	    eq [format "tk 0x%x" [testwrapper .t]]}
+} -cleanup {
+    destroy .t
+} -result 1
+
+test haiku-6.2 {hey presses a button} -constraints {
+    haiku hey testwrapper
+} -setup {
+    makeToplevel .t
+    set ::pressed 0
+    pack [button .t.b -text Press -command {incr ::pressed}] \
+	    -fill both -expand 1
+    waitShown .t
+} -body {
+    set view [format "tk 0x%x" [testwrapper .t]]
+    set where [format "BPoint(%d,%d)" [expr {[winfo x .t.b] + 10}] \
+	    [expr {[winfo y .t.b] + 10}]]
+    foreach {what buttons} {_MDN 1 _MUP 0} {
+	exec hey -s [pid] $what View [heyName $view] \
+		of Window [heyName [wm title .t]] \
+		with be:view_where=$where and buttons=int32($buttons)
+    }
+    waitFor {$::pressed}
+    set ::pressed
+} -cleanup {
+    destroy .t
+    unset -nocomplain ::pressed view where what buttons
+} -result 1
+
+# Fonts
+
+test haiku-7.1 {the fixed font of the preferences} -constraints haiku -body {
+    list [expr {[font measure TkFixedFont iiii]
+		== [font measure TkFixedFont MMMM]}] \
+	    [expr {[font measure TkDefaultFont iiii]
+		< [font measure TkDefaultFont MMMM]}]
+} -result {1 1}
+}
+
+#
+# TESTFILE CLEANUP
+#
+
+namespace delete ::tk::test::haiku
+cleanupTests
